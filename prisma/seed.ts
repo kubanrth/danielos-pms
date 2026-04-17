@@ -1,10 +1,14 @@
-// Demo seed — run with: npx tsx prisma/seed.ts
-// Requires DATABASE_URL set in .env.
+// Demo seed — run with: npm run db:seed
+// Loads DATABASE_URL from .env.
 
-import { PrismaClient, Role, ViewType } from "../lib/generated/prisma/client";
+import "dotenv/config";
+import { PrismaClient } from "../lib/generated/prisma/client";
+import { Role, ViewType } from "../lib/generated/prisma/enums";
+import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcrypt";
 
-const db = new PrismaClient();
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+const db = new PrismaClient({ adapter });
 
 async function main() {
   const passwordHash = await bcrypt.hash("danielos-demo-2026", 12);
