@@ -1,0 +1,516 @@
+// PMS domain schema — System Zarządzania Projektami
+// Hosting: Supabase Postgres | ORM: Prisma 7
+// Tenancy: workspaceId denormalized on user-content; authorization in Route Handlers.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Auth (Auth.js v5 — Prisma adapter compatible)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  avatarUrl     String?
+  passwordHash  String?
+  timezone      String    @default("Europe/Warsaw")
+  locale        String    @default("pl")
+  isSuperAdmin  Boolean   @default(false)
+  isBanned      Boolean   @default(false)
+  lastSeenAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  accounts           Account[]
+  sessions           Session[]
+  memberships        WorkspaceMembership[]
+  invitationsSent    Invitation[]          @relation("InvitationInviter")
+  createdWorkspaces  Workspace[]           @relation("WorkspaceOwner")
+  createdBoards      Board[]               @relation("BoardCreator")
+  createdTasks       Task[]                @relation("TaskCreator")
+  assignedTasks      TaskAssignee[]
+  createdMilestones  Milestone[]           @relation("MilestoneCreator")
+  assignedMilestones Milestone[]           @relation("MilestoneAssignee")
+  uploadedFiles      Attachment[]
+  comments           Comment[]
+  mentions           CommentMention[]
+  auditLogs          AuditLog[]            @relation("AuditActor")
+  globalAuditLogs    GlobalAuditLog[]      @relation("GlobalAuditActor")
+  notifications      Notification[]
+  createdCanvases    ProcessCanvas[]       @relation("CanvasCreator")
+  createdTags        Tag[]                 @relation("TagCreator")
+
+  @@index([isBanned])
+  @@index([lastSeenAt])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Workspaces & Access
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+model Workspace {
+  id               String    @id @default(cuid())
+  name             String
+  slug             String    @unique
+  description      String?
+  avatarUrl        String?
+  ownerId          String
+  storageUsedBytes BigInt    @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  owner       User                  @relation("WorkspaceOwner", fields: [ownerId], references: [id])
+  memberships WorkspaceMembership[]
+  invitations Invitation[]
+  boards      Board[]
+  canvases    ProcessCanvas[]
+  tags        Tag[]
+  tasks       Task[]
+  milestones  Milestone[]
+  auditLogs   AuditLog[]
+
+  @@index([ownerId])
+  @@index([deletedAt])
+}
+
+model WorkspaceMembership {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        Role     @default(MEMBER)
+  joinedAt    DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+}
+
+model Invitation {
+  id          String    @id @default(cuid())
+  workspaceId String
+  email       String
+  role        Role      @default(MEMBER)
+  token       String    @unique
+  inviterId   String
+  acceptedAt  DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  inviter   User      @relation("InvitationInviter", fields: [inviterId], references: [id])
+
+  @@unique([workspaceId, email])
+  @@index([token])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Boards, Views, Status columns
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum ViewType {
+  TABLE
+  KANBAN
+  ROADMAP
+}
+
+model Board {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  description String?
+  creatorId   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator       User           @relation("BoardCreator", fields: [creatorId], references: [id])
+  views         BoardView[]
+  statusColumns StatusColumn[]
+  tasks         Task[]
+  milestones    Milestone[]
+
+  @@index([workspaceId])
+  @@index([deletedAt])
+}
+
+model BoardView {
+  id         String   @id @default(cuid())
+  boardId    String
+  type       ViewType
+  configJson Json     @default("{}")
+  background Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  @@unique([boardId, type])
+}
+
+model StatusColumn {
+  id        String   @id @default(cuid())
+  boardId   String
+  name      String
+  colorHex  String   @default("#64748B")
+  order     Int
+  createdAt DateTime @default(now())
+
+  board Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  tasks Task[]
+
+  @@index([boardId, order])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tasks, Milestones, Tags
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Task {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  boardId         String
+  statusColumnId  String?
+  milestoneId     String?
+  creatorId       String
+  title           String
+  descriptionJson Json?
+  startAt         DateTime?
+  stopAt          DateTime?
+  rowOrder        Float     @default(0)
+  version         Int       @default(1)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  workspace    Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  board        Board                 @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  statusColumn StatusColumn?         @relation(fields: [statusColumnId], references: [id])
+  milestone    Milestone?            @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  creator      User                  @relation("TaskCreator", fields: [creatorId], references: [id])
+  assignees    TaskAssignee[]
+  tags         TaskTag[]
+  comments     Comment[]
+  attachments  Attachment[]
+  nodeLinks    ProcessNodeTaskLink[]
+
+  @@index([boardId, statusColumnId, rowOrder])
+  @@index([boardId, updatedAt(sort: Desc)])
+  @@index([workspaceId, deletedAt])
+  @@index([milestoneId])
+}
+
+model TaskAssignee {
+  taskId     String
+  userId     String
+  assignedAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@index([userId, taskId])
+}
+
+model Tag {
+  // workspaceId NULL = globalny (admin-created)
+  id          String   @id @default(cuid())
+  workspaceId String?
+  name        String
+  colorHex    String
+  creatorId   String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator   User       @relation("TagCreator", fields: [creatorId], references: [id])
+  tasks     TaskTag[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+}
+
+model TaskTag {
+  taskId String
+  tagId  String
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, tagId])
+  @@index([tagId])
+}
+
+model Milestone {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  boardId         String
+  creatorId       String
+  assigneeId      String?
+  title           String
+  descriptionJson Json?
+  startAt         DateTime
+  stopAt          DateTime
+  orderIndex      Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  board     Board     @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  creator   User      @relation("MilestoneCreator", fields: [creatorId], references: [id])
+  assignee  User?     @relation("MilestoneAssignee", fields: [assigneeId], references: [id])
+  tasks     Task[]
+
+  @@index([boardId, orderIndex])
+  @@index([workspaceId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Comments, Attachments, Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Comment {
+  id        String    @id @default(cuid())
+  taskId    String
+  authorId  String
+  parentId  String?
+  bodyJson  Json
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  task     Task             @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author   User             @relation(fields: [authorId], references: [id])
+  parent   Comment?         @relation("CommentThread", fields: [parentId], references: [id])
+  replies  Comment[]        @relation("CommentThread")
+  mentions CommentMention[]
+
+  @@index([taskId, createdAt])
+}
+
+model CommentMention {
+  commentId       String
+  mentionedUserId String
+  createdAt       DateTime @default(now())
+
+  comment       Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  mentionedUser User    @relation(fields: [mentionedUserId], references: [id], onDelete: Cascade)
+
+  @@id([commentId, mentionedUserId])
+  @@index([mentionedUserId])
+}
+
+model Attachment {
+  id         String    @id @default(cuid())
+  taskId     String
+  uploaderId String
+  filename   String
+  mimeType   String
+  sizeBytes  Int
+  storageKey String
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
+
+  task     Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploader User @relation(fields: [uploaderId], references: [id])
+
+  @@index([taskId])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String
+  payload   Json
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Audit logs
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  // Polymorphic: objectId can reference Task, Milestone, Board, Workspace, etc.
+  // No FK constraint — validate objectType in application layer.
+  id          String   @id @default(cuid())
+  workspaceId String
+  objectType  String
+  objectId    String
+  actorId     String?
+  action      String
+  diff        Json?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actor     User?     @relation("AuditActor", fields: [actorId], references: [id])
+
+  @@index([workspaceId, objectType, objectId, createdAt(sort: Desc)])
+  @@index([actorId])
+}
+
+model GlobalAuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actorIp    String?
+  endpoint   String
+  method     String
+  statusCode Int
+  errorType  String?
+  latencyMs  Int?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation("GlobalAuditActor", fields: [actorId], references: [id])
+
+  @@index([createdAt(sort: Desc)])
+  @@index([statusCode])
+  @@index([actorId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Whiteboard (Process Canvas)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ProcessCanvas {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  creatorId   String
+  yjsState    Bytes?
+  background  Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator   User          @relation("CanvasCreator", fields: [creatorId], references: [id])
+  nodes     ProcessNode[]
+  edges     ProcessEdge[]
+
+  @@index([workspaceId])
+}
+
+enum NodeShape {
+  RECTANGLE
+  DIAMOND
+  CIRCLE
+  ICON
+}
+
+model ProcessNode {
+  id        String    @id @default(cuid())
+  canvasId  String
+  shape     NodeShape @default(RECTANGLE)
+  label     String?
+  iconName  String?
+  x         Float
+  y         Float
+  width     Float     @default(160)
+  height    Float     @default(80)
+  colorHex  String    @default("#FFFFFF")
+  dataJson  Json?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  canvas    ProcessCanvas         @relation(fields: [canvasId], references: [id], onDelete: Cascade)
+  outEdges  ProcessEdge[]         @relation("EdgeFrom")
+  inEdges   ProcessEdge[]         @relation("EdgeTo")
+  taskLinks ProcessNodeTaskLink[]
+
+  @@index([canvasId])
+}
+
+model ProcessEdge {
+  id         String   @id @default(cuid())
+  canvasId   String
+  fromNodeId String
+  toNodeId   String
+  label      String?
+  style      String   @default("solid")
+  createdAt  DateTime @default(now())
+
+  canvas   ProcessCanvas @relation(fields: [canvasId], references: [id], onDelete: Cascade)
+  fromNode ProcessNode   @relation("EdgeFrom", fields: [fromNodeId], references: [id], onDelete: Cascade)
+  toNode   ProcessNode   @relation("EdgeTo", fields: [toNodeId], references: [id], onDelete: Cascade)
+
+  @@index([canvasId])
+}
+
+model ProcessNodeTaskLink {
+  nodeId String
+  taskId String
+
+  node ProcessNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  task Task        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@id([nodeId, taskId])
+  @@index([taskId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// System flags (admin maintenance controls)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model SystemFlag {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+}
