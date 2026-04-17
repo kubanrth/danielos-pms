@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import type { Prisma } from "@/lib/generated/prisma/client";
 
 export type AuditObjectType =
   | "Task"
@@ -16,7 +17,7 @@ export interface WriteAuditInput {
   objectId: string;
   actorId: string | null;
   action: string;
-  diff?: Record<string, unknown>;
+  diff?: Prisma.InputJsonValue;
 }
 
 export async function writeAudit(input: WriteAuditInput): Promise<void> {

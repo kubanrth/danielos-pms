@@ -8,9 +8,8 @@ export default defineConfig({
     seed: "tsx prisma/seed.ts",
   },
   datasource: {
-    // Pooler URL for runtime queries (serverless-friendly).
-    url: process.env["DATABASE_URL"],
-    // Direct connection for migrations (pooler can't run DDL).
-    directUrl: process.env["DIRECT_URL"],
+    // Direct connection (port 5432) for Prisma CLI (migrations can't run through pooler).
+    // Runtime queries go through the pooler (port 6543) via the driver adapter in lib/db.ts.
+    url: process.env["DIRECT_URL"],
   },
 });
