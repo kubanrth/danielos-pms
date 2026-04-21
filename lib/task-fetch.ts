@@ -3,6 +3,26 @@ import { db } from "@/lib/db";
 import { requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { can } from "@/lib/permissions";
 import type { TaskDetailProps } from "@/components/task/task-detail";
+import type { RichTextDoc } from "@/components/task/rich-text-editor";
+
+// Task.descriptionJson was historically stored as `{ plain: "text" }` (F1f).
+// Now it holds ProseMirror doc JSON (F4a). Convert legacy entries on read so
+// the editor renders them as a paragraph; otherwise pass through a valid doc;
+// anything else collapses to null (empty editor).
+function normalizeDescription(raw: unknown): RichTextDoc | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as { type?: unknown; plain?: unknown };
+  if (obj.type === "doc") return raw as RichTextDoc;
+  if (typeof obj.plain === "string" && obj.plain.length > 0) {
+    return {
+      type: "doc",
+      content: [
+        { type: "paragraph", content: [{ type: "text", text: obj.plain }] },
+      ],
+    };
+  }
+  return null;
+}
 
 // Shared data loader for the task detail view (reused by standalone
 // /w/[workspaceId]/t/[taskId] page AND the intercepting modal route).
@@ -42,18 +62,13 @@ export async function fetchTaskDetail(
     }),
   ]);
 
-  const descriptionValue =
-    task.descriptionJson && typeof task.descriptionJson === "object" && "plain" in task.descriptionJson
-      ? String((task.descriptionJson as { plain?: unknown }).plain ?? "")
-      : "";
-
   return {
     workspaceId,
     role: ctx.role,
     task: {
       id: task.id,
       title: task.title,
-      description: descriptionValue,
+      descriptionJson: normalizeDescription(task.descriptionJson),
       statusColumnId: task.statusColumnId,
       startAt: task.startAt ? task.startAt.toISOString() : null,
       stopAt: task.stopAt ? task.stopAt.toISOString() : null,

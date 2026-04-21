@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import type { Prisma } from "@/lib/generated/prisma/client";
+import { Prisma } from "@/lib/generated/prisma/client";
 import { requireWorkspaceAction } from "@/lib/workspace-guard";
 import { broadcastWorkspaceChange } from "@/lib/realtime";
 import { writeAudit } from "@/lib/audit";
@@ -18,7 +18,7 @@ import {
 type CreateFieldErrors = { title?: string };
 type UpdateFieldErrors = {
   title?: string;
-  description?: string;
+  descriptionJson?: string;
   statusColumnId?: string;
   startAt?: string;
   stopAt?: string;
@@ -110,7 +110,7 @@ export async function updateTaskAction(
   const parsed = updateTaskSchema.safeParse({
     id: formData.get("id"),
     title: formData.get("title"),
-    description: formData.get("description"),
+    descriptionJson: formData.get("descriptionJson"),
     statusColumnId: formData.get("statusColumnId"),
     startAt: formData.get("startAt"),
     stopAt: formData.get("stopAt"),
@@ -120,7 +120,7 @@ export async function updateTaskAction(
     const fe: UpdateFieldErrors = {};
     for (const issue of parsed.error.issues) {
       const k = issue.path[0];
-      if (k === "title" || k === "description" || k === "statusColumnId" || k === "startAt" || k === "stopAt")
+      if (k === "title" || k === "descriptionJson" || k === "statusColumnId" || k === "startAt" || k === "stopAt")
         fe[k] = issue.message;
     }
     return { ok: false, fieldErrors: fe };
@@ -135,9 +135,9 @@ export async function updateTaskAction(
     where: { id: parsed.data.id },
     data: {
       title: parsed.data.title,
-      descriptionJson: parsed.data.description
-        ? { plain: parsed.data.description }
-        : undefined,
+      descriptionJson: parsed.data.descriptionJson
+        ? (parsed.data.descriptionJson as Prisma.InputJsonValue)
+        : Prisma.DbNull,
       statusColumnId: parsed.data.statusColumnId || null,
       startAt: parseDate(formData.get("startAt")),
       stopAt: parseDate(formData.get("stopAt")),

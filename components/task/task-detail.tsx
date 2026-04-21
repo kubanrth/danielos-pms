@@ -11,6 +11,7 @@ import {
   updateTaskAction,
   type UpdateTaskState,
 } from "@/app/(app)/w/[workspaceId]/t/actions";
+import { RichTextEditor, type RichTextDoc } from "@/components/task/rich-text-editor";
 
 const TAG_COLORS = [
   "#EF4444",
@@ -29,7 +30,7 @@ export interface TaskDetailProps {
   task: {
     id: string;
     title: string;
-    description: string;
+    descriptionJson: RichTextDoc | null;
     statusColumnId: string | null;
     startAt: string | null;
     stopAt: string | null;
@@ -161,21 +162,14 @@ export function TaskDetail({
           </label>
         </div>
 
-        <label className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
           <span className="eyebrow">Opis</span>
-          <textarea
-            name="description"
-            rows={6}
-            maxLength={5000}
+          <RichTextEditor
+            name="descriptionJson"
+            initial={task.descriptionJson}
             readOnly={!canEdit}
-            defaultValue={task.description}
-            placeholder="Kontekst, acceptance criteria, linki…"
-            className="resize-y border-b border-border bg-transparent pb-2 text-[0.98rem] leading-[1.6] outline-none placeholder:text-muted-foreground/60 focus:border-primary"
           />
-          <span className="font-mono text-[0.64rem] uppercase tracking-[0.14em] text-muted-foreground">
-            Rich text (Tiptap) — F4
-          </span>
-        </label>
+        </div>
 
         {!state?.ok && state?.error && (
           <p className="font-mono text-[0.72rem] uppercase tracking-[0.14em] text-destructive">
