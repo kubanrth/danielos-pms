@@ -45,21 +45,17 @@ export function CreateTaskButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex h-10 items-center gap-1.5 bg-primary px-4 font-sans text-[0.88rem] font-medium text-primary-foreground transition-[transform,opacity] duration-200 hover:-translate-y-[1px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-        style={{
-          boxShadow:
-            "0 1px 0 color-mix(in oklch, var(--primary) 60%, black) inset, 0 10px 30px -12px color-mix(in oklch, var(--primary) 60%, transparent)",
-        }}
+        className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-brand-gradient px-4 font-sans text-[0.88rem] font-semibold text-white shadow-brand transition-[transform,opacity] duration-200 hover:-translate-y-[1px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       >
         <Plus size={14} /> Nowe zadanie
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="border-border bg-card sm:max-w-[520px]">
+        <DialogContent className="rounded-xl border-border bg-card sm:max-w-[520px]">
           <DialogHeader>
             <span className="eyebrow">Nowe zadanie</span>
-            <DialogTitle className="font-display text-[1.6rem] font-normal leading-[1.1] tracking-[-0.02em] text-foreground">
-              Co trzeba <span className="italic text-primary">zrobić?</span>
+            <DialogTitle className="font-display text-[1.5rem] font-bold leading-[1.15] tracking-[-0.02em] text-foreground">
+              Co trzeba <span className="text-brand-gradient">zrobić?</span>
             </DialogTitle>
             <DialogDescription className="text-[0.92rem] leading-[1.55] text-muted-foreground">
               Szczegóły uzupełnisz po utworzeniu — otworzymy kartę zadania od razu.
@@ -103,11 +99,7 @@ export function CreateTaskButton({
               <button
                 type="submit"
                 disabled={pending}
-                className="inline-flex h-11 items-center justify-center bg-primary px-6 font-sans text-[0.9rem] font-medium text-primary-foreground transition-[transform,opacity] duration-200 hover:-translate-y-[1px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60"
-                style={{
-                  boxShadow:
-                    "0 1px 0 color-mix(in oklch, var(--primary) 60%, black) inset, 0 10px 30px -12px color-mix(in oklch, var(--primary) 60%, transparent)",
-                }}
+                className="inline-flex h-11 items-center justify-center rounded-lg bg-brand-gradient px-6 font-sans text-[0.9rem] font-semibold text-white shadow-brand transition-[transform,opacity] duration-200 hover:-translate-y-[1px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60"
               >
                 {pending ? "Tworzę…" : "Utwórz zadanie"}
               </button>

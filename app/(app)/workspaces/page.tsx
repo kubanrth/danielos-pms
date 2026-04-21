@@ -18,13 +18,10 @@ export default async function WorkspacesPage() {
       <div className="mx-auto max-w-6xl">
         <div className="mb-12 flex flex-col gap-3">
           <span className="eyebrow">Twoje przestrzenie</span>
-          <h1
-            className="font-display text-[2.6rem] leading-[1.05] tracking-[-0.03em]"
-            style={{ fontVariationSettings: '"opsz" 144, "SOFT" 30' }}
-          >
-            Witaj, {user.name?.split(" ")[0] ?? "kolego"}.
+          <h1 className="font-display text-[2.4rem] font-bold leading-[1.05] tracking-[-0.03em]">
+            Cześć, {user.name?.split(" ")[0] ?? "kolego"}.
           </h1>
-          <p className="max-w-[52ch] text-[0.98rem] leading-[1.65] text-muted-foreground">
+          <p className="max-w-[52ch] text-[0.98rem] leading-[1.6] text-muted-foreground">
             Masz {memberships.length}{" "}
             {memberships.length === 1 ? "przestrzeń roboczą" : "przestrzenie robocze"}.
             Wybierz jedną, żeby kontynuować, albo utwórz nową.
@@ -36,11 +33,7 @@ export default async function WorkspacesPage() {
             <Link
               key={workspace.id}
               href={`/w/${workspace.id}`}
-              className="group relative flex min-h-[180px] flex-col gap-4 border border-border bg-card p-6 transition-[border-color,transform] hover:-translate-y-[2px] hover:border-primary/40 focus-visible:-translate-y-[2px] focus-visible:border-primary focus-visible:outline-none"
-              style={{
-                boxShadow:
-                  "0 1px 0 color-mix(in oklch, var(--foreground) 4%, transparent)",
-              }}
+              className="group relative flex min-h-[180px] flex-col gap-4 rounded-xl border border-border bg-card p-6 shadow-[0_1px_2px_rgba(10,10,40,0.04)] transition-all hover:-translate-y-[2px] hover:border-primary/30 hover:shadow-[0_12px_32px_-16px_rgba(123,104,238,0.35)] focus-visible:-translate-y-[2px] focus-visible:border-primary focus-visible:outline-none"
             >
               <div className="flex items-center justify-between">
                 <span className="eyebrow">{role.toLowerCase()}</span>
@@ -48,7 +41,7 @@ export default async function WorkspacesPage() {
                   /{workspace.slug}
                 </span>
               </div>
-              <h2 className="font-display text-[1.6rem] leading-[1.1] tracking-[-0.02em] text-foreground">
+              <h2 className="font-display text-[1.5rem] font-bold leading-[1.15] tracking-[-0.02em] text-foreground">
                 {workspace.name}
               </h2>
               {workspace.description && (
@@ -57,8 +50,8 @@ export default async function WorkspacesPage() {
                 </p>
               )}
               <div className="mt-auto flex items-center justify-between pt-4">
-                <span className="font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors group-hover:text-primary">
-                  wejdź →
+                <span className="inline-flex items-center gap-1 font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors group-hover:text-primary">
+                  wejdź <span className="transition-transform group-hover:translate-x-0.5">→</span>
                 </span>
               </div>
             </Link>

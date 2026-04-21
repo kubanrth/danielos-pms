@@ -8,10 +8,11 @@
   /* Brand tokens */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-ink: var(--ink);
   --color-paper: var(--paper);
+  --color-ink: var(--ink);
   --color-accent-brand: var(--accent-brand);
   --color-accent-brand-fg: var(--accent-brand-fg);
+  --color-accent-brand-2: var(--accent-brand-2);
 
   /* Fonts */
   --font-sans: var(--font-sans);
@@ -50,87 +51,88 @@
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
 
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-xl: calc(var(--radius) * 1.25);
+  --radius-2xl: calc(var(--radius) * 1.6);
+  --radius-3xl: calc(var(--radius) * 2);
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 :root {
-  /* Brand — warm editorial palette */
-  --paper: oklch(0.968 0.009 84);      /* warm off-white */
-  --ink: oklch(0.21 0.012 63);         /* deep warm charcoal */
-  --accent-brand: oklch(0.56 0.146 34); /* deep terracotta */
-  --accent-brand-fg: oklch(0.98 0.006 83);
+  /* Neutral SaaS palette — white paper, cool-dark ink */
+  --paper: oklch(1 0 0);
+  --ink: oklch(0.21 0.015 265);
+  /* ClickUp-adjacent purple + pink gradient accents */
+  --accent-brand: oklch(0.59 0.19 282);          /* #7B68EE */
+  --accent-brand-2: oklch(0.67 0.29 339);        /* #FF02F0 */
+  --accent-brand-fg: oklch(1 0 0);
 
-  /* Map to shadcn semantic names */
   --background: var(--paper);
   --foreground: var(--ink);
-  --card: oklch(0.985 0.006 83);
+  --card: oklch(1 0 0);
   --card-foreground: var(--ink);
-  --popover: oklch(0.985 0.006 83);
+  --popover: oklch(1 0 0);
   --popover-foreground: var(--ink);
   --primary: var(--accent-brand);
   --primary-foreground: var(--accent-brand-fg);
-  --secondary: oklch(0.925 0.01 82);
+  --secondary: oklch(0.97 0.003 265);
   --secondary-foreground: var(--ink);
-  --muted: oklch(0.935 0.008 82);
-  --muted-foreground: oklch(0.48 0.012 70);
-  --accent: oklch(0.925 0.01 82);
-  --accent-foreground: var(--ink);
-  --destructive: oklch(0.52 0.19 27);
-  --border: oklch(0.89 0.008 78);
-  --input: oklch(0.89 0.008 78);
-  --ring: oklch(0.56 0.146 34 / 0.5);
-  --chart-1: oklch(0.56 0.146 34);
-  --chart-2: oklch(0.45 0.12 180);
-  --chart-3: oklch(0.62 0.10 240);
-  --chart-4: oklch(0.68 0.14 100);
-  --chart-5: oklch(0.40 0.08 300);
-  --radius: 0.5rem;
+  --muted: oklch(0.97 0.003 265);
+  --muted-foreground: oklch(0.48 0.013 265);
+  --accent: oklch(0.96 0.01 282);
+  --accent-foreground: var(--accent-brand);
+  --destructive: oklch(0.58 0.22 28);
+  --border: oklch(0.92 0.006 265);
+  --input: oklch(0.92 0.006 265);
+  --ring: oklch(0.59 0.19 282 / 0.55);
+  --chart-1: oklch(0.59 0.19 282);
+  --chart-2: oklch(0.67 0.29 339);
+  --chart-3: oklch(0.7 0.15 170);
+  --chart-4: oklch(0.75 0.17 80);
+  --chart-5: oklch(0.55 0.18 230);
+  --radius: 0.75rem;
 
-  --sidebar: oklch(0.945 0.009 82);
+  --sidebar: oklch(0.985 0.003 265);
   --sidebar-foreground: var(--ink);
   --sidebar-primary: var(--accent-brand);
   --sidebar-primary-foreground: var(--accent-brand-fg);
-  --sidebar-accent: oklch(0.91 0.01 82);
-  --sidebar-accent-foreground: var(--ink);
-  --sidebar-border: oklch(0.87 0.008 78);
-  --sidebar-ring: oklch(0.56 0.146 34 / 0.5);
+  --sidebar-accent: oklch(0.95 0.008 282);
+  --sidebar-accent-foreground: var(--accent-brand);
+  --sidebar-border: oklch(0.92 0.006 265);
+  --sidebar-ring: oklch(0.59 0.19 282 / 0.55);
 }
 
 .dark {
-  --paper: oklch(0.16 0.008 60);
-  --ink: oklch(0.95 0.008 82);
+  --paper: oklch(0.17 0.012 265);
+  --ink: oklch(0.95 0.003 265);
   --background: var(--paper);
   --foreground: var(--ink);
-  --card: oklch(0.20 0.008 60);
+  --card: oklch(0.21 0.012 265);
   --card-foreground: var(--ink);
-  --popover: oklch(0.20 0.008 60);
+  --popover: oklch(0.21 0.012 265);
   --popover-foreground: var(--ink);
-  --primary: oklch(0.66 0.14 32);
-  --primary-foreground: oklch(0.14 0.008 60);
-  --secondary: oklch(0.26 0.008 60);
+  --primary: oklch(0.7 0.19 282);
+  --primary-foreground: oklch(0.14 0.01 265);
+  --secondary: oklch(0.27 0.01 265);
   --secondary-foreground: var(--ink);
-  --muted: oklch(0.26 0.008 60);
-  --muted-foreground: oklch(0.72 0.008 75);
-  --accent: oklch(0.26 0.008 60);
+  --muted: oklch(0.27 0.01 265);
+  --muted-foreground: oklch(0.72 0.005 265);
+  --accent: oklch(0.27 0.01 265);
   --accent-foreground: var(--ink);
-  --destructive: oklch(0.66 0.19 25);
+  --destructive: oklch(0.66 0.22 25);
   --border: oklch(1 0 0 / 0.08);
   --input: oklch(1 0 0 / 0.12);
-  --ring: oklch(0.66 0.14 32 / 0.55);
-  --sidebar: oklch(0.18 0.008 60);
+  --ring: oklch(0.7 0.19 282 / 0.55);
+  --sidebar: oklch(0.19 0.012 265);
   --sidebar-foreground: var(--ink);
-  --sidebar-primary: oklch(0.66 0.14 32);
-  --sidebar-primary-foreground: oklch(0.14 0.008 60);
-  --sidebar-accent: oklch(0.24 0.008 60);
+  --sidebar-primary: oklch(0.7 0.19 282);
+  --sidebar-primary-foreground: oklch(0.14 0.01 265);
+  --sidebar-accent: oklch(0.25 0.015 280);
   --sidebar-accent-foreground: var(--ink);
   --sidebar-border: oklch(1 0 0 / 0.08);
-  --sidebar-ring: oklch(0.66 0.14 32 / 0.55);
+  --sidebar-ring: oklch(0.7 0.19 282 / 0.55);
 }
 
 @layer base {
@@ -146,19 +148,30 @@
   }
   h1, h2, h3, h4 {
     font-family: var(--font-display);
-    letter-spacing: -0.02em;
+    letter-spacing: -0.025em;
   }
-  /* Editorial details — small caps for eyebrow text */
+  /* Micro-label in mono small caps — kept from previous design as a workhorse */
   .eyebrow {
     font-family: var(--font-mono);
     text-transform: uppercase;
-    letter-spacing: 0.18em;
+    letter-spacing: 0.14em;
     font-size: 0.68rem;
     font-weight: 500;
     color: var(--muted-foreground);
   }
-  /* Grain overlay — optional, can be added with bg-grain class */
-  .bg-grain {
-    background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.08 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  /* ClickUp-style brand gradient — used on primary CTAs + hero accents */
+  .bg-brand-gradient {
+    background-image: linear-gradient(135deg, var(--accent-brand) 0%, var(--accent-brand-2) 100%);
+  }
+  .text-brand-gradient {
+    background: linear-gradient(135deg, var(--accent-brand) 0%, var(--accent-brand-2) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .shadow-brand {
+    box-shadow:
+      0 1px 0 color-mix(in oklch, var(--accent-brand) 70%, black) inset,
+      0 10px 24px -10px color-mix(in oklch, var(--accent-brand) 55%, transparent);
   }
 }

@@ -176,11 +176,7 @@ export function TaskDetail({
             <button
               type="submit"
               disabled={pending}
-              className="inline-flex h-10 items-center justify-center bg-primary px-5 font-sans text-[0.9rem] font-medium text-primary-foreground transition-[transform,opacity] duration-200 hover:-translate-y-[1px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60"
-              style={{
-                boxShadow:
-                  "0 1px 0 color-mix(in oklch, var(--primary) 60%, black) inset, 0 10px 30px -12px color-mix(in oklch, var(--primary) 60%, transparent)",
-              }}
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-gradient px-5 font-sans text-[0.9rem] font-semibold text-white shadow-brand transition-[transform,opacity] duration-200 hover:-translate-y-[1px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60"
             >
               {pending ? "Zapisuję…" : "Zapisz"}
             </button>
@@ -210,7 +206,7 @@ export function TaskDetail({
                   data-active={active ? "true" : "false"}
                   title={m.email}
                 >
-                  <span className="grid h-5 w-5 shrink-0 place-items-center overflow-hidden rounded-full bg-primary font-display text-[0.62rem] text-primary-foreground">
+                  <span className="grid h-5 w-5 shrink-0 place-items-center overflow-hidden rounded-full bg-brand-gradient font-display text-[0.62rem] font-bold text-white">
                     {m.avatarUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={m.avatarUrl} alt="" className="h-full w-full object-cover" />

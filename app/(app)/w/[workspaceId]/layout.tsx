@@ -28,7 +28,7 @@ export default async function WorkspaceLayout({
       <header className="flex flex-col gap-4 border-b border-border px-8 pb-6 pt-8 md:flex-row md:items-end md:justify-between md:px-14">
         <div className="flex flex-col gap-2">
           <span className="eyebrow">Przestrzeń · /{workspace.slug}</span>
-          <h1 className="font-display text-[2.2rem] leading-[1.05] tracking-[-0.025em] text-foreground">
+          <h1 className="font-display text-[2rem] font-bold leading-[1.1] tracking-[-0.025em] text-foreground">
             {workspace.name}
           </h1>
           {workspace.description && (

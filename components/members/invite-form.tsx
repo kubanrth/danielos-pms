@@ -35,14 +35,13 @@ export function InviteForm({ workspaceId }: { workspaceId: string }) {
   return (
     <form
       action={(fd) => startTransition(() => formAction(fd))}
-      className="flex flex-col gap-5 border border-border bg-card p-6"
-      style={{ boxShadow: "0 1px 0 color-mix(in oklch, var(--foreground) 4%, transparent)" }}
+      className="flex flex-col gap-5 rounded-xl border border-border bg-card p-6 shadow-[0_1px_2px_rgba(10,10,40,0.04)]"
     >
       <input type="hidden" name="workspaceId" value={workspaceId} />
 
       <div className="flex flex-col gap-1.5">
         <span className="eyebrow">Nowe zaproszenie</span>
-        <h3 className="font-display text-[1.3rem] leading-[1.15] tracking-[-0.02em]">
+        <h3 className="font-display text-[1.2rem] font-bold leading-[1.2] tracking-[-0.02em]">
           Zaproś osobę do przestrzeni
         </h3>
       </div>
@@ -82,7 +81,7 @@ export function InviteForm({ workspaceId }: { workspaceId: string }) {
           <button
             type="submit"
             disabled={pending}
-            className="inline-flex h-10 items-center justify-center bg-primary px-5 font-sans text-[0.88rem] font-medium text-primary-foreground transition-[transform,opacity] duration-200 hover:-translate-y-[1px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60"
+            className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-gradient px-5 font-sans text-[0.88rem] font-semibold text-white shadow-brand transition-[transform,opacity] duration-200 hover:-translate-y-[1px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60"
           >
             {pending ? "Wysyłam…" : "Wyślij zaproszenie"}
           </button>
@@ -96,7 +95,7 @@ export function InviteForm({ workspaceId }: { workspaceId: string }) {
       )}
 
       {state?.ok && (
-        <div className="flex flex-col gap-3 border border-primary/30 bg-primary/5 p-4">
+        <div className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
           <div className="flex items-center gap-2">
             <span className="eyebrow text-primary">
               Zaproszenie {state.emailed ? "wysłane" : "utworzone"}
@@ -108,13 +107,13 @@ export function InviteForm({ workspaceId }: { workspaceId: string }) {
             )}
           </div>
           <div className="flex items-center gap-3">
-            <code className="min-w-0 flex-1 truncate rounded-sm bg-muted px-3 py-2 font-mono text-[0.82rem]">
+            <code className="min-w-0 flex-1 truncate rounded-md bg-muted px-3 py-2 font-mono text-[0.82rem]">
               {state.inviteUrl}
             </code>
             <button
               type="button"
               onClick={copyUrl}
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-sm border border-border px-3 font-mono text-[0.72rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-border px-3 font-mono text-[0.72rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
             >
               {copied ? <Check size={13} /> : <Copy size={13} />}
               {copied ? "Skopiowano" : "Kopiuj"}

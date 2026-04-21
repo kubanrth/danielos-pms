@@ -67,17 +67,23 @@ export default async function InvitePage({
       />
 
       <header className="flex items-center justify-between px-8 pt-8 md:px-14 md:pt-10">
-        <span className="eyebrow">DANIELOS · zaproszenie</span>
+        <div className="flex items-center gap-2">
+          <span className="grid h-7 w-7 place-items-center rounded-md bg-brand-gradient text-white font-display text-[0.82rem] font-bold">
+            D
+          </span>
+          <span className="font-display text-[1rem] font-semibold tracking-[-0.01em]">
+            DANIELOS
+          </span>
+        </div>
+        <span className="eyebrow hidden md:inline">zaproszenie</span>
       </header>
 
       <main className="mx-auto flex w-full max-w-[440px] flex-1 flex-col justify-center px-6 py-16">
         <div className="mb-10 flex flex-col items-start gap-3">
           <span className="eyebrow">Zostałaś/eś zaproszona/y</span>
-          <h1
-            className="font-display text-[2.8rem] leading-[1.0] tracking-[-0.035em]"
-          >
+          <h1 className="font-display text-[2.6rem] font-bold leading-[1.05] tracking-[-0.03em]">
             Dołącz do<br />
-            <span className="italic text-primary">{invitation.workspace.name}.</span>
+            <span className="text-brand-gradient">{invitation.workspace.name}.</span>
           </h1>
           <p className="mt-3 max-w-[38ch] text-[0.95rem] leading-[1.6] text-muted-foreground">
             {invitation.inviter.name ?? invitation.inviter.email} zaprasza Cię jako{" "}

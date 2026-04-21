@@ -25,13 +25,13 @@ export function CreateWorkspaceDialog() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="group flex min-h-[180px] flex-col items-start justify-between border border-dashed border-border p-6 text-left text-muted-foreground transition-[border-color,color] hover:border-primary/60 hover:text-foreground focus-visible:border-primary focus-visible:text-foreground focus-visible:outline-none"
+        className="group flex min-h-[180px] flex-col items-start justify-between rounded-xl border border-dashed border-border p-6 text-left text-muted-foreground transition-all hover:border-primary/60 hover:bg-accent/50 hover:text-foreground focus-visible:border-primary focus-visible:text-foreground focus-visible:outline-none"
       >
         <span className="eyebrow transition-colors group-hover:text-primary">
           Nowa przestrzeń
         </span>
         <div className="flex flex-col gap-1">
-          <span className="font-display text-[1.4rem] leading-[1.1] tracking-[-0.02em]">
+          <span className="font-display text-[1.35rem] font-bold leading-[1.15] tracking-[-0.02em]">
             + Utwórz workspace
           </span>
           <span className="font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground">
@@ -41,12 +41,11 @@ export function CreateWorkspaceDialog() {
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="border-border bg-card sm:max-w-[520px]">
+        <DialogContent className="rounded-xl border-border bg-card sm:max-w-[520px]">
           <DialogHeader>
             <span className="eyebrow">Nowa przestrzeń robocza</span>
-            <DialogTitle className="font-display text-[1.8rem] font-normal leading-[1.1] tracking-[-0.02em] text-foreground">
-              Jak nazwiemy<br />
-              <span className="italic text-primary">tę przestrzeń?</span>
+            <DialogTitle className="font-display text-[1.65rem] font-bold leading-[1.15] tracking-[-0.02em] text-foreground">
+              Jak nazwiemy tę <span className="text-brand-gradient">przestrzeń?</span>
             </DialogTitle>
             <DialogDescription className="text-[0.92rem] leading-[1.55] text-muted-foreground">
               Po utworzeniu trafisz do niej automatycznie. Zaczniesz z domyślną tablicą,
@@ -95,15 +94,9 @@ export function CreateWorkspaceDialog() {
               <button
                 type="submit"
                 disabled={pending}
-                className="group relative inline-flex h-11 items-center justify-center overflow-hidden bg-primary px-6 text-primary-foreground transition-[transform,opacity] duration-200 hover:-translate-y-[1px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary active:translate-y-0 disabled:opacity-60"
-                style={{
-                  boxShadow:
-                    "0 1px 0 color-mix(in oklch, var(--primary) 60%, black) inset, 0 10px 30px -12px color-mix(in oklch, var(--primary) 60%, transparent)",
-                }}
+                className="inline-flex h-11 items-center justify-center rounded-lg bg-brand-gradient px-6 font-sans text-[0.9rem] font-semibold text-white shadow-brand transition-[transform,opacity] duration-200 hover:-translate-y-[1px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary active:translate-y-0 disabled:opacity-60"
               >
-                <span className="relative z-10 font-sans text-[0.9rem] font-medium tracking-wide">
-                  {pending ? "Tworzę…" : "Utwórz przestrzeń"}
-                </span>
+                {pending ? "Tworzę…" : "Utwórz przestrzeń"}
               </button>
             </div>
           </form>

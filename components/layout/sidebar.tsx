@@ -102,7 +102,7 @@ export function Sidebar({
           href="/profile"
           className="flex min-w-0 items-center gap-2.5 rounded-sm px-1.5 py-1 transition-colors hover:bg-sidebar-accent focus-visible:bg-sidebar-accent focus-visible:outline-none"
         >
-          <span className="relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-primary font-display text-[0.72rem] text-primary-foreground">
+          <span className="relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-brand-gradient font-display text-[0.72rem] font-bold text-white">
             {user.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
@@ -112,7 +112,7 @@ export function Sidebar({
           </span>
           {!collapsed && (
             <div className="min-w-0 flex-1 leading-tight">
-              <div className="truncate font-display text-[0.95rem] tracking-[-0.01em]">
+              <div className="truncate font-display text-[0.92rem] font-semibold tracking-[-0.01em]">
                 {user.name ?? user.email.split("@")[0]}
               </div>
               <div className="truncate font-mono text-[0.64rem] uppercase tracking-[0.14em] text-muted-foreground">

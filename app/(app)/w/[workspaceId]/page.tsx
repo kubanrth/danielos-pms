@@ -51,7 +51,7 @@ export default async function WorkspaceOverviewPage({
       {boards.map((board) => (
         <section key={board.id} className="flex flex-col gap-5">
           <div className="flex items-baseline justify-between">
-            <h2 className="font-display text-[1.4rem] leading-[1.15] tracking-[-0.02em]">
+            <h2 className="font-display text-[1.25rem] font-bold leading-[1.2] tracking-[-0.02em]">
               {board.name}
               <span className="ml-3 font-mono text-[0.72rem] font-normal uppercase tracking-[0.14em] text-muted-foreground">
                 {board._count.tasks}{" "}
@@ -64,28 +64,28 @@ export default async function WorkspaceOverviewPage({
           </div>
 
           {board.tasks.length === 0 ? (
-            <div className="border border-dashed border-border p-8 text-center text-muted-foreground">
-              <p className="font-display text-[1.1rem]">Brak zadań.</p>
+            <div className="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
+              <p className="font-display text-[1.05rem] font-semibold">Brak zadań.</p>
               <p className="mt-1 font-mono text-[0.7rem] uppercase tracking-[0.14em]">
                 zacznij od przycisku „Nowe zadanie" powyżej
               </p>
             </div>
           ) : (
-            <ul className="flex flex-col border-t border-border">
+            <ul className="flex flex-col rounded-xl border border-border bg-card overflow-hidden">
               {board.tasks.map((task) => (
-                <li key={task.id}>
+                <li key={task.id} className="border-b border-border last:border-b-0">
                   <Link
                     href={`/w/${workspaceId}/t/${task.id}`}
-                    className="group flex items-start justify-between gap-4 border-b border-border py-3 transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none"
+                    className="group flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-accent/60 focus-visible:bg-accent/60 focus-visible:outline-none"
                   >
                     <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                       <div className="flex items-center gap-2">
                         {task.statusColumn && (
                           <span
-                            className="inline-flex h-5 items-center rounded-sm px-1.5 font-mono text-[0.62rem] uppercase tracking-[0.12em]"
+                            className="inline-flex h-5 items-center rounded-full px-2 font-mono text-[0.6rem] uppercase tracking-[0.12em] font-semibold"
                             style={{
                               color: task.statusColumn.colorHex,
-                              background: `${task.statusColumn.colorHex}1A`,
+                              background: `${task.statusColumn.colorHex}22`,
                             }}
                           >
                             {task.statusColumn.name}
@@ -94,9 +94,9 @@ export default async function WorkspaceOverviewPage({
                         {task.tags.map(({ tag }) => (
                           <span
                             key={tag.id}
-                            className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[0.72rem]"
+                            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.7rem] font-medium"
                             style={{
-                              borderColor: tag.colorHex,
+                              background: `${tag.colorHex}1A`,
                               color: tag.colorHex,
                             }}
                           >
@@ -105,7 +105,7 @@ export default async function WorkspaceOverviewPage({
                           </span>
                         ))}
                       </div>
-                      <span className="truncate font-display text-[1.05rem] leading-tight tracking-[-0.01em] transition-colors group-hover:text-primary">
+                      <span className="truncate font-display text-[0.98rem] font-semibold leading-tight tracking-[-0.01em] transition-colors group-hover:text-primary">
                         {task.title}
                       </span>
                     </div>
@@ -116,7 +116,7 @@ export default async function WorkspaceOverviewPage({
                           {task.assignees.slice(0, 3).map((a) => (
                             <span
                               key={a.userId}
-                              className="grid h-6 w-6 place-items-center overflow-hidden rounded-full border border-background bg-primary font-display text-[0.62rem] text-primary-foreground"
+                              className="grid h-6 w-6 place-items-center overflow-hidden rounded-full border-2 border-background bg-brand-gradient font-display text-[0.6rem] font-bold text-white"
                               title={a.user.name ?? a.user.email}
                             >
                               {a.user.avatarUrl ? (
@@ -144,7 +144,7 @@ export default async function WorkspaceOverviewPage({
       ))}
 
       <section className="flex flex-col gap-4 border-t border-border pt-10">
-        <h3 className="font-display text-[1.2rem] leading-[1.15] tracking-[-0.02em]">
+        <h3 className="font-display text-[1.1rem] font-bold leading-[1.2] tracking-[-0.02em]">
           Dalsze kroki
         </h3>
         <ul className="grid gap-3 text-[0.92rem] leading-[1.55] text-muted-foreground md:grid-cols-2">
@@ -162,7 +162,7 @@ function Metric({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex items-baseline gap-4">
       <span className="eyebrow">{label}</span>
-      <span className="font-display text-[2rem] leading-none tracking-[-0.02em]">
+      <span className="font-display text-[1.8rem] font-bold leading-none tracking-[-0.02em]">
         {value}
       </span>
     </div>

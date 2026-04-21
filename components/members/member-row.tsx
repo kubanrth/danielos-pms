@@ -37,7 +37,7 @@ export function MemberRow({
   return (
     <div className="flex items-center justify-between gap-4 border-b border-border py-3 last:border-b-0">
       <div className="flex min-w-0 items-center gap-3">
-        <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-primary font-display text-[0.78rem] text-primary-foreground">
+        <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-brand-gradient font-display text-[0.78rem] font-bold text-white">
           {avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
@@ -46,7 +46,7 @@ export function MemberRow({
           )}
         </span>
         <div className="min-w-0">
-          <div className="truncate font-display text-[1.02rem] leading-tight tracking-[-0.01em]">
+          <div className="truncate font-display text-[0.98rem] font-semibold leading-tight tracking-[-0.01em]">
             {name ?? email.split("@")[0]}
             {isSelf && (
               <span className="ml-2 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted-foreground">

@@ -93,11 +93,7 @@ export function AcceptInviteForm({
       <button
         type="submit"
         disabled={pending}
-        className="mt-2 inline-flex h-12 items-center justify-center bg-primary px-6 font-sans text-[0.92rem] font-medium text-primary-foreground transition-[transform,opacity] duration-200 hover:-translate-y-[1px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60"
-        style={{
-          boxShadow:
-            "0 1px 0 color-mix(in oklch, var(--primary) 60%, black) inset, 0 10px 30px -12px color-mix(in oklch, var(--primary) 60%, transparent)",
-        }}
+        className="mt-2 inline-flex h-12 items-center justify-center rounded-lg bg-brand-gradient px-6 font-sans text-[0.92rem] font-semibold text-white shadow-brand transition-[transform,opacity] duration-200 hover:-translate-y-[1px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60"
       >
         {pending ? "Dołączam…" : "Dołącz do przestrzeni"}
       </button>

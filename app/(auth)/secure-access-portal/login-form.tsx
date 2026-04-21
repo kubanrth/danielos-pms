@@ -42,13 +42,9 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
       <button
         type="submit"
         disabled={pending}
-        className="group relative mt-2 inline-flex h-12 items-center justify-center overflow-hidden bg-primary px-6 text-primary-foreground transition-[transform,opacity] duration-200 hover:-translate-y-[1px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary active:translate-y-0 disabled:opacity-60"
-        style={{
-          boxShadow:
-            "0 1px 0 color-mix(in oklch, var(--primary) 60%, black) inset, 0 10px 30px -12px color-mix(in oklch, var(--primary) 60%, transparent)",
-        }}
+        className="group relative mt-2 inline-flex h-12 items-center justify-center overflow-hidden rounded-lg bg-brand-gradient px-6 text-white shadow-brand transition-[transform,opacity] duration-200 hover:-translate-y-[1px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary active:translate-y-0 disabled:opacity-60"
       >
-        <span className="relative z-10 font-sans text-[0.92rem] font-medium tracking-wide">
+        <span className="relative z-10 font-sans text-[0.92rem] font-semibold tracking-wide">
           {pending ? "Loguję…" : "Wejdź do systemu"}
         </span>
       </button>

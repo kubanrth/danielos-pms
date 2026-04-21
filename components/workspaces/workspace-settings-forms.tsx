@@ -51,11 +51,7 @@ export function UpdateWorkspaceForm({
         <button
           type="submit"
           disabled={pending}
-          className="inline-flex h-10 items-center justify-center bg-primary px-5 font-sans text-[0.9rem] font-medium text-primary-foreground transition-[transform,opacity] duration-200 hover:-translate-y-[1px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60"
-          style={{
-            boxShadow:
-              "0 1px 0 color-mix(in oklch, var(--primary) 60%, black) inset, 0 10px 30px -12px color-mix(in oklch, var(--primary) 60%, transparent)",
-          }}
+          className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-gradient px-5 font-sans text-[0.9rem] font-semibold text-white shadow-brand transition-[transform,opacity] duration-200 hover:-translate-y-[1px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60"
         >
           {pending ? "Zapisuję…" : "Zapisz zmiany"}
         </button>
@@ -96,7 +92,7 @@ export function DeleteWorkspaceForm({
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="self-start border border-destructive/40 px-4 py-2 font-mono text-[0.72rem] uppercase tracking-[0.14em] text-destructive transition-colors hover:bg-destructive/5 focus-visible:bg-destructive/5 focus-visible:outline-none"
+          className="self-start rounded-lg border border-destructive/40 px-4 py-2 font-mono text-[0.72rem] uppercase tracking-[0.14em] font-semibold text-destructive transition-colors hover:bg-destructive/5 focus-visible:bg-destructive/5 focus-visible:outline-none"
         >
           Usuń przestrzeń
         </button>
@@ -107,7 +103,7 @@ export function DeleteWorkspaceForm({
   return (
     <form
       action={(fd) => startTransition(() => formAction(fd))}
-      className="flex flex-col gap-4 border border-destructive/40 p-5"
+      className="flex flex-col gap-4 rounded-lg border border-destructive/40 p-5"
     >
       <input type="hidden" name="id" value={workspaceId} />
       <p className="text-[0.92rem] leading-[1.55]">
@@ -137,7 +133,7 @@ export function DeleteWorkspaceForm({
         <button
           type="submit"
           disabled={pending}
-          className="inline-flex h-10 items-center justify-center bg-destructive px-5 font-sans text-[0.9rem] font-medium text-white transition-[transform,opacity] duration-200 hover:-translate-y-[1px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-destructive disabled:opacity-60"
+          className="inline-flex h-10 items-center justify-center rounded-lg bg-destructive px-5 font-sans text-[0.9rem] font-semibold text-white transition-[transform,opacity] duration-200 hover:-translate-y-[1px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-destructive disabled:opacity-60"
         >
           {pending ? "Usuwam…" : "Tak, usuń nieodwracalnie"}
         </button>
