@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { requireWorkspaceAction } from "@/lib/workspace-guard";
+import { broadcastWorkspaceChange } from "@/lib/realtime";
 import { writeAudit } from "@/lib/audit";
 import {
   createTagSchema,
@@ -94,6 +95,11 @@ export async function createTaskAction(
   });
 
   revalidatePath(`/w/${parsed.data.workspaceId}`);
+  await broadcastWorkspaceChange(task.workspaceId, {
+    type: "task.changed",
+    taskId: task.id,
+    boardId: task.boardId,
+  });
   return { ok: true, taskId: task.id };
 }
 
@@ -150,6 +156,11 @@ export async function updateTaskAction(
 
   revalidatePath(`/w/${updated.workspaceId}`);
   revalidatePath(`/w/${updated.workspaceId}/t/${updated.id}`);
+  await broadcastWorkspaceChange(updated.workspaceId, {
+    type: "task.changed",
+    taskId: updated.id,
+    boardId: updated.boardId,
+  });
   return { ok: true, message: "Zapisano." };
 }
 
@@ -168,6 +179,7 @@ export async function deleteTaskAction(formData: FormData) {
     action: "task.deleted",
   });
   revalidatePath(`/w/${workspaceId}`);
+  await broadcastWorkspaceChange(workspaceId, { type: "task.changed", taskId: id });
   redirect(`/w/${workspaceId}`);
 }
 
@@ -229,6 +241,11 @@ export async function patchTaskAction(formData: FormData) {
   revalidatePath(`/w/${updated.workspaceId}/b/${updated.boardId}/table`);
   revalidatePath(`/w/${updated.workspaceId}/b/${updated.boardId}/kanban`);
   revalidatePath(`/w/${updated.workspaceId}/t/${updated.id}`);
+  await broadcastWorkspaceChange(updated.workspaceId, {
+    type: "task.changed",
+    taskId: updated.id,
+    boardId: updated.boardId,
+  });
 }
 
 export async function toggleAssigneeAction(formData: FormData) {
@@ -275,6 +292,13 @@ export async function toggleAssigneeAction(formData: FormData) {
   });
 
   revalidatePath(`/w/${task.workspaceId}/t/${task.id}`);
+  revalidatePath(`/w/${task.workspaceId}/b/${task.boardId}/table`);
+  revalidatePath(`/w/${task.workspaceId}/b/${task.boardId}/kanban`);
+  await broadcastWorkspaceChange(task.workspaceId, {
+    type: "task.changed",
+    taskId: task.id,
+    boardId: task.boardId,
+  });
 }
 
 export async function toggleTagAction(formData: FormData) {
@@ -313,6 +337,13 @@ export async function toggleTagAction(formData: FormData) {
   });
 
   revalidatePath(`/w/${task.workspaceId}/t/${task.id}`);
+  revalidatePath(`/w/${task.workspaceId}/b/${task.boardId}/table`);
+  revalidatePath(`/w/${task.workspaceId}/b/${task.boardId}/kanban`);
+  await broadcastWorkspaceChange(task.workspaceId, {
+    type: "task.changed",
+    taskId: task.id,
+    boardId: task.boardId,
+  });
 }
 
 export async function createTagAction(formData: FormData) {

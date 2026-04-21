@@ -21,6 +21,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { patchTaskAction } from "@/app/(app)/w/[workspaceId]/t/actions";
+import { useWorkspaceRealtime } from "@/hooks/use-workspace-realtime";
 
 export interface KanbanTask {
   id: string;
@@ -62,6 +63,7 @@ export function KanbanBoard({
   const [tasks, setTasks] = useState<KanbanTask[]>(initialTasks);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [, startPatch] = useTransition();
+  useWorkspaceRealtime(workspaceId);
 
   // Resync local state when the server props change (revalidate).
   useEffect(() => {

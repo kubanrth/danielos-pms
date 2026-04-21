@@ -12,6 +12,7 @@ import {
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { patchTaskAction } from "@/app/(app)/w/[workspaceId]/t/actions";
+import { useWorkspaceRealtime } from "@/hooks/use-workspace-realtime";
 
 export interface BoardTableTask {
   id: string;
@@ -57,6 +58,7 @@ export function BoardTable({
   canEdit: boolean;
 }) {
   const [sorting, setSorting] = useState<SortingState>([]);
+  useWorkspaceRealtime(workspaceId);
 
   const columns = useMemo(
     () => [
