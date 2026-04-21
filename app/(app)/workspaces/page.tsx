@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { signOutAction } from "@/app/(app)/actions";
 import { db } from "@/lib/db";
+import { CreateWorkspaceDialog } from "@/components/workspaces/create-workspace-dialog";
 
 export default async function WorkspacesPage() {
   const session = await auth();
@@ -62,9 +64,10 @@ export default async function WorkspacesPage() {
 
         <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
           {memberships.map(({ workspace, role }) => (
-            <article
+            <Link
               key={workspace.id}
-              className="group relative flex flex-col gap-4 border border-border bg-card p-6 transition-[border-color,transform] hover:-translate-y-[2px] hover:border-primary/40"
+              href={`/w/${workspace.id}`}
+              className="group relative flex min-h-[180px] flex-col gap-4 border border-border bg-card p-6 transition-[border-color,transform] hover:-translate-y-[2px] hover:border-primary/40 focus-visible:-translate-y-[2px] focus-visible:border-primary focus-visible:outline-none"
               style={{
                 boxShadow:
                   "0 1px 0 color-mix(in oklch, var(--foreground) 4%, transparent)",
@@ -82,32 +85,19 @@ export default async function WorkspacesPage() {
                 {workspace.name}
               </h2>
               {workspace.description && (
-                <p className="text-[0.9rem] leading-[1.55] text-muted-foreground">
+                <p className="line-clamp-2 text-[0.9rem] leading-[1.55] text-muted-foreground">
                   {workspace.description}
                 </p>
               )}
               <div className="mt-auto flex items-center justify-between pt-4">
-                <span className="font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground">
+                <span className="font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors group-hover:text-primary">
                   wejdź →
                 </span>
               </div>
-            </article>
+            </Link>
           ))}
 
-          {/* Create new card placeholder */}
-          <article
-            className="flex min-h-[180px] flex-col items-start justify-between border border-dashed border-border p-6 text-muted-foreground"
-          >
-            <span className="eyebrow">Nowa przestrzeń</span>
-            <div className="flex flex-col gap-1">
-              <span className="font-display text-[1.4rem] leading-[1.1] tracking-[-0.02em]">
-                + Utwórz workspace
-              </span>
-              <span className="font-mono text-[0.68rem] uppercase tracking-[0.14em]">
-                dostępne w F1c
-              </span>
-            </div>
-          </article>
+          <CreateWorkspaceDialog />
         </div>
       </main>
     </div>
