@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import { Prisma } from "@/lib/generated/prisma/client";
 import {
   createStatusColumnSchema,
   deleteStatusColumnSchema,
@@ -9,6 +10,7 @@ import {
   reorderStatusColumnsSchema,
   updateStatusColumnSchema,
 } from "@/lib/schemas/board";
+import { backgroundSchema, updateBackgroundSchema } from "@/lib/schemas/background";
 import { requireWorkspaceAction } from "@/lib/workspace-guard";
 import { writeAudit } from "@/lib/audit";
 
@@ -137,6 +139,59 @@ export async function deleteStatusColumnAction(formData: FormData) {
     diff: { name: col.name },
   });
   revalidatePath(`/w/${workspaceId}/b/${col.boardId}/table`);
+}
+
+// BoardView background — "ikona pędzla" per-view customization (color /
+// gradient / image URL). Persists on BoardView.background as JSON.
+export async function updateBackgroundAction(formData: FormData) {
+  const parsedMeta = updateBackgroundSchema.safeParse({
+    workspaceId: formData.get("workspaceId"),
+    boardId: formData.get("boardId"),
+    viewType: formData.get("viewType"),
+    payload: formData.get("payload"),
+  });
+  if (!parsedMeta.success) return;
+
+  let parsedPayload: unknown;
+  try {
+    parsedPayload = JSON.parse(parsedMeta.data.payload);
+  } catch {
+    return;
+  }
+  const parsed = backgroundSchema.safeParse(parsedPayload);
+  if (!parsed.success) return;
+
+  const ctx = await requireWorkspaceAction(
+    parsedMeta.data.workspaceId,
+    "background.customize",
+  );
+
+  // The default board is seeded with BoardView rows for each view type,
+  // but workspaces created before the view row existed might not — upsert.
+  await db.boardView.upsert({
+    where: {
+      boardId_type: { boardId: parsedMeta.data.boardId, type: parsedMeta.data.viewType },
+    },
+    update: {
+      background: parsed.data === null ? Prisma.DbNull : (parsed.data as Prisma.InputJsonValue),
+    },
+    create: {
+      boardId: parsedMeta.data.boardId,
+      type: parsedMeta.data.viewType,
+      background: parsed.data === null ? Prisma.DbNull : (parsed.data as Prisma.InputJsonValue),
+    },
+  });
+
+  await writeAudit({
+    workspaceId: parsedMeta.data.workspaceId,
+    objectType: "Board",
+    objectId: parsedMeta.data.boardId,
+    actorId: ctx.userId,
+    action: "board.backgroundCustomized",
+    diff: { viewType: parsedMeta.data.viewType, kind: (parsed.data ?? { kind: "none" }).kind },
+  });
+
+  revalidatePath(`/w/${parsedMeta.data.workspaceId}/b/${parsedMeta.data.boardId}/table`);
 }
 
 export async function reorderStatusColumnsAction(formData: FormData) {

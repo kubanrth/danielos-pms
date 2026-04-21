@@ -5,6 +5,8 @@ import { can } from "@/lib/permissions";
 import { BoardTable } from "@/components/table/board-table";
 import { StatusColumnManager } from "@/components/table/status-column-manager";
 import { CreateTaskButton } from "@/components/task/create-task-button";
+import { BackgroundCustomizer } from "@/components/view/background-customizer";
+import { backgroundToCss, type BackgroundConfig } from "@/lib/schemas/background";
 
 export default async function BoardTablePage({
   params,
@@ -18,6 +20,7 @@ export default async function BoardTablePage({
     where: { id: boardId, workspaceId, deletedAt: null },
     include: {
       statusColumns: { orderBy: { order: "asc" } },
+      views: { where: { type: "TABLE" } },
       tasks: {
         where: { deletedAt: null },
         orderBy: [{ statusColumn: { order: "asc" } }, { rowOrder: "asc" }],
@@ -35,9 +38,18 @@ export default async function BoardTablePage({
   const canEdit = can(ctx.role, "task.update");
   const canCreate = can(ctx.role, "task.create");
   const canManageBoard = can(ctx.role, "board.update");
+  const canCustomize = can(ctx.role, "background.customize");
+
+  const tableView = board.views[0];
+  const background = (tableView?.background ?? null) as BackgroundConfig | null;
+  const bgCss = backgroundToCss(background);
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-6">
+    <div
+      className="relative -mx-8 -my-10 min-h-[calc(100dvh-14rem)] px-8 py-10 md:-mx-14 md:px-14"
+      style={bgCss ? { background: bgCss } : undefined}
+    >
+      <div className="mx-auto flex max-w-7xl flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-1">
           <span className="eyebrow">Widok tabeli</span>
@@ -50,9 +62,19 @@ export default async function BoardTablePage({
             </p>
           )}
         </div>
-        {canCreate && (
-          <CreateTaskButton workspaceId={workspaceId} boardId={board.id} />
-        )}
+        <div className="flex items-center gap-2">
+          {canCustomize && (
+            <BackgroundCustomizer
+              workspaceId={workspaceId}
+              boardId={board.id}
+              viewType="TABLE"
+              initial={background}
+            />
+          )}
+          {canCreate && (
+            <CreateTaskButton workspaceId={workspaceId} boardId={board.id} />
+          )}
+        </div>
       </div>
 
       <BoardTable
@@ -95,6 +117,7 @@ export default async function BoardTablePage({
           }))}
         />
       )}
+      </div>
     </div>
   );
 }

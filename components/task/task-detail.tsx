@@ -1,15 +1,27 @@
 "use client";
 
-import { useActionState, startTransition } from "react";
-import { Trash2 } from "lucide-react";
+import { useActionState, startTransition, useState } from "react";
+import { Trash2, Plus, Check, X } from "lucide-react";
 import type { Role } from "@/lib/generated/prisma/enums";
 import {
+  createTagAction,
   deleteTaskAction,
   toggleAssigneeAction,
   toggleTagAction,
   updateTaskAction,
   type UpdateTaskState,
 } from "@/app/(app)/w/[workspaceId]/t/actions";
+
+const TAG_COLORS = [
+  "#EF4444",
+  "#F59E0B",
+  "#10B981",
+  "#3B82F6",
+  "#8B5CF6",
+  "#EC4899",
+  "#64748B",
+  "#14B8A6",
+];
 
 export interface TaskDetailProps {
   workspaceId: string;
@@ -223,48 +235,129 @@ export function TaskDetail({
       </section>
 
       {/* Tags */}
-      <section className="flex flex-col gap-3">
-        <div className="flex items-baseline justify-between">
-          <span className="eyebrow">Tagi</span>
-          <span className="font-mono text-[0.64rem] uppercase tracking-[0.12em] text-muted-foreground">
-            zarządzanie tagami — F2
-          </span>
-        </div>
-        {allTags.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {allTags.map((t) => {
-              const active = tagIds.has(t.id);
-              return (
-                <form key={t.id} action={toggleTagAction} className="m-0">
-                  <input type="hidden" name="taskId" value={task.id} />
-                  <input type="hidden" name="tagId" value={t.id} />
-                  <button
-                    type="submit"
-                    disabled={!canEdit}
-                    data-active={active ? "true" : "false"}
-                    className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[0.78rem] transition-[border-color,opacity] data-[active=false]:opacity-50 hover:opacity-100 disabled:cursor-not-allowed"
-                    style={{
-                      borderColor: active ? t.colorHex : "var(--border)",
-                      background: active ? `${t.colorHex}1A` : "transparent",
-                      color: active ? t.colorHex : "var(--foreground)",
-                    }}
-                  >
-                    <span
-                      className="h-2 w-2 rounded-full"
-                      style={{ background: t.colorHex }}
-                    />
-                    {t.name}
-                  </button>
-                </form>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="text-[0.88rem] text-muted-foreground">
-            Brak tagów w tej przestrzeni.
-          </p>
-        )}
-      </section>
+      <TagsSection
+        workspaceId={workspaceId}
+        taskId={task.id}
+        allTags={allTags}
+        tagIds={tagIds}
+        canEdit={canEdit}
+      />
     </div>
+  );
+}
+
+function TagsSection({
+  workspaceId,
+  taskId,
+  allTags,
+  tagIds,
+  canEdit,
+}: {
+  workspaceId: string;
+  taskId: string;
+  allTags: { id: string; name: string; colorHex: string }[];
+  tagIds: Set<string>;
+  canEdit: boolean;
+}) {
+  const [creating, setCreating] = useState(false);
+  const [color, setColor] = useState(TAG_COLORS[0]);
+
+  return (
+    <section className="flex flex-col gap-3">
+      <span className="eyebrow">Tagi</span>
+      {allTags.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {allTags.map((t) => {
+            const active = tagIds.has(t.id);
+            return (
+              <form key={t.id} action={toggleTagAction} className="m-0">
+                <input type="hidden" name="taskId" value={taskId} />
+                <input type="hidden" name="tagId" value={t.id} />
+                <button
+                  type="submit"
+                  disabled={!canEdit}
+                  data-active={active ? "true" : "false"}
+                  className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[0.78rem] font-medium transition-[border-color,opacity] data-[active=false]:opacity-50 hover:opacity-100 disabled:cursor-not-allowed"
+                  style={{
+                    borderColor: active ? t.colorHex : "var(--border)",
+                    background: active ? `${t.colorHex}1A` : "transparent",
+                    color: active ? t.colorHex : "var(--foreground)",
+                  }}
+                >
+                  <span className="h-2 w-2 rounded-full" style={{ background: t.colorHex }} />
+                  {t.name}
+                </button>
+              </form>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="text-[0.88rem] text-muted-foreground">Brak tagów.</p>
+      )}
+
+      {canEdit && (
+        creating ? (
+          <form
+            action={createTagAction}
+            onSubmit={() => {
+              setCreating(false);
+              setColor(TAG_COLORS[0]);
+            }}
+            className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 p-2"
+          >
+            <input type="hidden" name="workspaceId" value={workspaceId} />
+            <input type="hidden" name="colorHex" value={color} />
+            <input
+              name="name"
+              type="text"
+              required
+              maxLength={32}
+              placeholder="np. urgent"
+              autoFocus
+              className="flex-1 min-w-[140px] rounded-md bg-transparent px-2 py-1 text-[0.82rem] outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"
+            />
+            <div className="flex items-center gap-1">
+              {TAG_COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setColor(c)}
+                  className="grid h-6 w-6 place-items-center rounded-full transition-transform hover:scale-110"
+                  style={{
+                    background: c,
+                    outline: color === c ? "2px solid var(--foreground)" : "none",
+                    outlineOffset: color === c ? 2 : 0,
+                  }}
+                  aria-label={`kolor ${c}`}
+                />
+              ))}
+            </div>
+            <button
+              type="submit"
+              className="grid h-8 w-8 place-items-center rounded-md bg-brand-gradient text-white transition-opacity hover:opacity-90"
+              aria-label="Utwórz tag"
+            >
+              <Check size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setCreating(false)}
+              className="grid h-8 w-8 place-items-center rounded-md border border-border text-muted-foreground transition-colors hover:text-foreground"
+              aria-label="Anuluj"
+            >
+              <X size={14} />
+            </button>
+          </form>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="inline-flex h-8 w-fit items-center gap-1.5 rounded-full border border-dashed border-border px-3 font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
+          >
+            <Plus size={12} /> Nowy tag
+          </button>
+        )
+      )}
+    </section>
   );
 }
