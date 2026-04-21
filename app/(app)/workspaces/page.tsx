@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
-import { signOutAction } from "@/app/(app)/actions";
 import { db } from "@/lib/db";
 import { CreateWorkspaceDialog } from "@/components/workspaces/create-workspace-dialog";
 
@@ -15,38 +14,8 @@ export default async function WorkspacesPage() {
   });
 
   return (
-    <div className="min-h-dvh bg-background">
-      <header className="flex items-center justify-between border-b border-border px-8 py-5 md:px-14">
-        <div className="flex items-center gap-3">
-          <span
-            className="font-display text-[1.4rem] leading-none tracking-[-0.02em]"
-            style={{ fontVariationSettings: '"opsz" 144' }}
-          >
-            DANIELOS
-          </span>
-          <span className="eyebrow hidden sm:inline">System zarządzania projektami</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="font-mono text-[0.72rem] text-muted-foreground">
-            {user.email}
-            {user.isSuperAdmin && (
-              <span className="ml-2 rounded-sm bg-primary/10 px-1.5 py-0.5 text-primary">
-                super admin
-              </span>
-            )}
-          </span>
-          <form action={signOutAction}>
-            <button
-              type="submit"
-              className="font-mono text-[0.72rem] uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground focus-visible:text-foreground"
-            >
-              Wyloguj
-            </button>
-          </form>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-6xl px-8 py-16 md:px-14">
+    <main className="flex-1 px-8 py-12 md:px-14 md:py-16">
+      <div className="mx-auto max-w-6xl">
         <div className="mb-12 flex flex-col gap-3">
           <span className="eyebrow">Twoje przestrzenie</span>
           <h1
@@ -79,9 +48,7 @@ export default async function WorkspacesPage() {
                   /{workspace.slug}
                 </span>
               </div>
-              <h2
-                className="font-display text-[1.6rem] leading-[1.1] tracking-[-0.02em] text-foreground"
-              >
+              <h2 className="font-display text-[1.6rem] leading-[1.1] tracking-[-0.02em] text-foreground">
                 {workspace.name}
               </h2>
               {workspace.description && (
@@ -99,7 +66,7 @@ export default async function WorkspacesPage() {
 
           <CreateWorkspaceDialog />
         </div>
-      </main>
-    </div>
+      </div>
+    </main>
   );
 }
