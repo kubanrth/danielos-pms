@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
+import type { Prisma } from "@/lib/generated/prisma/client";
 import { requireWorkspaceAction } from "@/lib/workspace-guard";
 import { writeAudit } from "@/lib/audit";
 import {
@@ -168,6 +169,60 @@ export async function deleteTaskAction(formData: FormData) {
   });
   revalidatePath(`/w/${workspaceId}`);
   redirect(`/w/${workspaceId}`);
+}
+
+// Small-field patches used by the Table view's inline-edit cells.
+// Unlike updateTaskAction, this updates only the fields present in
+// the FormData, so a click-to-edit title or a status dropdown can
+// each fire their own action without round-tripping the whole task.
+export async function patchTaskAction(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const existing = await db.task.findUnique({ where: { id } });
+  if (!existing) return;
+  const ctx = await requireWorkspaceAction(existing.workspaceId, "task.update");
+
+  const data: Record<string, unknown> = {};
+  const keys = ["title", "statusColumnId", "startAt", "stopAt"] as const;
+  let hasChange = false;
+
+  for (const k of keys) {
+    const raw = formData.get(k);
+    if (raw === null) continue;
+    if (k === "title") {
+      const v = String(raw).trim();
+      if (v.length === 0 || v.length > 200) continue;
+      data.title = v;
+      hasChange = true;
+    } else if (k === "statusColumnId") {
+      const v = String(raw);
+      data.statusColumnId = v === "" ? null : v;
+      hasChange = true;
+    } else if (k === "startAt" || k === "stopAt") {
+      data[k] = parseDate(raw);
+      hasChange = true;
+    }
+  }
+
+  if (!hasChange) return;
+
+  const updated = await db.task.update({
+    where: { id },
+    data: { ...data, version: { increment: 1 } },
+  });
+
+  await writeAudit({
+    workspaceId: updated.workspaceId,
+    objectType: "Task",
+    objectId: updated.id,
+    actorId: ctx.userId,
+    action: "task.patched",
+    diff: data as Prisma.InputJsonValue,
+  });
+
+  revalidatePath(`/w/${updated.workspaceId}`);
+  revalidatePath(`/w/${updated.workspaceId}/b/${updated.boardId}/table`);
+  revalidatePath(`/w/${updated.workspaceId}/t/${updated.id}`);
 }
 
 export async function toggleAssigneeAction(formData: FormData) {

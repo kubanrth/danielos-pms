@@ -228,7 +228,7 @@ export function Sidebar({
                     {ws.boards.map((b) => (
                       <Link
                         key={b.id}
-                        href={`/w/${ws.id}?board=${b.id}`}
+                        href={`/w/${ws.id}/b/${b.id}/table`}
                         className="truncate rounded-sm px-2 py-1 text-[0.82rem] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
                       >
                         {b.name}

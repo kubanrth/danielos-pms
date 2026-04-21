@@ -50,17 +50,25 @@ export default async function WorkspaceOverviewPage({
 
       {boards.map((board) => (
         <section key={board.id} className="flex flex-col gap-5">
-          <div className="flex items-baseline justify-between">
+          <div className="flex items-baseline justify-between gap-4">
             <h2 className="font-display text-[1.25rem] font-bold leading-[1.2] tracking-[-0.02em]">
-              {board.name}
+              <Link
+                href={`/w/${workspaceId}/b/${board.id}/table`}
+                className="transition-colors hover:text-primary"
+              >
+                {board.name}
+              </Link>
               <span className="ml-3 font-mono text-[0.72rem] font-normal uppercase tracking-[0.14em] text-muted-foreground">
                 {board._count.tasks}{" "}
                 {board._count.tasks === 1 ? "zadanie" : "zadań"}
               </span>
             </h2>
-            <span className="eyebrow text-muted-foreground">
-              pełne widoki (Tabela / Kanban / Roadmap) — F2+
-            </span>
+            <Link
+              href={`/w/${workspaceId}/b/${board.id}/table`}
+              className="eyebrow transition-colors hover:text-foreground"
+            >
+              Otwórz widok tabeli →
+            </Link>
           </div>
 
           {board.tasks.length === 0 ? (
