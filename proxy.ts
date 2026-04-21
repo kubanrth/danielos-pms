@@ -9,7 +9,8 @@ export const proxy = auth((req) => {
 
   const isAuthPage = pathname.startsWith(AUTH_PATH);
   const isApiAuth = pathname.startsWith("/api/auth");
-  const isPublic = pathname === "/" || isAuthPage || isApiAuth;
+  const isInvitePage = pathname.startsWith("/invites/");
+  const isPublic = pathname === "/" || isAuthPage || isApiAuth || isInvitePage;
 
   if (!isAuth && !isPublic) {
     const url = req.nextUrl.clone();

@@ -43,6 +43,12 @@ export default async function WorkspaceLayout({
           >
             Przegląd
           </Link>
+          <Link
+            href={`/w/${workspace.id}/members`}
+            className="eyebrow transition-colors hover:text-foreground focus-visible:text-foreground"
+          >
+            Członkowie
+          </Link>
           {canEditSettings && (
             <Link
               href={`/w/${workspace.id}/settings`}
