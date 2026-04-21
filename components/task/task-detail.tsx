@@ -12,6 +12,7 @@ import {
   type UpdateTaskState,
 } from "@/app/(app)/w/[workspaceId]/t/actions";
 import { RichTextEditor, type RichTextDoc } from "@/components/task/rich-text-editor";
+import { CommentsSection, type CommentItem } from "@/components/task/comments-section";
 
 const TAG_COLORS = [
   "#EF4444",
@@ -47,6 +48,10 @@ export interface TaskDetailProps {
   tagIds: Set<string>;
   canEdit: boolean;
   canDelete: boolean;
+  comments: CommentItem[];
+  canComment: boolean;
+  canModerateComments: boolean;
+  currentUserId: string;
 }
 
 function toLocalInput(iso: string | null): string {
@@ -67,6 +72,9 @@ export function TaskDetail({
   tagIds,
   canEdit,
   canDelete,
+  comments,
+  canComment,
+  canModerateComments,
 }: TaskDetailProps) {
   const [state, formAction, pending] = useActionState<UpdateTaskState, FormData>(
     updateTaskAction,
@@ -235,6 +243,14 @@ export function TaskDetail({
         allTags={allTags}
         tagIds={tagIds}
         canEdit={canEdit}
+      />
+
+      {/* Comments */}
+      <CommentsSection
+        taskId={task.id}
+        comments={comments}
+        canComment={canComment}
+        canModerateComments={canModerateComments}
       />
     </div>
   );

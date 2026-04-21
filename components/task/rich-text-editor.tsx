@@ -24,9 +24,12 @@ export interface RichTextEditorProps {
   initial: RichTextDoc | null;
   readOnly: boolean;
   // Hidden-input name — emits the current JSON stringified so a normal
-  // <form> submit picks it up.
-  name: string;
+  // <form> submit picks it up. Omit for display-only renders.
+  name?: string;
   placeholder?: string;
+  // `display` strips toolbar + outer border so a read-only comment body
+  // reads as flowing prose, not a form field.
+  variant?: "field" | "display";
 }
 
 function isDocEmpty(doc: RichTextDoc | null): boolean {
@@ -47,10 +50,13 @@ export function RichTextEditor({
   readOnly,
   name,
   placeholder = "Kontekst, acceptance criteria, linki…",
+  variant = "field",
 }: RichTextEditorProps) {
   const [json, setJson] = useState<string>(
     initial && !isDocEmpty(initial) ? JSON.stringify(initial) : "",
   );
+  const showToolbar = variant === "field" && !readOnly;
+  const showFrame = variant === "field";
 
   const editor = useEditor({
     extensions: [
@@ -72,7 +78,9 @@ export function RichTextEditor({
     editorProps: {
       attributes: {
         class:
-          "tiptap-content min-h-[120px] focus:outline-none text-[0.98rem] leading-[1.6]",
+          variant === "display"
+            ? "tiptap-content focus:outline-none text-[0.92rem] leading-[1.55]"
+            : "tiptap-content min-h-[120px] focus:outline-none text-[0.98rem] leading-[1.6]",
       },
     },
     onUpdate: ({ editor }) => {
@@ -88,14 +96,18 @@ export function RichTextEditor({
 
   return (
     <div className="flex flex-col gap-2">
-      {!readOnly && <Toolbar editor={editor} />}
-      <div
-        className="rounded-md border border-border bg-transparent px-3 py-2 transition-colors focus-within:border-primary"
-        data-readonly={readOnly ? "true" : "false"}
-      >
+      {showToolbar && <Toolbar editor={editor} />}
+      {showFrame ? (
+        <div
+          className="rounded-md border border-border bg-transparent px-3 py-2 transition-colors focus-within:border-primary"
+          data-readonly={readOnly ? "true" : "false"}
+        >
+          <EditorContent editor={editor} />
+        </div>
+      ) : (
         <EditorContent editor={editor} />
-      </div>
-      <input type="hidden" name={name} value={json} />
+      )}
+      {name !== undefined && <input type="hidden" name={name} value={json} />}
       <style>{`
         .tiptap-content p { margin: 0.25em 0; }
         .tiptap-content p:first-child { margin-top: 0; }

@@ -46,7 +46,7 @@ export async function fetchTaskDetail(
   });
   if (!task) notFound();
 
-  const [members, tags] = await Promise.all([
+  const [members, tags, comments] = await Promise.all([
     db.workspaceMembership.findMany({
       where: { workspaceId },
       include: {
@@ -59,6 +59,13 @@ export async function fetchTaskDetail(
         OR: [{ workspaceId }, { workspaceId: null }], // workspace-local + global
       },
       orderBy: [{ workspaceId: { sort: "desc", nulls: "last" } }, { name: "asc" }],
+    }),
+    db.comment.findMany({
+      where: { taskId, deletedAt: null },
+      orderBy: { createdAt: "asc" },
+      include: {
+        author: { select: { id: true, name: true, email: true, avatarUrl: true } },
+      },
     }),
   ]);
 
@@ -84,5 +91,16 @@ export async function fetchTaskDetail(
     tagIds: new Set(task.tags.map((t) => t.tagId)),
     canEdit: can(ctx.role, "task.update"),
     canDelete: can(ctx.role, "task.delete"),
+    comments: comments.map((c) => ({
+      id: c.id,
+      author: c.author,
+      bodyJson: (c.bodyJson as RichTextDoc | null) ?? null,
+      createdAt: c.createdAt.toISOString(),
+      updatedAt: c.updatedAt.toISOString(),
+      isAuthor: c.authorId === ctx.userId,
+    })),
+    canComment: can(ctx.role, "task.comment"),
+    canModerateComments: ctx.role === "ADMIN",
+    currentUserId: ctx.userId,
   };
 }
