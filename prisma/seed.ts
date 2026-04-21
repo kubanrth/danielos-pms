@@ -43,13 +43,20 @@ async function main() {
       name: "Demo Workspace",
       slug: "demo",
       ownerId: admin.id,
-      memberships: {
-        create: [
-          { userId: admin.id, role: Role.ADMIN },
-          { userId: member.id, role: Role.MEMBER },
-        ],
-      },
     },
+  });
+
+  // Memberships — upserted independently so re-seed restores them after
+  // smoke tests that remove members (F1d invitations/removals etc.).
+  await db.workspaceMembership.upsert({
+    where: { workspaceId_userId: { workspaceId: workspace.id, userId: admin.id } },
+    update: { role: Role.ADMIN },
+    create: { workspaceId: workspace.id, userId: admin.id, role: Role.ADMIN },
+  });
+  await db.workspaceMembership.upsert({
+    where: { workspaceId_userId: { workspaceId: workspace.id, userId: member.id } },
+    update: { role: Role.MEMBER },
+    create: { workspaceId: workspace.id, userId: member.id, role: Role.MEMBER },
   });
 
   const board = await db.board.create({
