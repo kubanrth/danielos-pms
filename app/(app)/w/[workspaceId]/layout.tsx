@@ -6,9 +6,11 @@ import { can } from "@/lib/permissions";
 
 export default async function WorkspaceLayout({
   children,
+  modal,
   params,
 }: {
   children: React.ReactNode;
+  modal: React.ReactNode;
   params: Promise<{ workspaceId: string }>;
 }) {
   const { workspaceId } = await params;
@@ -64,6 +66,7 @@ export default async function WorkspaceLayout({
       </header>
 
       <main className="flex-1 px-8 py-10 md:px-14">{children}</main>
+      {modal}
     </>
   );
 }

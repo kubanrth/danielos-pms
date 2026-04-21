@@ -1,0 +1,120 @@
+"use client";
+
+import { useActionState, useEffect, useState, startTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Plus } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  createTaskAction,
+  type CreateTaskState,
+} from "@/app/(app)/w/[workspaceId]/t/actions";
+
+export function CreateTaskButton({
+  workspaceId,
+  boardId,
+}: {
+  workspaceId: string;
+  boardId: string;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [state, formAction, pending] = useActionState<CreateTaskState, FormData>(
+    createTaskAction,
+    null,
+  );
+
+  // On success — use client navigation so @modal intercepting route activates.
+  useEffect(() => {
+    if (state?.ok) {
+      setOpen(false);
+      router.push(`/w/${workspaceId}/t/${state.taskId}`);
+      router.refresh();
+    }
+  }, [state, router, workspaceId]);
+
+  const fieldError = !state?.ok ? state?.fieldErrors?.title : undefined;
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex h-10 items-center gap-1.5 bg-primary px-4 font-sans text-[0.88rem] font-medium text-primary-foreground transition-[transform,opacity] duration-200 hover:-translate-y-[1px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        style={{
+          boxShadow:
+            "0 1px 0 color-mix(in oklch, var(--primary) 60%, black) inset, 0 10px 30px -12px color-mix(in oklch, var(--primary) 60%, transparent)",
+        }}
+      >
+        <Plus size={14} /> Nowe zadanie
+      </button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="border-border bg-card sm:max-w-[520px]">
+          <DialogHeader>
+            <span className="eyebrow">Nowe zadanie</span>
+            <DialogTitle className="font-display text-[1.6rem] font-normal leading-[1.1] tracking-[-0.02em] text-foreground">
+              Co trzeba <span className="italic text-primary">zrobić?</span>
+            </DialogTitle>
+            <DialogDescription className="text-[0.92rem] leading-[1.55] text-muted-foreground">
+              Szczegóły uzupełnisz po utworzeniu — otworzymy kartę zadania od razu.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form
+            action={(fd) => startTransition(() => formAction(fd))}
+            className="mt-2 flex flex-col gap-6"
+          >
+            <input type="hidden" name="workspaceId" value={workspaceId} />
+            <input type="hidden" name="boardId" value={boardId} />
+
+            <label className="flex flex-col gap-2">
+              <span className="eyebrow">Tytuł</span>
+              <input
+                name="title"
+                type="text"
+                required
+                autoFocus
+                maxLength={200}
+                placeholder="np. Zaprojektować logo DANIELOS"
+                aria-invalid={!!fieldError}
+                className="h-10 border-b border-border bg-transparent pb-1 text-[1rem] outline-none focus:border-primary aria-[invalid=true]:border-destructive"
+              />
+              {fieldError && (
+                <span className="font-mono text-[0.68rem] text-destructive">
+                  {fieldError}
+                </span>
+              )}
+            </label>
+
+            <div className="mt-2 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="font-mono text-[0.72rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Anuluj
+              </button>
+              <button
+                type="submit"
+                disabled={pending}
+                className="inline-flex h-11 items-center justify-center bg-primary px-6 font-sans text-[0.9rem] font-medium text-primary-foreground transition-[transform,opacity] duration-200 hover:-translate-y-[1px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60"
+                style={{
+                  boxShadow:
+                    "0 1px 0 color-mix(in oklch, var(--primary) 60%, black) inset, 0 10px 30px -12px color-mix(in oklch, var(--primary) 60%, transparent)",
+                }}
+              >
+                {pending ? "Tworzę…" : "Utwórz zadanie"}
+              </button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}

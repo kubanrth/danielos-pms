@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireWorkspaceMembership } from "@/lib/workspace-guard";
+import { can } from "@/lib/permissions";
+import { CreateTaskButton } from "@/components/task/create-task-button";
 
 export default async function WorkspaceOverviewPage({
   params,
@@ -8,7 +10,7 @@ export default async function WorkspaceOverviewPage({
   params: Promise<{ workspaceId: string }>;
 }) {
   const { workspaceId } = await params;
-  await requireWorkspaceMembership(workspaceId);
+  const ctx = await requireWorkspaceMembership(workspaceId);
 
   const [memberCount, boards] = await Promise.all([
     db.workspaceMembership.count({ where: { workspaceId } }),
@@ -16,82 +18,142 @@ export default async function WorkspaceOverviewPage({
       where: { workspaceId, deletedAt: null },
       orderBy: { createdAt: "asc" },
       include: {
+        statusColumns: { orderBy: { order: "asc" } },
         _count: { select: { tasks: { where: { deletedAt: null } } } },
+        tasks: {
+          where: { deletedAt: null },
+          orderBy: [{ statusColumn: { order: "asc" } }, { rowOrder: "asc" }],
+          take: 20,
+          include: {
+            assignees: {
+              include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+            },
+            tags: { include: { tag: true } },
+            statusColumn: true,
+          },
+        },
       },
     }),
   ]);
 
+  const canCreateTask = can(ctx.role, "task.create");
+  const firstBoard = boards[0];
+
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-10">
-      <Metric label="Członkowie" value={memberCount} />
+      <div className="flex items-baseline justify-between">
+        <Metric label="Członkowie" value={memberCount} />
+        {firstBoard && canCreateTask && (
+          <CreateTaskButton workspaceId={workspaceId} boardId={firstBoard.id} />
+        )}
+      </div>
 
-      <section className="flex flex-col gap-5">
-        <div className="flex items-baseline justify-between">
-          <h2 className="font-display text-[1.4rem] leading-[1.15] tracking-[-0.02em]">
-            Tablice
-          </h2>
-          <span className="eyebrow text-muted-foreground">
-            dodawanie tablic dostępne w F2
-          </span>
-        </div>
+      {boards.map((board) => (
+        <section key={board.id} className="flex flex-col gap-5">
+          <div className="flex items-baseline justify-between">
+            <h2 className="font-display text-[1.4rem] leading-[1.15] tracking-[-0.02em]">
+              {board.name}
+              <span className="ml-3 font-mono text-[0.72rem] font-normal uppercase tracking-[0.14em] text-muted-foreground">
+                {board._count.tasks}{" "}
+                {board._count.tasks === 1 ? "zadanie" : "zadań"}
+              </span>
+            </h2>
+            <span className="eyebrow text-muted-foreground">
+              pełne widoki (Tabela / Kanban / Roadmap) — F2+
+            </span>
+          </div>
 
-        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-          {boards.map((board) => (
-            <article
-              key={board.id}
-              className="flex flex-col gap-4 border border-border bg-card p-5"
-              style={{
-                boxShadow:
-                  "0 1px 0 color-mix(in oklch, var(--foreground) 4%, transparent)",
-              }}
-            >
-              <div className="flex items-center justify-between">
-                <span className="eyebrow">Tablica</span>
-                <span className="font-mono text-[0.68rem] text-muted-foreground">
-                  {board._count.tasks}{" "}
-                  {board._count.tasks === 1 ? "zadanie" : "zadań"}
-                </span>
-              </div>
-              <h3 className="font-display text-[1.25rem] leading-[1.15] tracking-[-0.02em]">
-                {board.name}
-              </h3>
-              {board.description && (
-                <p className="line-clamp-2 text-[0.9rem] leading-[1.55] text-muted-foreground">
-                  {board.description}
-                </p>
-              )}
-              <div className="mt-auto flex items-center gap-4 pt-3 font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground/70">
-                <span>table · kanban · roadmap (F2+)</span>
-              </div>
-            </article>
-          ))}
-
-          {boards.length === 0 && (
-            <div className="col-span-full border border-dashed border-border p-8 text-center text-muted-foreground">
-              <p className="font-display text-[1.2rem]">Brak tablic.</p>
-              <p className="mt-1 font-mono text-[0.72rem] uppercase tracking-[0.14em]">
-                dodawanie w fazie F2
+          {board.tasks.length === 0 ? (
+            <div className="border border-dashed border-border p-8 text-center text-muted-foreground">
+              <p className="font-display text-[1.1rem]">Brak zadań.</p>
+              <p className="mt-1 font-mono text-[0.7rem] uppercase tracking-[0.14em]">
+                zacznij od przycisku „Nowe zadanie" powyżej
               </p>
             </div>
-          )}
-        </div>
-      </section>
+          ) : (
+            <ul className="flex flex-col border-t border-border">
+              {board.tasks.map((task) => (
+                <li key={task.id}>
+                  <Link
+                    href={`/w/${workspaceId}/t/${task.id}`}
+                    className="group flex items-start justify-between gap-4 border-b border-border py-3 transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none"
+                  >
+                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                      <div className="flex items-center gap-2">
+                        {task.statusColumn && (
+                          <span
+                            className="inline-flex h-5 items-center rounded-sm px-1.5 font-mono text-[0.62rem] uppercase tracking-[0.12em]"
+                            style={{
+                              color: task.statusColumn.colorHex,
+                              background: `${task.statusColumn.colorHex}1A`,
+                            }}
+                          >
+                            {task.statusColumn.name}
+                          </span>
+                        )}
+                        {task.tags.map(({ tag }) => (
+                          <span
+                            key={tag.id}
+                            className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[0.72rem]"
+                            style={{
+                              borderColor: tag.colorHex,
+                              color: tag.colorHex,
+                            }}
+                          >
+                            <span className="h-1.5 w-1.5 rounded-full" style={{ background: tag.colorHex }} />
+                            {tag.name}
+                          </span>
+                        ))}
+                      </div>
+                      <span className="truncate font-display text-[1.05rem] leading-tight tracking-[-0.01em] transition-colors group-hover:text-primary">
+                        {task.title}
+                      </span>
+                    </div>
 
-      <section className="flex flex-col gap-5">
-        <div className="flex items-baseline justify-between">
-          <h2 className="font-display text-[1.4rem] leading-[1.15] tracking-[-0.02em]">
-            Dalsze kroki
-          </h2>
-        </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      {task.assignees.length > 0 && (
+                        <div className="flex -space-x-1.5">
+                          {task.assignees.slice(0, 3).map((a) => (
+                            <span
+                              key={a.userId}
+                              className="grid h-6 w-6 place-items-center overflow-hidden rounded-full border border-background bg-primary font-display text-[0.62rem] text-primary-foreground"
+                              title={a.user.name ?? a.user.email}
+                            >
+                              {a.user.avatarUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={a.user.avatarUrl} alt="" className="h-full w-full object-cover" />
+                              ) : (
+                                (a.user.name ?? a.user.email).slice(0, 2).toUpperCase()
+                              )}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {task.stopAt && (
+                        <span className="font-mono text-[0.7rem] uppercase tracking-[0.12em] text-muted-foreground">
+                          do {new Date(task.stopAt).toLocaleDateString("pl-PL")}
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ))}
+
+      <section className="flex flex-col gap-4 border-t border-border pt-10">
+        <h3 className="font-display text-[1.2rem] leading-[1.15] tracking-[-0.02em]">
+          Dalsze kroki
+        </h3>
         <ul className="grid gap-3 text-[0.92rem] leading-[1.55] text-muted-foreground md:grid-cols-2">
-          <Step phase="F1d" label="Zaproszenia i członkowie workspace'u" />
-          <Step phase="F1f" label="Uniwersalny Task Modal + tworzenie zadań" />
           <Step phase="F2" label="Edytowalny widok tabeli (Jira-like)" />
           <Step phase="F3" label="Kanban z drag & drop + real-time sync" />
+          <Step phase="F4" label="Komentarze, załączniki, audit log w modalu" />
+          <Step phase="F5" label="Roadmap + Milestones" />
         </ul>
       </section>
-
-      <SettingsHint workspaceId={workspaceId} />
     </div>
   );
 }
@@ -100,9 +162,7 @@ function Metric({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex items-baseline gap-4">
       <span className="eyebrow">{label}</span>
-      <span
-        className="font-display text-[2rem] leading-none tracking-[-0.02em]"
-      >
+      <span className="font-display text-[2rem] leading-none tracking-[-0.02em]">
         {value}
       </span>
     </div>
@@ -117,20 +177,5 @@ function Step({ phase, label }: { phase: string; label: string }) {
       </span>
       <span>{label}</span>
     </li>
-  );
-}
-
-async function SettingsHint({ workspaceId }: { workspaceId: string }) {
-  return (
-    <p className="font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground">
-      Admini mogą zmienić nazwę lub usunąć przestrzeń w{" "}
-      <Link
-        href={`/w/${workspaceId}/settings`}
-        className="text-foreground underline decoration-border underline-offset-4 transition-colors hover:decoration-primary"
-      >
-        Ustawieniach
-      </Link>
-      .
-    </p>
   );
 }
