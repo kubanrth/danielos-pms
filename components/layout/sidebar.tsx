@@ -148,8 +148,6 @@ export function Sidebar({
           label="Zadania dla Ciebie"
           pathname={pathname}
           collapsed={collapsed}
-          disabled
-          hint="F3"
         />
         <NavItem
           href="/workspaces"
