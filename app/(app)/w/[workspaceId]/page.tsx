@@ -63,12 +63,20 @@ export default async function WorkspaceOverviewPage({
                 {board._count.tasks === 1 ? "zadanie" : "zadań"}
               </span>
             </h2>
-            <Link
-              href={`/w/${workspaceId}/b/${board.id}/table`}
-              className="eyebrow transition-colors hover:text-foreground"
-            >
-              Otwórz widok tabeli →
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link
+                href={`/w/${workspaceId}/b/${board.id}/table`}
+                className="eyebrow transition-colors hover:text-foreground"
+              >
+                Tabela →
+              </Link>
+              <Link
+                href={`/w/${workspaceId}/b/${board.id}/kanban`}
+                className="eyebrow transition-colors hover:text-foreground"
+              >
+                Kanban →
+              </Link>
+            </div>
           </div>
 
           {board.tasks.length === 0 ? (

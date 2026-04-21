@@ -183,7 +183,7 @@ export async function patchTaskAction(formData: FormData) {
   const ctx = await requireWorkspaceAction(existing.workspaceId, "task.update");
 
   const data: Record<string, unknown> = {};
-  const keys = ["title", "statusColumnId", "startAt", "stopAt"] as const;
+  const keys = ["title", "statusColumnId", "startAt", "stopAt", "rowOrder"] as const;
   let hasChange = false;
 
   for (const k of keys) {
@@ -200,6 +200,11 @@ export async function patchTaskAction(formData: FormData) {
       hasChange = true;
     } else if (k === "startAt" || k === "stopAt") {
       data[k] = parseDate(raw);
+      hasChange = true;
+    } else if (k === "rowOrder") {
+      const n = Number(raw);
+      if (!Number.isFinite(n)) continue;
+      data.rowOrder = n;
       hasChange = true;
     }
   }
@@ -222,6 +227,7 @@ export async function patchTaskAction(formData: FormData) {
 
   revalidatePath(`/w/${updated.workspaceId}`);
   revalidatePath(`/w/${updated.workspaceId}/b/${updated.boardId}/table`);
+  revalidatePath(`/w/${updated.workspaceId}/b/${updated.boardId}/kanban`);
   revalidatePath(`/w/${updated.workspaceId}/t/${updated.id}`);
 }
 

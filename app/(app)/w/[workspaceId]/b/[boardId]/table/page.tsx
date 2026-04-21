@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireWorkspaceMembership } from "@/lib/workspace-guard";
@@ -61,6 +62,12 @@ export default async function BoardTablePage({
               {board.description}
             </p>
           )}
+          <Link
+            href={`/w/${workspaceId}/b/${boardId}/kanban`}
+            className="eyebrow w-fit transition-colors hover:text-foreground"
+          >
+            → przełącz na Kanban
+          </Link>
         </div>
         <div className="flex items-center gap-2">
           {canCustomize && (
