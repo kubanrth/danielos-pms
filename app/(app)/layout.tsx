@@ -8,22 +8,30 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await auth();
   if (!session?.user) redirect("/secure-access-portal");
 
-  // Fetch all workspaces the user belongs to, plus their boards (for sidebar accordion).
-  const memberships = await db.workspaceMembership.findMany({
-    where: { userId: session.user.id, workspace: { deletedAt: null } },
-    include: {
-      workspace: {
-        include: {
-          boards: {
-            where: { deletedAt: null },
-            orderBy: { createdAt: "asc" },
-            select: { id: true, name: true },
+  // Read fresh User to ensure sidebar avatar/name reflect recent profile changes
+  // (JWT session is cached; DB is source of truth).
+  const [user, memberships] = await Promise.all([
+    db.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true, email: true, name: true, avatarUrl: true, isSuperAdmin: true },
+    }),
+    db.workspaceMembership.findMany({
+      where: { userId: session.user.id, workspace: { deletedAt: null } },
+      include: {
+        workspace: {
+          include: {
+            boards: {
+              where: { deletedAt: null },
+              orderBy: { createdAt: "asc" },
+              select: { id: true, name: true },
+            },
           },
         },
       },
-    },
-    orderBy: { joinedAt: "asc" },
-  });
+      orderBy: { joinedAt: "asc" },
+    }),
+  ]);
+  if (!user) redirect("/secure-access-portal");
 
   const workspaces: SidebarWorkspace[] = memberships.map((m) => ({
     id: m.workspace.id,
@@ -37,11 +45,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="flex min-h-dvh">
       <Sidebar
         user={{
-          id: session.user.id,
-          email: session.user.email ?? "",
-          name: session.user.name ?? null,
-          avatarUrl: session.user.image ?? null,
-          isSuperAdmin: session.user.isSuperAdmin,
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          avatarUrl: user.avatarUrl,
+          isSuperAdmin: user.isSuperAdmin,
         }}
         workspaces={workspaces}
       />

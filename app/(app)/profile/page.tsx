@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { ProfileForm } from "@/components/profile/profile-form";
 
 export default async function ProfilePage() {
   const session = await auth();
@@ -19,35 +20,22 @@ export default async function ProfilePage() {
           </p>
         </div>
 
-        <dl className="grid grid-cols-[minmax(100px,140px)_1fr] gap-x-8 gap-y-6 border-t border-border pt-6">
-          <dt className="eyebrow">Email</dt>
-          <dd className="font-mono text-[0.92rem]">{user.email}</dd>
+        <ProfileForm
+          initialName={user.name ?? ""}
+          initialTimezone={user.timezone}
+          initialAvatarUrl={user.avatarUrl}
+          email={user.email}
+        />
 
-          <dt className="eyebrow">Imię</dt>
-          <dd className="font-display text-[1.1rem] leading-[1.2]">
-            {user.name ?? <span className="text-muted-foreground">(nie ustawione)</span>}
-          </dd>
-
-          <dt className="eyebrow">Strefa czasowa</dt>
-          <dd className="font-mono text-[0.92rem]">{user.timezone}</dd>
-
-          <dt className="eyebrow">Rola w systemie</dt>
-          <dd className="font-mono text-[0.92rem]">
-            {user.isSuperAdmin ? (
-              <span className="rounded-sm bg-primary/10 px-1.5 py-0.5 text-primary">
-                super admin
-              </span>
-            ) : (
-              "member"
-            )}
-          </dd>
-        </dl>
-
-        <div className="border-t border-border pt-6 text-[0.82rem] leading-[1.55] text-muted-foreground">
-          <span className="eyebrow text-muted-foreground">
-            Edycja profilu + upload awatara — F1b
-          </span>
-        </div>
+        {user.isSuperAdmin && (
+          <div className="border-t border-border pt-6">
+            <span className="eyebrow text-primary">Super Admin</span>
+            <p className="mt-2 text-[0.88rem] leading-[1.55] text-muted-foreground">
+              Masz dostęp do panelu administracyjnego (F7). Zarządzanie
+              globalnymi tagami, flagami modułów oraz audit log'iem systemu.
+            </p>
+          </div>
+        )}
       </div>
     </main>
   );
