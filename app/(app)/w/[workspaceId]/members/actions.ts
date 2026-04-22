@@ -13,6 +13,7 @@ import {
 import { requireWorkspaceAction } from "@/lib/workspace-guard";
 import { writeAudit } from "@/lib/audit";
 import { sendEmail } from "@/lib/email";
+import { checkLimit } from "@/lib/rate-limit";
 
 type FieldErrors = { email?: string; role?: string };
 
@@ -33,6 +34,11 @@ export async function inviteMemberAction(
   if (!workspaceId) return { ok: false, error: "Brak identyfikatora przestrzeni." };
 
   const ctx = await requireWorkspaceAction(workspaceId, "workspace.inviteMember");
+
+  // Per-workspace invite limit — stops a compromised admin account
+  // from spamming dozens of invites.
+  const limit = await checkLimit("workspace.invite", workspaceId);
+  if (!limit.ok) return { ok: false, error: limit.error };
 
   const parsed = inviteSchema.safeParse({
     email: formData.get("email"),

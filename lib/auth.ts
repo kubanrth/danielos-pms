@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcrypt";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { checkLimit } from "@/lib/rate-limit";
 
 // Augment session + user with our custom fields.
 declare module "next-auth" {
@@ -38,6 +39,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       authorize: async (credentials) => {
         const parsed = credentialsSchema.safeParse(credentials);
         if (!parsed.success) return null;
+
+        // Brute-force guard: rate-limit per typed email so a single
+        // address can't be hammered. Anonymous / unknown emails are
+        // limited the same way — a bot trying random emails will eat
+        // its own budget on every one it tries.
+        const rl = await checkLimit("auth.login", parsed.data.email.toLowerCase());
+        if (!rl.ok) return null;
 
         const user = await db.user.findFirst({
           where: {

@@ -12,6 +12,7 @@ import {
   updateCommentSchema,
 } from "@/lib/schemas/comment";
 import { extractMentionIds, syncCommentMentions } from "@/lib/mentions";
+import { checkLimit } from "@/lib/rate-limit";
 
 type CreateFieldErrors = { bodyJson?: string };
 type UpdateFieldErrors = { bodyJson?: string };
@@ -50,6 +51,9 @@ export async function createCommentAction(
   if (!task || task.deletedAt) return { ok: false, error: "Zadanie nie istnieje." };
 
   const ctx = await requireWorkspaceAction(task.workspaceId, "task.comment");
+
+  const limit = await checkLimit("comment.create", ctx.userId);
+  if (!limit.ok) return { ok: false, error: limit.error };
 
   const comment = await db.comment.create({
     data: {

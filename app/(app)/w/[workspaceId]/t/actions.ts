@@ -14,6 +14,7 @@ import {
   toggleTagSchema,
   updateTaskSchema,
 } from "@/lib/schemas/task";
+import { checkLimit } from "@/lib/rate-limit";
 
 type CreateFieldErrors = { title?: string };
 type UpdateFieldErrors = {
@@ -59,6 +60,9 @@ export async function createTaskAction(
   }
 
   const ctx = await requireWorkspaceAction(parsed.data.workspaceId, "task.create");
+
+  const limit = await checkLimit("task.create", ctx.userId);
+  if (!limit.ok) return { ok: false, error: limit.error };
 
   // Use the first status column as default (Do zrobienia).
   const firstColumn = await db.statusColumn.findFirst({
