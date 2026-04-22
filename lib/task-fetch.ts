@@ -46,7 +46,7 @@ export async function fetchTaskDetail(
   });
   if (!task) notFound();
 
-  const [members, tags, comments] = await Promise.all([
+  const [members, tags, comments, auditEntries] = await Promise.all([
     db.workspaceMembership.findMany({
       where: { workspaceId },
       include: {
@@ -65,6 +65,14 @@ export async function fetchTaskDetail(
       orderBy: { createdAt: "asc" },
       include: {
         author: { select: { id: true, name: true, email: true, avatarUrl: true } },
+      },
+    }),
+    db.auditLog.findMany({
+      where: { workspaceId, objectType: "Task", objectId: taskId },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      include: {
+        actor: { select: { id: true, name: true, email: true, avatarUrl: true } },
       },
     }),
   ]);
@@ -102,5 +110,12 @@ export async function fetchTaskDetail(
     canComment: can(ctx.role, "task.comment"),
     canModerateComments: ctx.role === "ADMIN",
     currentUserId: ctx.userId,
+    activity: auditEntries.map((e) => ({
+      id: e.id,
+      action: e.action,
+      actor: e.actor,
+      diff: (e.diff ?? null) as Record<string, unknown> | null,
+      createdAt: e.createdAt.toISOString(),
+    })),
   };
 }
