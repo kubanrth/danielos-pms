@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ProfileForm } from "@/components/profile/profile-form";
+import { TwoFactorSection } from "@/components/profile/two-factor-section";
 
 export default async function ProfilePage() {
   const session = await auth();
@@ -27,12 +28,14 @@ export default async function ProfilePage() {
           email={user.email}
         />
 
+        <TwoFactorSection enabled={!!user.totpEnabledAt} />
+
         {user.isSuperAdmin && (
           <div className="border-t border-border pt-6">
             <span className="eyebrow text-primary">Super Admin</span>
             <p className="mt-2 text-[0.88rem] leading-[1.55] text-muted-foreground">
               Masz dostęp do panelu administracyjnego (F7). Zarządzanie
-              globalnymi tagami, flagami modułów oraz audit log'iem systemu.
+              globalnymi tagami, flagami modułów oraz audit log’iem systemu.
             </p>
           </div>
         )}

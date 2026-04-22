@@ -16,20 +16,22 @@ datasource db {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  emailVerified DateTime?
-  name          String?
-  avatarUrl     String?
-  passwordHash  String?
-  timezone      String    @default("Europe/Warsaw")
-  locale        String    @default("pl")
-  isSuperAdmin  Boolean   @default(false)
-  isBanned      Boolean   @default(false)
-  lastSeenAt    DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  deletedAt     DateTime?
+  id              String    @id @default(cuid())
+  email           String    @unique
+  emailVerified   DateTime?
+  name            String?
+  avatarUrl       String?
+  passwordHash    String?
+  timezone        String    @default("Europe/Warsaw")
+  locale          String    @default("pl")
+  isSuperAdmin    Boolean   @default(false)
+  isBanned        Boolean   @default(false)
+  lastSeenAt      DateTime?
+  totpSecret      String?
+  totpEnabledAt   DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
 
   accounts           Account[]
   sessions           Session[]
@@ -49,9 +51,22 @@ model User {
   notifications      Notification[]
   createdCanvases    ProcessCanvas[]       @relation("CanvasCreator")
   createdTags        Tag[]                 @relation("TagCreator")
+  totpRecoveryCodes  TotpRecoveryCode[]
 
   @@index([isBanned])
   @@index([lastSeenAt])
+}
+
+model TotpRecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Account {

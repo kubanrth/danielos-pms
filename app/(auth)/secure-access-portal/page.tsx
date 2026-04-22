@@ -53,7 +53,7 @@ export default async function SecureAccessPortalPage({
         <LoginForm redirectTo={redirect} />
 
         <p className="mt-10 font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground">
-          Problem z dostępem? Skontaktuj się z administratorem workspace'u.
+          Problem z dostępem? Skontaktuj się z administratorem workspace’u.
         </p>
       </main>
 

@@ -4,6 +4,7 @@ import bcrypt from "bcrypt";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { checkLimit } from "@/lib/rate-limit";
+import { verifyRecoveryCode, verifyTotpToken } from "@/lib/totp";
 
 // Augment session + user with our custom fields.
 declare module "next-auth" {
@@ -21,6 +22,10 @@ declare module "next-auth" {
 const credentialsSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+  // Optional — only required for users with 2FA enabled. Client sends
+  // "" when the user isn't using 2FA; we normalise to undefined so the
+  // branch below stays readable.
+  totp: z.string().optional(),
 });
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -35,6 +40,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Hasło", type: "password" },
+        totp: { label: "Kod 2FA", type: "text" },
       },
       authorize: async (credentials) => {
         const parsed = credentialsSchema.safeParse(credentials);
@@ -59,6 +65,34 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const valid = await bcrypt.compare(parsed.data.password, user.passwordHash);
         if (!valid) return null;
+
+        // Second factor check. If the user has 2FA enabled, they must
+        // provide either a valid TOTP token OR a one-use recovery code.
+        // We deliberately return null (not a distinct error) when the
+        // factor is missing/wrong — don't leak whether 2FA is on.
+        if (user.totpEnabledAt && user.totpSecret) {
+          const submitted = (parsed.data.totp ?? "").trim();
+          if (submitted.length === 0) return null;
+
+          const totpDelta = verifyTotpToken(user.totpSecret, submitted);
+          if (totpDelta === null) {
+            // Fall back to recovery codes. Fetch only unused ones.
+            const codes = await db.totpRecoveryCode.findMany({
+              where: { userId: user.id, usedAt: null },
+              select: { id: true, codeHash: true },
+            });
+            const match = verifyRecoveryCode(
+              submitted,
+              codes.map((c) => c.codeHash),
+            );
+            if (match === null) return null;
+            // Mark the used code so it can't be replayed.
+            await db.totpRecoveryCode.update({
+              where: { id: codes[match].id },
+              data: { usedAt: new Date() },
+            });
+          }
+        }
 
         await db.user.update({
           where: { id: user.id },

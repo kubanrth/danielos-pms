@@ -29,6 +29,15 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
         required
         error={state?.fieldErrors?.password}
       />
+      <Field
+        label="Kod 2FA (jeśli włączone)"
+        name="totp"
+        type="text"
+        autoComplete="one-time-code"
+        // inputMode text (not numeric) so users can paste XXXX-XXXX-XXXX
+        // recovery codes into the same field.
+        error={state?.fieldErrors?.totp}
+      />
 
       {state?.error && (
         <p
