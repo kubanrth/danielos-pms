@@ -82,6 +82,12 @@ export default async function WorkspaceOverviewPage({
               >
                 Roadmapa →
               </Link>
+              <Link
+                href={`/w/${workspaceId}/canvases`}
+                className="eyebrow transition-colors hover:text-foreground"
+              >
+                Whiteboard →
+              </Link>
             </div>
           </div>
 

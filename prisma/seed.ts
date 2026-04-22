@@ -133,6 +133,43 @@ async function main() {
     },
   });
 
+  // Sample whiteboard — 2 nodes + 1 edge so a fresh DB lands on a non-
+  // empty editor the first time a user opens /canvases.
+  const canvas = await db.processCanvas.create({
+    data: {
+      workspaceId: workspace.id,
+      creatorId: admin.id,
+      name: "Onboarding klienta",
+    },
+  });
+  const nodeA = await db.processNode.create({
+    data: {
+      canvasId: canvas.id,
+      shape: "RECTANGLE",
+      label: "Zapytanie",
+      x: 80,
+      y: 120,
+      colorHex: "#DBEAFE",
+    },
+  });
+  const nodeB = await db.processNode.create({
+    data: {
+      canvasId: canvas.id,
+      shape: "DIAMOND",
+      label: "Kwalifikacja",
+      x: 340,
+      y: 120,
+      colorHex: "#FEF3C7",
+    },
+  });
+  await db.processEdge.create({
+    data: {
+      canvasId: canvas.id,
+      fromNodeId: nodeA.id,
+      toNodeId: nodeB.id,
+    },
+  });
+
   console.log("Seed complete:", { admin: admin.email, member: member.email, workspace: workspace.slug });
 }
 
