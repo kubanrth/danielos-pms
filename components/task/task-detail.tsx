@@ -251,6 +251,7 @@ export function TaskDetail({
         comments={comments}
         canComment={canComment}
         canModerateComments={canModerateComments}
+        members={allMembers}
       />
     </div>
   );

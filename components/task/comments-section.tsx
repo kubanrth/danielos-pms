@@ -10,6 +10,7 @@ import {
   type UpdateCommentState,
 } from "@/app/(app)/w/[workspaceId]/t/comment-actions";
 import { RichTextEditor, type RichTextDoc } from "@/components/task/rich-text-editor";
+import type { MentionMember } from "@/components/task/mention-list";
 
 export interface CommentItem {
   id: string;
@@ -30,11 +31,13 @@ export function CommentsSection({
   comments,
   canComment,
   canModerateComments,
+  members,
 }: {
   taskId: string;
   comments: CommentItem[];
   canComment: boolean;
   canModerateComments: boolean;
+  members: MentionMember[];
 }) {
   return (
     <section className="flex flex-col gap-5">
@@ -53,6 +56,7 @@ export function CommentsSection({
                 comment={c}
                 canDelete={c.isAuthor || canModerateComments}
                 canEdit={c.isAuthor}
+                members={members}
               />
             </li>
           ))}
@@ -61,7 +65,7 @@ export function CommentsSection({
         <p className="text-[0.88rem] text-muted-foreground">Brak komentarzy.</p>
       )}
 
-      {canComment && <NewCommentForm taskId={taskId} />}
+      {canComment && <NewCommentForm taskId={taskId} members={members} />}
     </section>
   );
 }
@@ -70,10 +74,12 @@ function CommentItemView({
   comment,
   canDelete,
   canEdit,
+  members,
 }: {
   comment: CommentItem;
   canDelete: boolean;
   canEdit: boolean;
+  members: MentionMember[];
 }) {
   const [editing, setEditing] = useState(false);
   const initials = (comment.author.name ?? comment.author.email).slice(0, 2).toUpperCase();
@@ -121,6 +127,7 @@ function CommentItemView({
           <EditCommentForm
             comment={comment}
             onDone={() => setEditing(false)}
+            members={members}
           />
         ) : (
           <RichTextEditor
@@ -135,7 +142,13 @@ function CommentItemView({
   );
 }
 
-function NewCommentForm({ taskId }: { taskId: string }) {
+function NewCommentForm({
+  taskId,
+  members,
+}: {
+  taskId: string;
+  members: MentionMember[];
+}) {
   const [state, formAction, pending] = useActionState<CreateCommentState, FormData>(
     createCommentAction,
     null,
@@ -159,7 +172,8 @@ function NewCommentForm({ taskId }: { taskId: string }) {
         initial={null}
         readOnly={false}
         name="bodyJson"
-        placeholder="Zostaw komentarz…"
+        placeholder="Zostaw komentarz…  (napisz @ by oznaczyć osobę)"
+        mentionMembers={members}
       />
       {!state?.ok && state?.fieldErrors?.bodyJson && (
         <span className="font-mono text-[0.68rem] text-destructive">
@@ -182,9 +196,11 @@ function NewCommentForm({ taskId }: { taskId: string }) {
 function EditCommentForm({
   comment,
   onDone,
+  members,
 }: {
   comment: CommentItem;
   onDone: () => void;
+  members: MentionMember[];
 }) {
   const [state, formAction, pending] = useActionState<UpdateCommentState, FormData>(
     updateCommentAction,
@@ -203,6 +219,7 @@ function EditCommentForm({
         initial={comment.bodyJson}
         readOnly={false}
         name="bodyJson"
+        mentionMembers={members}
       />
       {!state?.ok && state?.fieldErrors?.bodyJson && (
         <span className="font-mono text-[0.68rem] text-destructive">

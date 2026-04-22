@@ -1,9 +1,12 @@
 "use client";
 
-import { useEditor, EditorContent, type Editor, type JSONContent } from "@tiptap/react";
+import { useEditor, EditorContent, ReactRenderer, type Editor, type JSONContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Link } from "@tiptap/extension-link";
 import { Placeholder } from "@tiptap/extension-placeholder";
+import { Mention } from "@tiptap/extension-mention";
+import type { SuggestionProps, SuggestionKeyDownProps } from "@tiptap/suggestion";
+import { MentionList, type MentionListHandle, type MentionMember } from "@/components/task/mention-list";
 import {
   Bold as BoldIcon,
   Italic as ItalicIcon,
@@ -30,6 +33,74 @@ export interface RichTextEditorProps {
   // `display` strips toolbar + outer border so a read-only comment body
   // reads as flowing prose, not a form field.
   variant?: "field" | "display";
+  // When provided, typing "@" opens an autocomplete of these members and
+  // inserts a mention node. The Mention node is always registered in the
+  // schema so display-variant editors can still render mention chips.
+  mentionMembers?: MentionMember[];
+}
+
+// Suggestion config with no matches — used when the editor has no members
+// (display variant, or task description where mentions aren't populated).
+// Keeps the default `char: "@"` so the Mention node schema is valid while
+// ensuring the popover never opens.
+const INERT_MENTION_SUGGESTION = {
+  char: "@",
+  items: () => [] as MentionMember[],
+};
+
+function buildMentionSuggestion(members: MentionMember[]) {
+  return {
+    char: "@",
+    items: ({ query }: { query: string }) => {
+      const q = query.trim().toLowerCase();
+      const pool = q
+        ? members.filter((m) => {
+            const name = (m.name ?? "").toLowerCase();
+            return name.includes(q) || m.email.toLowerCase().includes(q);
+          })
+        : members;
+      return pool.slice(0, 8);
+    },
+    render: () => {
+      let renderer: ReactRenderer<MentionListHandle> | null = null;
+      let popover: HTMLDivElement | null = null;
+
+      const place = (rect: DOMRect | null) => {
+        if (!popover || !rect) return;
+        popover.style.position = "fixed";
+        popover.style.left = `${Math.round(rect.left)}px`;
+        popover.style.top = `${Math.round(rect.bottom + 6)}px`;
+        popover.style.zIndex = "1000";
+      };
+
+      return {
+        onStart(props: SuggestionProps<MentionMember>) {
+          renderer = new ReactRenderer(MentionList, {
+            props,
+            editor: props.editor,
+          });
+          popover = document.createElement("div");
+          popover.appendChild(renderer.element);
+          document.body.appendChild(popover);
+          place(props.clientRect?.() ?? null);
+        },
+        onUpdate(props: SuggestionProps<MentionMember>) {
+          renderer?.updateProps(props);
+          place(props.clientRect?.() ?? null);
+        },
+        onKeyDown(props: SuggestionKeyDownProps) {
+          if (props.event.key === "Escape") return true;
+          return renderer?.ref?.onKeyDown(props) ?? false;
+        },
+        onExit() {
+          popover?.remove();
+          renderer?.destroy();
+          popover = null;
+          renderer = null;
+        },
+      };
+    },
+  };
 }
 
 function isDocEmpty(doc: RichTextDoc | null): boolean {
@@ -51,6 +122,7 @@ export function RichTextEditor({
   name,
   placeholder = "Kontekst, acceptance criteria, linki…",
   variant = "field",
+  mentionMembers,
 }: RichTextEditorProps) {
   const [json, setJson] = useState<string>(
     initial && !isDocEmpty(initial) ? JSON.stringify(initial) : "",
@@ -71,6 +143,13 @@ export function RichTextEditor({
         },
       }),
       Placeholder.configure({ placeholder }),
+      Mention.configure({
+        HTMLAttributes: { class: "mention-chip" },
+        renderText: ({ node }) => `@${node.attrs.label ?? node.attrs.id}`,
+        suggestion: mentionMembers
+          ? buildMentionSuggestion(mentionMembers)
+          : INERT_MENTION_SUGGESTION,
+      }),
     ],
     content: (initial as JSONContent | null) ?? undefined,
     editable: !readOnly,
@@ -129,6 +208,17 @@ export function RichTextEditor({
           float: left;
           pointer-events: none;
           height: 0;
+        }
+        .tiptap-content .mention-chip {
+          display: inline-flex;
+          align-items: center;
+          padding: 0 0.35em;
+          border-radius: 0.3em;
+          background: color-mix(in oklch, var(--accent-brand) 18%, transparent);
+          color: var(--accent-brand);
+          font-weight: 600;
+          font-size: 0.94em;
+          white-space: nowrap;
         }
       `}</style>
     </div>

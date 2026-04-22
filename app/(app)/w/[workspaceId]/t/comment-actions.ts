@@ -11,6 +11,7 @@ import {
   deleteCommentSchema,
   updateCommentSchema,
 } from "@/lib/schemas/comment";
+import { extractMentionIds, syncCommentMentions } from "@/lib/mentions";
 
 type CreateFieldErrors = { bodyJson?: string };
 type UpdateFieldErrors = { bodyJson?: string };
@@ -58,13 +59,24 @@ export async function createCommentAction(
     },
   });
 
+  const mentionIds = extractMentionIds(parsed.data.bodyJson);
+  const mentionResult = mentionIds.length
+    ? await syncCommentMentions({
+        commentId: comment.id,
+        authorId: ctx.userId,
+        taskId: task.id,
+        workspaceId: task.workspaceId,
+        newIds: mentionIds,
+      })
+    : { added: [], removed: [] };
+
   await writeAudit({
     workspaceId: task.workspaceId,
     objectType: "Task",
     objectId: task.id,
     actorId: ctx.userId,
     action: "comment.created",
-    diff: { commentId: comment.id },
+    diff: { commentId: comment.id, mentions: mentionResult.added },
   });
 
   await revalidateTaskRoutes(task.workspaceId, task.id);
@@ -102,13 +114,26 @@ export async function updateCommentAction(
     data: { bodyJson: parsed.data.bodyJson as Prisma.InputJsonValue },
   });
 
+  const mentionIds = extractMentionIds(parsed.data.bodyJson);
+  const mentionResult = await syncCommentMentions({
+    commentId: existing.id,
+    authorId: ctx.userId,
+    taskId: existing.task.id,
+    workspaceId: existing.task.workspaceId,
+    newIds: mentionIds,
+  });
+
   await writeAudit({
     workspaceId: existing.task.workspaceId,
     objectType: "Task",
     objectId: existing.task.id,
     actorId: ctx.userId,
     action: "comment.updated",
-    diff: { commentId: existing.id },
+    diff: {
+      commentId: existing.id,
+      mentionsAdded: mentionResult.added,
+      mentionsRemoved: mentionResult.removed,
+    },
   });
 
   await revalidateTaskRoutes(existing.task.workspaceId, existing.task.id);
