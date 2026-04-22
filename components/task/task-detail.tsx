@@ -16,6 +16,7 @@ import { CommentsSection, type CommentItem } from "@/components/task/comments-se
 import { ActivityLog, type ActivityEntry } from "@/components/task/activity-log";
 import { AttachmentsSection, type AttachmentItem } from "@/components/task/attachments-section";
 import { assignTaskToMilestoneAction } from "@/app/(app)/w/[workspaceId]/b/[boardId]/milestone-actions";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 
 const TAG_COLORS = [
   "#EF4444",
@@ -63,13 +64,6 @@ export interface TaskDetailProps {
   canModerateAttachments: boolean;
 }
 
-function toLocalInput(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  // datetime-local wants YYYY-MM-DDTHH:mm
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 export function TaskDetail({
   workspaceId,
@@ -162,26 +156,26 @@ export function TaskDetail({
               ))}
             </select>
           </label>
-          <label className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2">
             <span className="eyebrow">Start</span>
-            <input
+            <DateTimePicker
               name="startAt"
-              type="datetime-local"
-              readOnly={!canEdit}
-              defaultValue={toLocalInput(task.startAt)}
-              className="h-10 border-b border-border bg-transparent pb-1 font-mono text-[0.85rem] outline-none focus:border-primary"
+              defaultValue={task.startAt}
+              disabled={!canEdit}
+              placeholder="Brak daty startu"
+              label="Data startu"
             />
-          </label>
-          <label className="flex flex-col gap-2">
+          </div>
+          <div className="flex flex-col gap-2">
             <span className="eyebrow">Koniec</span>
-            <input
+            <DateTimePicker
               name="stopAt"
-              type="datetime-local"
-              readOnly={!canEdit}
-              defaultValue={toLocalInput(task.stopAt)}
-              className="h-10 border-b border-border bg-transparent pb-1 font-mono text-[0.85rem] outline-none focus:border-primary"
+              defaultValue={task.stopAt}
+              disabled={!canEdit}
+              placeholder="Brak daty końca"
+              label="Data końca"
             />
-          </label>
+          </div>
         </div>
 
         <div className="flex flex-col gap-2">

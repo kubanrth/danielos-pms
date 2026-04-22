@@ -4,6 +4,7 @@ import { requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { can } from "@/lib/permissions";
 import { RoadmapView } from "@/components/roadmap/roadmap-view";
 import { BackgroundCustomizer } from "@/components/view/background-customizer";
+import { ViewSwitcher } from "@/components/view/view-switcher";
 import { backgroundToCss, type BackgroundConfig } from "@/lib/schemas/background";
 
 export default async function RoadmapPage({
@@ -59,12 +60,12 @@ export default async function RoadmapPage({
       style={bgCss ? { background: bgCss } : undefined}
     >
       <div className="mx-auto flex max-w-6xl flex-col gap-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-col gap-2">
-            <span className="eyebrow">Roadmapa</span>
             <h1 className="font-display text-[2rem] font-bold leading-[1.1] tracking-[-0.03em]">
               {board.name}
             </h1>
+            <ViewSwitcher workspaceId={workspaceId} boardId={boardId} active="roadmap" />
           </div>
           {canCustomize && roadmapView && (
             <BackgroundCustomizer

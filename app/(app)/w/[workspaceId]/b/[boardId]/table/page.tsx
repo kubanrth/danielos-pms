@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireWorkspaceMembership } from "@/lib/workspace-guard";
@@ -7,6 +6,7 @@ import { BoardTable } from "@/components/table/board-table";
 import { StatusColumnManager } from "@/components/table/status-column-manager";
 import { CreateTaskButton } from "@/components/task/create-task-button";
 import { BackgroundCustomizer } from "@/components/view/background-customizer";
+import { ViewSwitcher } from "@/components/view/view-switcher";
 import { backgroundToCss, type BackgroundConfig } from "@/lib/schemas/background";
 
 export default async function BoardTablePage({
@@ -51,9 +51,8 @@ export default async function BoardTablePage({
       style={bgCss ? { background: bgCss } : undefined}
     >
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <span className="eyebrow">Widok tabeli</span>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-col gap-2">
           <h2 className="font-display text-[1.5rem] font-bold leading-[1.15] tracking-[-0.02em]">
             {board.name}
           </h2>
@@ -62,12 +61,7 @@ export default async function BoardTablePage({
               {board.description}
             </p>
           )}
-          <Link
-            href={`/w/${workspaceId}/b/${boardId}/kanban`}
-            className="eyebrow w-fit transition-colors hover:text-foreground"
-          >
-            → przełącz na Kanban
-          </Link>
+          <ViewSwitcher workspaceId={workspaceId} boardId={board.id} active="table" />
         </div>
         <div className="flex items-center gap-2">
           {canCustomize && (

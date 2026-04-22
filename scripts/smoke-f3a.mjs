@@ -75,7 +75,14 @@ console.log("[4] first card:", cardTitle);
 
 await Promise.all([
   page.waitForFunction(
-    () => document.querySelectorAll("textarea[name=description]").length > 0,
+    () =>
+      // Tiptap editor mounts with .tiptap-content; also accept the
+      // modal's sticky header as a fallback since intercepted routes
+      // can hydrate in either order.
+      document.querySelectorAll(".tiptap-content").length > 0 ||
+      !!Array.from(document.querySelectorAll("*")).find(
+        (e) => e.textContent?.trim() === "Szczegóły zadania",
+      ),
     { timeout: 15000 },
   ),
   page.evaluate(() => {
@@ -86,32 +93,22 @@ await Promise.all([
 console.log("[5] modal opened via intercept →", page.url());
 await shot(page, "2-modal-from-kanban");
 
-// Close modal — onClose navigates back to /w/[id] overview.
+// Close modal — router.back() unwinds the intercept, leaving us on
+// /kanban (where we clicked the card from).
 await page.keyboard.press("Escape");
 await new Promise((r) => setTimeout(r, 1500));
+if (!/\/kanban$/.test(page.url())) {
+  throw new Error("Escape didn't return to kanban: " + page.url());
+}
+console.log("[6] back on kanban →", page.url());
 
-// Navigate back to Kanban directly, then use the "przełącz" link.
-const kanbanUrl = page.url().replace(/\/[^/]+$/, ""); // strip last segment
-// Actually just compute from known params.
-const workspaceId = page.url().match(/\/w\/([^/]+)/)?.[1];
-// Re-land on kanban from overview
+// Jump to Table through the ViewSwitcher pill (new, replaces the old
+// eyebrow "przełącz na Tabelę" link).
 await Promise.all([
   page.waitForNavigation({ waitUntil: "networkidle0" }),
   page.evaluate(() => {
-    const a = Array.from(document.querySelectorAll("a")).find((x) =>
-      x.textContent?.trim() === "Kanban →",
-    );
-    a?.click();
-  }),
-]);
-console.log("[6] back on kanban");
-
-// Use the cross-link to Table view
-await Promise.all([
-  page.waitForNavigation({ waitUntil: "networkidle0" }),
-  page.evaluate(() => {
-    const a = Array.from(document.querySelectorAll("a")).find((x) =>
-      x.textContent?.includes("przełącz na Tabelę"),
+    const a = Array.from(document.querySelectorAll('[role="tab"]')).find(
+      (x) => x.textContent?.trim() === "Tabela",
     );
     a?.click();
   }),

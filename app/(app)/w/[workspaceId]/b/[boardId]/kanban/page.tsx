@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireWorkspaceMembership } from "@/lib/workspace-guard";
@@ -6,6 +5,8 @@ import { can } from "@/lib/permissions";
 import { KanbanBoard } from "@/components/kanban/kanban-board";
 import { CreateTaskButton } from "@/components/task/create-task-button";
 import { BackgroundCustomizer } from "@/components/view/background-customizer";
+import { ViewSwitcher } from "@/components/view/view-switcher";
+import { CollapsibleColumnManager } from "@/components/table/collapsible-column-manager";
 import { backgroundToCss, type BackgroundConfig } from "@/lib/schemas/background";
 
 export default async function BoardKanbanPage({
@@ -36,6 +37,7 @@ export default async function BoardKanbanPage({
   if (!board) notFound();
 
   const canCreate = can(ctx.role, "task.create");
+  const canManageBoard = can(ctx.role, "board.update");
   const canCustomize = can(ctx.role, "background.customize");
   const kanbanView = board.views[0];
   const background = (kanbanView?.background ?? null) as BackgroundConfig | null;
@@ -47,20 +49,12 @@ export default async function BoardKanbanPage({
       style={bgCss ? { background: bgCss } : undefined}
     >
       <div className="mx-auto flex max-w-[1400px] flex-col gap-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <span className="eyebrow">Widok kanban</span>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-col gap-2">
             <h2 className="font-display text-[1.5rem] font-bold leading-[1.15] tracking-[-0.02em]">
               {board.name}
             </h2>
-            <div className="flex items-center gap-3">
-              <Link
-                href={`/w/${workspaceId}/b/${boardId}/table`}
-                className="eyebrow transition-colors hover:text-foreground"
-              >
-                → przełącz na Tabelę
-              </Link>
-            </div>
+            <ViewSwitcher workspaceId={workspaceId} boardId={board.id} active="kanban" />
           </div>
           <div className="flex items-center gap-2">
             {canCustomize && (
@@ -76,6 +70,18 @@ export default async function BoardKanbanPage({
             )}
           </div>
         </div>
+
+        {canManageBoard && (
+          <CollapsibleColumnManager
+            workspaceId={workspaceId}
+            boardId={board.id}
+            columns={board.statusColumns.map((c) => ({
+              id: c.id,
+              name: c.name,
+              colorHex: c.colorHex,
+            }))}
+          />
+        )}
 
         <KanbanBoard
           workspaceId={workspaceId}

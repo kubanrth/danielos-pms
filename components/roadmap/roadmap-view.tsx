@@ -2,12 +2,19 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus, Pencil, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, LineChart, Circle } from "lucide-react";
 import {
   assignTaskToMilestoneAction,
   deleteMilestoneAction,
 } from "@/app/(app)/w/[workspaceId]/b/[boardId]/milestone-actions";
 import { MilestoneDialog, type MilestoneMember } from "@/components/roadmap/milestone-dialog";
+import {
+  assignRows,
+  colorFor,
+  computeTimelineRange,
+  formatDateRange,
+  pctFor,
+} from "@/components/roadmap/timeline-utils";
 
 export interface MilestoneItem {
   id: string;
@@ -21,54 +28,8 @@ export interface MilestoneItem {
 
 const ROW_HEIGHT = 36;
 const TRACK_PADDING_Y = 18;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
-// Pastel accent palette — each milestone gets a stable color derived from
-// its id so re-orderings don't reshuffle hues across renders.
-const PALETTE = [
-  "#7B68EE",
-  "#FF02F0",
-  "#14B8A6",
-  "#F59E0B",
-  "#3B82F6",
-  "#EF4444",
-  "#10B981",
-  "#8B5CF6",
-];
-
-function colorFor(id: string): string {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return PALETTE[h % PALETTE.length];
-}
-
-// Greedy row assignment: sort by start, slot each milestone into the first
-// track that has no overlap. Produces a Gantt-like stacking.
-function assignRows(items: MilestoneItem[]): Map<string, number> {
-  const sorted = [...items].sort(
-    (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
-  );
-  const rowEnds: number[] = [];
-  const rows = new Map<string, number>();
-  for (const m of sorted) {
-    const start = new Date(m.startAt).getTime();
-    const stop = new Date(m.stopAt).getTime();
-    let placed = false;
-    for (let i = 0; i < rowEnds.length; i++) {
-      if (rowEnds[i] <= start) {
-        rowEnds[i] = stop;
-        rows.set(m.id, i);
-        placed = true;
-        break;
-      }
-    }
-    if (!placed) {
-      rows.set(m.id, rowEnds.length);
-      rowEnds.push(stop);
-    }
-  }
-  return rows;
-}
+type Mode = "timeline" | "markers";
 
 export function RoadmapView({
   workspaceId,
@@ -78,6 +39,7 @@ export function RoadmapView({
   canCreate,
   canUpdate,
   canDelete,
+  initialMode = "timeline",
 }: {
   workspaceId: string;
   boardId: string;
@@ -86,7 +48,9 @@ export function RoadmapView({
   canCreate: boolean;
   canUpdate: boolean;
   canDelete: boolean;
+  initialMode?: Mode;
 }) {
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [dialog, setDialog] = useState<
     | { mode: "create" }
     | { mode: "edit"; milestone: MilestoneItem }
@@ -106,56 +70,37 @@ export function RoadmapView({
       return next;
     });
 
-  // Time range — widen by 10% padding so bars don't kiss the edges.
-  const { rangeStart, rangeStop, ticks } = useMemo(() => {
-    if (milestones.length === 0) {
-      return {
-        rangeStart: now - 7 * DAY_MS,
-        rangeStop: now + 90 * DAY_MS,
-        ticks: [],
-      };
-    }
-    let min = Infinity;
-    let max = -Infinity;
-    for (const m of milestones) {
-      min = Math.min(min, new Date(m.startAt).getTime());
-      max = Math.max(max, new Date(m.stopAt).getTime());
-    }
-    const span = max - min || DAY_MS;
-    const pad = span * 0.08;
-    const start = min - pad;
-    const stop = max + pad;
-    // Month ticks
-    const t: { ts: number; label: string }[] = [];
-    const d = new Date(start);
-    d.setDate(1);
-    d.setHours(0, 0, 0, 0);
-    while (d.getTime() <= stop) {
-      t.push({
-        ts: d.getTime(),
-        label: d.toLocaleDateString("pl-PL", { month: "short", year: "2-digit" }),
-      });
-      d.setMonth(d.getMonth() + 1);
-    }
-    return { rangeStart: start, rangeStop: stop, ticks: t };
-  }, [milestones, now]);
-
+  const range = useMemo(() => computeTimelineRange(milestones, now), [milestones, now]);
   const rowMap = useMemo(() => assignRows(milestones), [milestones]);
   const rowCount = Math.max(1, ...[...rowMap.values()].map((n) => n + 1));
   const chartHeight = rowCount * ROW_HEIGHT + 2 * TRACK_PADDING_Y;
 
-  const pctFor = (ts: number) =>
-    ((ts - rangeStart) / (rangeStop - rangeStart)) * 100;
-
-  const todayInRange = now >= rangeStart && now <= rangeStop;
+  const todayInRange = now >= range.rangeStart && now <= range.rangeStop;
 
   return (
     <div className="flex flex-col gap-6">
-      {canCreate && (
-        <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
           <span className="font-mono text-[0.7rem] uppercase tracking-[0.14em] text-muted-foreground">
             {milestones.length} {milestones.length === 1 ? "milestone" : "milestones"}
           </span>
+          {/* Mode toggle — pill group. Keeps the list view regardless. */}
+          <div className="inline-flex items-center gap-0.5 rounded-full border border-border bg-card p-0.5 shadow-sm">
+            <ModeButton
+              active={mode === "timeline"}
+              onClick={() => setMode("timeline")}
+              icon={<LineChart size={12} />}
+              label="Oś czasu"
+            />
+            <ModeButton
+              active={mode === "markers"}
+              onClick={() => setMode("markers")}
+              icon={<Circle size={12} />}
+              label="Kropki"
+            />
+          </div>
+        </div>
+        {canCreate && (
           <button
             type="button"
             onClick={() => setDialog({ mode: "create" })}
@@ -163,18 +108,18 @@ export function RoadmapView({
           >
             <Plus size={14} /> Nowy milestone
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Chart */}
       <div className="rounded-xl border border-border bg-card/70 p-4 shadow-sm backdrop-blur">
         {/* Time axis */}
         <div className="relative mb-3 h-5 border-b border-border">
-          {ticks.map((t) => (
+          {range.ticks.map((t) => (
             <div
               key={t.ts}
               className="absolute -top-0.5 flex -translate-x-1/2 flex-col items-center"
-              style={{ left: `${pctFor(t.ts)}%` }}
+              style={{ left: `${pctFor(t.ts, range)}%` }}
             >
               <span className="font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted-foreground/80">
                 {t.label}
@@ -183,77 +128,27 @@ export function RoadmapView({
           ))}
         </div>
 
-        {/* Bars track */}
-        <div
-          className="relative w-full"
-          style={{ height: chartHeight, paddingTop: TRACK_PADDING_Y, paddingBottom: TRACK_PADDING_Y }}
-        >
-          {/* Vertical month gridlines */}
-          {ticks.map((t) => (
-            <div
-              key={t.ts}
-              className="pointer-events-none absolute top-0 bottom-0 w-px bg-border/60"
-              style={{ left: `${pctFor(t.ts)}%` }}
-              aria-hidden
-            />
-          ))}
-
-          {/* Today marker */}
-          {todayInRange && (
-            <>
-              <div
-                className="pointer-events-none absolute top-0 bottom-0 w-[2px] bg-primary/60"
-                style={{ left: `${pctFor(now)}%` }}
-                aria-hidden
-              />
-              <span
-                className="pointer-events-none absolute -top-2 -translate-x-1/2 rounded-full bg-primary px-1.5 font-mono text-[0.56rem] font-semibold uppercase tracking-[0.14em] text-primary-foreground"
-                style={{ left: `${pctFor(now)}%` }}
-              >
-                Dziś
-              </span>
-            </>
-          )}
-
-          {milestones.map((m) => {
-            const row = rowMap.get(m.id) ?? 0;
-            const start = new Date(m.startAt).getTime();
-            const stop = new Date(m.stopAt).getTime();
-            const left = pctFor(start);
-            const width = Math.max(pctFor(stop) - left, 0.8);
-            const color = colorFor(m.id);
-            return (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => canUpdate && setDialog({ mode: "edit", milestone: m })}
-                disabled={!canUpdate}
-                className="group absolute flex items-center gap-2 rounded-md px-2 py-1 text-left text-[0.78rem] font-medium text-white shadow-[0_1px_2px_rgba(0,0,0,0.12)] transition-[transform,opacity] duration-200 hover:-translate-y-[1px] disabled:cursor-default"
-                style={{
-                  top: TRACK_PADDING_Y + row * ROW_HEIGHT,
-                  left: `${left}%`,
-                  width: `${width}%`,
-                  height: ROW_HEIGHT - 8,
-                  background: `linear-gradient(135deg, ${color}, color-mix(in oklch, ${color} 70%, white))`,
-                }}
-                title={`${m.title} · ${formatRange(m.startAt, m.stopAt)}`}
-              >
-                <span className="truncate">{m.title}</span>
-                <span className="shrink-0 rounded-full bg-white/25 px-1.5 font-mono text-[0.58rem] font-bold">
-                  {m.taskCount}
-                </span>
-              </button>
-            );
-          })}
-
-          {milestones.length === 0 && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <p className="font-display text-[0.92rem] text-muted-foreground">
-                Brak milestones. Dodaj pierwszy, żeby narysować oś czasu.
-              </p>
-            </div>
-          )}
-        </div>
+        {mode === "timeline" ? (
+          <TimelineTrack
+            range={range}
+            milestones={milestones}
+            rowMap={rowMap}
+            chartHeight={chartHeight}
+            todayInRange={todayInRange}
+            now={now}
+            canUpdate={canUpdate}
+            onEdit={(m) => setDialog({ mode: "edit", milestone: m })}
+          />
+        ) : (
+          <MarkersTrack
+            range={range}
+            milestones={milestones}
+            todayInRange={todayInRange}
+            now={now}
+            canUpdate={canUpdate}
+            onEdit={(m) => setDialog({ mode: "edit", milestone: m })}
+          />
+        )}
       </div>
 
       {/* Per-milestone card list with expandable tasks */}
@@ -287,7 +182,7 @@ export function RoadmapView({
                       {m.title}
                     </span>
                     <span className="font-mono text-[0.64rem] uppercase tracking-[0.12em] text-muted-foreground">
-                      {formatRange(m.startAt, m.stopAt)} · {m.taskCount}{" "}
+                      {formatDateRange(m.startAt, m.stopAt)} · {m.taskCount}{" "}
                       {m.taskCount === 1 ? "zadanie" : "zadań"}
                     </span>
                   </div>
@@ -380,11 +275,259 @@ export function RoadmapView({
   );
 }
 
-function formatRange(startIso: string, stopIso: string): string {
-  const fmt = (iso: string) =>
-    new Date(iso).toLocaleDateString("pl-PL", {
-      day: "numeric",
-      month: "short",
-    });
-  return `${fmt(startIso)} → ${fmt(stopIso)}`;
+function ModeButton({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-active={active ? "true" : "false"}
+      className="inline-flex h-7 items-center gap-1.5 rounded-full px-3 font-mono text-[0.66rem] uppercase tracking-[0.12em] text-muted-foreground transition-colors data-[active=true]:bg-primary data-[active=true]:text-primary-foreground hover:text-foreground data-[active=true]:hover:text-primary-foreground"
+    >
+      {icon} {label}
+    </button>
+  );
 }
+
+function TimelineTrack({
+  range,
+  milestones,
+  rowMap,
+  chartHeight,
+  todayInRange,
+  now,
+  canUpdate,
+  onEdit,
+}: {
+  range: ReturnType<typeof computeTimelineRange>;
+  milestones: MilestoneItem[];
+  rowMap: Map<string, number>;
+  chartHeight: number;
+  todayInRange: boolean;
+  now: number;
+  canUpdate: boolean;
+  onEdit: (m: MilestoneItem) => void;
+}) {
+  return (
+    <div
+      className="relative w-full"
+      style={{ height: chartHeight, paddingTop: TRACK_PADDING_Y, paddingBottom: TRACK_PADDING_Y }}
+    >
+      {range.ticks.map((t) => (
+        <div
+          key={t.ts}
+          className="pointer-events-none absolute top-0 bottom-0 w-px bg-border/60"
+          style={{ left: `${pctFor(t.ts, range)}%` }}
+          aria-hidden
+        />
+      ))}
+
+      {todayInRange && (
+        <>
+          <div
+            className="pointer-events-none absolute top-0 bottom-0 w-[2px] bg-primary/60"
+            style={{ left: `${pctFor(now, range)}%` }}
+            aria-hidden
+          />
+          <span
+            className="pointer-events-none absolute -top-2 -translate-x-1/2 rounded-full bg-primary px-1.5 font-mono text-[0.56rem] font-semibold uppercase tracking-[0.14em] text-primary-foreground"
+            style={{ left: `${pctFor(now, range)}%` }}
+          >
+            Dziś
+          </span>
+        </>
+      )}
+
+      {milestones.map((m) => {
+        const row = rowMap.get(m.id) ?? 0;
+        const start = new Date(m.startAt).getTime();
+        const stop = new Date(m.stopAt).getTime();
+        const left = pctFor(start, range);
+        const width = Math.max(pctFor(stop, range) - left, 0.8);
+        const color = colorFor(m.id);
+        return (
+          <button
+            key={m.id}
+            type="button"
+            onClick={() => canUpdate && onEdit(m)}
+            disabled={!canUpdate}
+            className="group absolute flex items-center gap-2 rounded-md px-2 py-1 text-left text-[0.78rem] font-medium text-white shadow-[0_1px_2px_rgba(0,0,0,0.12)] transition-[transform,opacity] duration-200 hover:-translate-y-[1px] disabled:cursor-default"
+            style={{
+              top: TRACK_PADDING_Y + row * ROW_HEIGHT,
+              left: `${left}%`,
+              width: `${width}%`,
+              height: ROW_HEIGHT - 8,
+              background: `linear-gradient(135deg, ${color}, color-mix(in oklch, ${color} 70%, white))`,
+            }}
+            title={`${m.title} · ${formatDateRange(m.startAt, m.stopAt)}`}
+          >
+            <span className="truncate">{m.title}</span>
+            <span className="shrink-0 rounded-full bg-white/25 px-1.5 font-mono text-[0.58rem] font-bold">
+              {m.taskCount}
+            </span>
+          </button>
+        );
+      })}
+
+      {milestones.length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <p className="font-display text-[0.92rem] text-muted-foreground">
+            Brak milestones. Dodaj pierwszy, żeby narysować oś czasu.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Markers: each milestone is a circle at the midpoint of its date range,
+// sitting on the axis. Underneath: title + small pill with task count.
+// Circles never overlap horizontally perfectly (same start+stop would
+// collapse) — if two share a midpoint, we nudge them left/right using
+// the same greedy row algorithm collapsed to two rows (upper/lower).
+function MarkersTrack({
+  range,
+  milestones,
+  todayInRange,
+  now,
+  canUpdate,
+  onEdit,
+}: {
+  range: ReturnType<typeof computeTimelineRange>;
+  milestones: MilestoneItem[];
+  todayInRange: boolean;
+  now: number;
+  canUpdate: boolean;
+  onEdit: (m: MilestoneItem) => void;
+}) {
+  const MARKER_HEIGHT = 120;
+  // Pack markers into up-to-2 rows to avoid dot-on-dot collisions.
+  const rows = useMemo(() => {
+    const m2 = [...milestones]
+      .map((m) => ({
+        id: m.id,
+        mid: (new Date(m.startAt).getTime() + new Date(m.stopAt).getTime()) / 2,
+      }))
+      .sort((a, b) => a.mid - b.mid);
+    const MIN_GAP = (range.rangeStop - range.rangeStart) * 0.04; // 4% of axis
+    const lastMidPerRow: number[] = [];
+    const out = new Map<string, number>();
+    for (const m of m2) {
+      let placed = false;
+      for (let i = 0; i < lastMidPerRow.length; i++) {
+        if (m.mid - lastMidPerRow[i] >= MIN_GAP) {
+          lastMidPerRow[i] = m.mid;
+          out.set(m.id, i);
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        // cap at 2 rows; overflow collapses into row 1 (visually overlaps
+        // slightly, still clickable)
+        const row = Math.min(lastMidPerRow.length, 1);
+        out.set(m.id, row);
+        if (lastMidPerRow.length < 2) lastMidPerRow.push(m.mid);
+        else lastMidPerRow[1] = m.mid;
+      }
+    }
+    return out;
+  }, [milestones, range]);
+
+  return (
+    <div
+      className="relative w-full"
+      style={{ height: MARKER_HEIGHT, paddingTop: 20 }}
+    >
+      {/* Month gridlines — same as timeline */}
+      {range.ticks.map((t) => (
+        <div
+          key={t.ts}
+          className="pointer-events-none absolute top-0 bottom-0 w-px bg-border/60"
+          style={{ left: `${pctFor(t.ts, range)}%` }}
+          aria-hidden
+        />
+      ))}
+
+      {/* Horizontal baseline */}
+      <div className="pointer-events-none absolute left-0 right-0 top-[40px] h-px bg-border" aria-hidden />
+
+      {todayInRange && (
+        <>
+          <div
+            className="pointer-events-none absolute top-0 bottom-0 w-[2px] bg-primary/60"
+            style={{ left: `${pctFor(now, range)}%` }}
+            aria-hidden
+          />
+          <span
+            className="pointer-events-none absolute -top-2 -translate-x-1/2 rounded-full bg-primary px-1.5 font-mono text-[0.56rem] font-semibold uppercase tracking-[0.14em] text-primary-foreground"
+            style={{ left: `${pctFor(now, range)}%` }}
+          >
+            Dziś
+          </span>
+        </>
+      )}
+
+      {milestones.map((m) => {
+        const mid = (new Date(m.startAt).getTime() + new Date(m.stopAt).getTime()) / 2;
+        const left = pctFor(mid, range);
+        const color = colorFor(m.id);
+        const row = rows.get(m.id) ?? 0; // 0 = above line, 1 = below
+        const circleTop = row === 0 ? 20 : 50;
+        const labelTop = row === 0 ? 64 : 94;
+        const title = m.title.length > 18 ? m.title.slice(0, 17) + "…" : m.title;
+        return (
+          <div
+            key={m.id}
+            className="absolute -translate-x-1/2"
+            style={{ left: `${left}%`, top: 0, width: 120 }}
+          >
+            <button
+              type="button"
+              onClick={() => canUpdate && onEdit(m)}
+              disabled={!canUpdate}
+              aria-label={`${m.title}, ${formatDateRange(m.startAt, m.stopAt)}`}
+              title={`${m.title} · ${formatDateRange(m.startAt, m.stopAt)} · ${m.taskCount} ${m.taskCount === 1 ? "zadanie" : "zadań"}`}
+              className="absolute left-1/2 grid h-8 w-8 -translate-x-1/2 place-items-center rounded-full text-white shadow-[0_2px_6px_rgba(0,0,0,0.2)] transition-transform duration-150 hover:scale-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-default"
+              style={{
+                top: circleTop,
+                background: `linear-gradient(135deg, ${color}, color-mix(in oklch, ${color} 70%, white))`,
+              }}
+            >
+              <span className="font-mono text-[0.64rem] font-bold">{m.taskCount}</span>
+            </button>
+            <div
+              className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center gap-0.5 text-center"
+              style={{ top: labelTop, width: 120 }}
+            >
+              <span className="truncate font-display text-[0.74rem] font-semibold tracking-[-0.01em]">
+                {title}
+              </span>
+              <span className="font-mono text-[0.56rem] uppercase tracking-[0.12em] text-muted-foreground">
+                {formatDateRange(m.startAt, m.stopAt)}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+
+      {milestones.length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <p className="font-display text-[0.92rem] text-muted-foreground">
+            Brak milestones. Dodaj pierwszy, żeby zobaczyć kropki.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+

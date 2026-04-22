@@ -10,6 +10,7 @@ import {
   type UpdateMilestoneState,
 } from "@/app/(app)/w/[workspaceId]/b/[boardId]/milestone-actions";
 import { RichTextEditor } from "@/components/task/rich-text-editor";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 
 export interface MilestoneMember {
   id: string;
@@ -27,13 +28,6 @@ interface InitialMilestone {
 }
 
 type Mode = "create" | "edit";
-
-function toLocalInput(iso: string | null | undefined): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 export function MilestoneDialog({
   workspaceId,
@@ -129,36 +123,34 @@ export function MilestoneDialog({
             </label>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <label className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2">
                 <span className="eyebrow">Start</span>
-                <input
+                <DateTimePicker
                   name="startAt"
-                  type="datetime-local"
-                  required
-                  defaultValue={toLocalInput(defaultStart)}
-                  className="h-10 border-b border-border bg-transparent pb-1 font-mono text-[0.85rem] outline-none focus:border-primary"
+                  defaultValue={defaultStart}
+                  placeholder="Wybierz start"
+                  label="Data startu"
                 />
                 {fieldErrors?.startAt && (
                   <span className="font-mono text-[0.68rem] text-destructive">
                     {fieldErrors.startAt}
                   </span>
                 )}
-              </label>
-              <label className="flex flex-col gap-2">
+              </div>
+              <div className="flex flex-col gap-2">
                 <span className="eyebrow">Koniec</span>
-                <input
+                <DateTimePicker
                   name="stopAt"
-                  type="datetime-local"
-                  required
-                  defaultValue={toLocalInput(defaultStop)}
-                  className="h-10 border-b border-border bg-transparent pb-1 font-mono text-[0.85rem] outline-none focus:border-primary"
+                  defaultValue={defaultStop}
+                  placeholder="Wybierz koniec"
+                  label="Data końca"
                 />
                 {fieldErrors?.stopAt && (
                   <span className="font-mono text-[0.68rem] text-destructive">
                     {fieldErrors.stopAt}
                   </span>
                 )}
-              </label>
+              </div>
             </div>
 
             <label className="flex flex-col gap-2">
