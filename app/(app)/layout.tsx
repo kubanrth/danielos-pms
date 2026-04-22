@@ -10,7 +10,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   // Read fresh User to ensure sidebar avatar/name reflect recent profile changes
   // (JWT session is cached; DB is source of truth).
-  const [user, memberships] = await Promise.all([
+  const [user, memberships, unreadNotifs] = await Promise.all([
     db.user.findUnique({
       where: { id: session.user.id },
       select: { id: true, email: true, name: true, avatarUrl: true, isSuperAdmin: true },
@@ -29,6 +29,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         },
       },
       orderBy: { joinedAt: "asc" },
+    }),
+    db.notification.count({
+      where: { userId: session.user.id, readAt: null },
     }),
   ]);
   if (!user) redirect("/secure-access-portal");
@@ -52,6 +55,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           isSuperAdmin: user.isSuperAdmin,
         }}
         workspaces={workspaces}
+        unreadNotificationCount={unreadNotifs}
       />
       <div className="flex min-w-0 flex-1 flex-col">{children}</div>
     </div>

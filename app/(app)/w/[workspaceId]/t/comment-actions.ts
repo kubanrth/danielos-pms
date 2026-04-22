@@ -59,7 +59,8 @@ export async function createCommentAction(
     },
   });
 
-  const mentionIds = extractMentionIds(parsed.data.bodyJson);
+  const bodyDoc = parsed.data.bodyJson;
+  const mentionIds = extractMentionIds(bodyDoc);
   const mentionResult = mentionIds.length
     ? await syncCommentMentions({
         commentId: comment.id,
@@ -67,6 +68,7 @@ export async function createCommentAction(
         taskId: task.id,
         workspaceId: task.workspaceId,
         newIds: mentionIds,
+        bodyDoc,
       })
     : { added: [], removed: [] };
 
@@ -114,13 +116,15 @@ export async function updateCommentAction(
     data: { bodyJson: parsed.data.bodyJson as Prisma.InputJsonValue },
   });
 
-  const mentionIds = extractMentionIds(parsed.data.bodyJson);
+  const bodyDoc = parsed.data.bodyJson;
+  const mentionIds = extractMentionIds(bodyDoc);
   const mentionResult = await syncCommentMentions({
     commentId: existing.id,
     authorId: ctx.userId,
     taskId: existing.task.id,
     workspaceId: existing.task.workspaceId,
     newIds: mentionIds,
+    bodyDoc,
   });
 
   await writeAudit({

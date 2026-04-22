@@ -43,8 +43,11 @@ export async function syncCommentMentions(params: {
   taskId: string;
   workspaceId: string;
   newIds: string[];
+  // Optional doc used to build a notification/email snippet. Passing the
+  // raw body keeps the caller's call site tidy (the extract is idempotent).
+  bodyDoc?: unknown;
 }): Promise<{ added: string[]; removed: string[] }> {
-  const { commentId, authorId, taskId, workspaceId, newIds } = params;
+  const { commentId, authorId, taskId, workspaceId, newIds, bodyDoc } = params;
 
   // Only notify workspace members (filters out stale ids from deleted
   // members, or bogus ids from a doctored client payload).
@@ -95,6 +98,7 @@ export async function syncCommentMentions(params: {
     const taskTitle = task?.title ?? "zadanie";
     const workspaceName = task?.workspace.name ?? "workspace";
 
+    const snippet = bodyDoc ? extractPlainSnippet(bodyDoc) : "";
     const payload = {
       commentId,
       taskId,
@@ -102,6 +106,7 @@ export async function syncCommentMentions(params: {
       authorId,
       authorName,
       taskTitle,
+      snippet,
     } as const;
 
     await db.notification.createMany({

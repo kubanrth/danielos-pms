@@ -39,9 +39,11 @@ const STORAGE_KEY = "danielos.sidebar.collapsed";
 export function Sidebar({
   user,
   workspaces,
+  unreadNotificationCount,
 }: {
   user: SidebarUser;
   workspaces: SidebarWorkspace[];
+  unreadNotificationCount: number;
 }) {
   const pathname = usePathname();
   const activeWorkspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;
@@ -139,8 +141,7 @@ export function Sidebar({
           label="Powiadomienia"
           pathname={pathname}
           collapsed={collapsed}
-          disabled
-          hint="F1+"
+          badge={unreadNotificationCount > 0 ? unreadNotificationCount : undefined}
         />
         <NavItem
           href="/my-tasks"
@@ -285,6 +286,7 @@ function NavItem({
   disabled,
   hint,
   exact,
+  badge,
 }: {
   href: string;
   icon: React.ReactNode;
@@ -294,18 +296,29 @@ function NavItem({
   disabled?: boolean;
   hint?: string;
   exact?: boolean;
+  badge?: number;
 }) {
   const active = exact ? pathname === href : pathname.startsWith(href);
 
   const content = (
     <>
-      <span className="shrink-0 text-muted-foreground group-hover:text-foreground group-data-[active=true]:text-foreground">
+      <span className="relative shrink-0 text-muted-foreground group-hover:text-foreground group-data-[active=true]:text-foreground">
         {icon}
+        {collapsed && badge !== undefined && badge > 0 && (
+          <span className="absolute -right-1.5 -top-1.5 grid h-3.5 min-w-[14px] place-items-center rounded-full bg-primary px-1 font-mono text-[0.55rem] font-bold text-primary-foreground">
+            {badge > 9 ? "9+" : badge}
+          </span>
+        )}
       </span>
       {!collapsed && (
         <span className="min-w-0 flex-1 truncate tracking-tight">{label}</span>
       )}
-      {!collapsed && hint && (
+      {!collapsed && badge !== undefined && badge > 0 && (
+        <span className="grid h-5 min-w-[20px] shrink-0 place-items-center rounded-full bg-primary px-1.5 font-mono text-[0.62rem] font-bold text-primary-foreground">
+          {badge > 99 ? "99+" : badge}
+        </span>
+      )}
+      {!collapsed && hint && badge === undefined && (
         <span className="font-mono text-[0.62rem] uppercase tracking-[0.12em] text-muted-foreground/60">
           {hint}
         </span>
