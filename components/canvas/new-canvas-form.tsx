@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, startTransition, useRef } from "react";
+import { useActionState, startTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import {
@@ -17,12 +17,12 @@ export function NewCanvasForm({ workspaceId }: { workspaceId: string }) {
   );
 
   // Navigate into the new canvas on success so the user starts drawing
-  // immediately instead of bouncing back through the list.
-  if (state?.ok && state.canvasId) {
-    queueMicrotask(() =>
-      router.push(`/w/${workspaceId}/c/${state.canvasId}`),
-    );
-  }
+  // immediately. useEffect guards against useActionState's stable state
+  // ref re-firing the push on every render after success.
+  const createdId = state?.ok ? state.canvasId : null;
+  useEffect(() => {
+    if (createdId) router.push(`/w/${workspaceId}/c/${createdId}`);
+  }, [createdId, router, workspaceId]);
 
   const fieldError = !state?.ok ? state?.fieldErrors?.name : undefined;
 

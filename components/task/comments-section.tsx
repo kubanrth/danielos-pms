@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, startTransition, useState } from "react";
+import { useActionState, startTransition, useEffect, useState } from "react";
 import { Trash2, Pencil, Check, X } from "lucide-react";
 import {
   createCommentAction,
@@ -153,13 +153,11 @@ function NewCommentForm({
     createCommentAction,
     null,
   );
-  // Re-key the editor after a successful submit so it clears.
-  const [formKey, setFormKey] = useState(0);
-  const submittedOk = state?.ok === true && state.commentId;
-  if (submittedOk) {
-    // Clear once, next render uses the new key.
-    queueMicrotask(() => setFormKey((k) => k + 1));
-  }
+  // Derive the editor's key directly from the successful-submit marker.
+  // React remounts the editor (clearing it) whenever state flips to a
+  // new commentId. Avoids the render-body setState pattern that was
+  // causing a re-render loop + visible jitter of the form box.
+  const editorKey = state?.ok ? state.commentId : "pristine";
 
   return (
     <form
@@ -168,7 +166,7 @@ function NewCommentForm({
     >
       <input type="hidden" name="taskId" value={taskId} />
       <RichTextEditor
-        key={formKey}
+        key={editorKey}
         initial={null}
         readOnly={false}
         name="bodyJson"
@@ -206,9 +204,10 @@ function EditCommentForm({
     updateCommentAction,
     null,
   );
-  if (state?.ok) {
-    queueMicrotask(onDone);
-  }
+  const doneId = state?.ok ? state.commentId : null;
+  useEffect(() => {
+    if (doneId) onDone();
+  }, [doneId, onDone]);
   return (
     <form
       action={(fd) => startTransition(() => formAction(fd))}
