@@ -3,12 +3,20 @@
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 
+export interface NodeTaskChip {
+  taskId: string;
+  title: string;
+}
+
 export interface ShapeNodeData {
   shape: "RECTANGLE" | "DIAMOND" | "CIRCLE";
   label: string | null;
   colorHex: string;
   width: number;
   height: number;
+  linkedTasks?: NodeTaskChip[];
+  // Injected by the editor so the chip knows where to navigate.
+  workspaceId?: string;
   [key: string]: unknown; // React Flow's NodeProps expects index signature on data
 }
 
@@ -40,6 +48,8 @@ export const ShapeNode = memo(function ShapeNode({ data, selected }: NodeProps) 
     </span>
   );
 
+  const chips = d.linkedTasks ?? [];
+
   return (
     <>
       <Handle type="target" position={Position.Top} />
@@ -53,6 +63,30 @@ export const ShapeNode = memo(function ShapeNode({ data, selected }: NodeProps) 
       ) : (
         <div style={base} className="grid place-items-center">
           {content}
+        </div>
+      )}
+      {chips.length > 0 && d.workspaceId && (
+        <div
+          className="pointer-events-auto absolute -bottom-3 left-1/2 flex max-w-[calc(100%+40px)] -translate-x-1/2 flex-wrap justify-center gap-1"
+          data-chips=""
+        >
+          {chips.slice(0, 3).map((c) => (
+            <a
+              key={c.taskId}
+              href={`/w/${d.workspaceId}/t/${c.taskId}`}
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="inline-flex max-w-[160px] items-center gap-1 truncate rounded-full border border-border bg-background px-2 py-0.5 font-mono text-[0.58rem] uppercase tracking-[0.12em] text-muted-foreground shadow-sm transition-colors hover:border-primary/60 hover:text-foreground nodrag"
+              title={c.title}
+            >
+              # {c.title}
+            </a>
+          ))}
+          {chips.length > 3 && (
+            <span className="inline-flex items-center rounded-full border border-border bg-background px-2 py-0.5 font-mono text-[0.58rem] uppercase tracking-[0.12em] text-muted-foreground">
+              +{chips.length - 3}
+            </span>
+          )}
         </div>
       )}
     </>

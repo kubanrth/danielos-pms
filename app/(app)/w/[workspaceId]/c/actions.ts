@@ -120,11 +120,10 @@ export type SaveSnapshotResult =
   | { ok: true; nodeCount: number; edgeCount: number }
   | { ok: false; error: string };
 
-// Full-canvas snapshot save. Strategy: delete-all existing ProcessNode +
-// ProcessEdge rows for this canvas, then bulk-insert the client's state.
-// Inside a transaction so a mid-save crash leaves the prior snapshot
-// intact. Cheap for small graphs; when node count grows past ~200 we can
-// switch to diff-based save (or let Yjs CRDT handle sync in F6b).
+// Full-canvas snapshot save. Diff against existing rows so node identities
+// survive between saves — critical for ProcessNodeTaskLink (onDelete:
+// Cascade would nuke the links if we did a naive delete-all-and-recreate).
+// Edges are cheap to rewrite so we still do delete-all for them.
 export async function saveCanvasSnapshotAction(
   input: SaveCanvasSnapshotInput,
 ): Promise<SaveSnapshotResult> {
@@ -142,40 +141,80 @@ export async function saveCanvasSnapshotAction(
   const ctx = await requireWorkspaceAction(canvas.workspaceId, "canvas.edit");
 
   // Validate edge endpoints point at nodes in the snapshot.
-  const nodeIds = new Set(parsed.data.nodes.map((n) => n.id));
+  const snapshotNodeIds = new Set(parsed.data.nodes.map((n) => n.id));
   for (const e of parsed.data.edges) {
-    if (!nodeIds.has(e.fromNodeId) || !nodeIds.has(e.toNodeId)) {
+    if (!snapshotNodeIds.has(e.fromNodeId) || !snapshotNodeIds.has(e.toNodeId)) {
       return { ok: false, error: "Krawędź wskazuje na nieistniejący węzeł." };
     }
   }
 
+  const existingNodes = await db.processNode.findMany({
+    where: { canvasId: canvas.id },
+    select: { id: true },
+  });
+  const existingNodeIds = new Set(existingNodes.map((n) => n.id));
+
+  const toCreate = parsed.data.nodes.filter((n) => !existingNodeIds.has(n.id));
+  const toUpdate = parsed.data.nodes.filter((n) => existingNodeIds.has(n.id));
+  const toDelete = [...existingNodeIds].filter((id) => !snapshotNodeIds.has(id));
+
   await db.$transaction([
+    // Edges first — cascades on node delete would hit them anyway.
     db.processEdge.deleteMany({ where: { canvasId: canvas.id } }),
-    db.processNode.deleteMany({ where: { canvasId: canvas.id } }),
-    db.processNode.createMany({
-      data: parsed.data.nodes.map((n) => ({
-        id: n.id,
-        canvasId: canvas.id,
-        shape: n.shape,
-        label: n.label ?? null,
-        iconName: n.iconName ?? null,
-        x: n.x,
-        y: n.y,
-        width: n.width,
-        height: n.height,
-        colorHex: n.colorHex,
-      })),
-    }),
-    db.processEdge.createMany({
-      data: parsed.data.edges.map((e) => ({
-        id: e.id,
-        canvasId: canvas.id,
-        fromNodeId: e.fromNodeId,
-        toNodeId: e.toNodeId,
-        label: e.label ?? null,
-        style: e.style,
-      })),
-    }),
+    // Prune nodes the client no longer has (cascades their task links).
+    ...(toDelete.length > 0
+      ? [db.processNode.deleteMany({ where: { canvasId: canvas.id, id: { in: toDelete } } })]
+      : []),
+    // Insert brand-new nodes.
+    ...(toCreate.length > 0
+      ? [
+          db.processNode.createMany({
+            data: toCreate.map((n) => ({
+              id: n.id,
+              canvasId: canvas.id,
+              shape: n.shape,
+              label: n.label ?? null,
+              iconName: n.iconName ?? null,
+              x: n.x,
+              y: n.y,
+              width: n.width,
+              height: n.height,
+              colorHex: n.colorHex,
+            })),
+          }),
+        ]
+      : []),
+    // Update existing nodes in place — preserves ProcessNodeTaskLink.
+    ...toUpdate.map((n) =>
+      db.processNode.update({
+        where: { id: n.id },
+        data: {
+          shape: n.shape,
+          label: n.label ?? null,
+          iconName: n.iconName ?? null,
+          x: n.x,
+          y: n.y,
+          width: n.width,
+          height: n.height,
+          colorHex: n.colorHex,
+        },
+      }),
+    ),
+    // Recreate all edges — no downstream FKs so delete-then-insert is fine.
+    ...(parsed.data.edges.length > 0
+      ? [
+          db.processEdge.createMany({
+            data: parsed.data.edges.map((e) => ({
+              id: e.id,
+              canvasId: canvas.id,
+              fromNodeId: e.fromNodeId,
+              toNodeId: e.toNodeId,
+              label: e.label ?? null,
+              style: e.style,
+            })),
+          }),
+        ]
+      : []),
     db.processCanvas.update({
       where: { id: canvas.id },
       data: { updatedAt: new Date() },
@@ -188,7 +227,13 @@ export async function saveCanvasSnapshotAction(
     objectId: canvas.id,
     actorId: ctx.userId,
     action: "canvas.saved",
-    diff: { nodeCount: parsed.data.nodes.length, edgeCount: parsed.data.edges.length },
+    diff: {
+      nodeCount: parsed.data.nodes.length,
+      edgeCount: parsed.data.edges.length,
+      created: toCreate.length,
+      updated: toUpdate.length,
+      deleted: toDelete.length,
+    },
   });
 
   // Revalidate rarely — the editor already has the fresh state client-side

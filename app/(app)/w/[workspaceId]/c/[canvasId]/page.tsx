@@ -17,13 +17,54 @@ export default async function CanvasEditorPage({
   const canvas = await db.processCanvas.findFirst({
     where: { id: canvasId, workspaceId, deletedAt: null },
     include: {
-      nodes: true,
+      nodes: {
+        include: {
+          taskLinks: {
+            include: {
+              task: {
+                select: { id: true, title: true, deletedAt: true },
+              },
+            },
+          },
+        },
+      },
       edges: true,
     },
   });
   if (!canvas) notFound();
 
   const canEdit = can(ctx.role, "canvas.edit");
+  const canCreateTask = can(ctx.role, "task.create");
+
+  // Load the workspace's first active board + its tasks for the
+  // "Podepnij zadanie" picker. The picker stays cheap at the workspace
+  // scale we target (hundreds of tasks max); beyond that we'd paginate.
+  const [firstBoard, tasks] = await Promise.all([
+    db.board.findFirst({
+      where: { workspaceId, deletedAt: null },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, name: true },
+    }),
+    db.task.findMany({
+      where: { workspaceId, deletedAt: null },
+      orderBy: { updatedAt: "desc" },
+      take: 300,
+      select: { id: true, title: true },
+    }),
+  ]);
+
+  // Per-node map of { taskId, title } — filter out tasks that have since
+  // been soft-deleted so we never render a chip pointing at a dead task.
+  const linksByNode = new Map<
+    string,
+    { taskId: string; title: string }[]
+  >();
+  for (const n of canvas.nodes) {
+    const alive = n.taskLinks
+      .filter((l) => l.task && !l.task.deletedAt)
+      .map((l) => ({ taskId: l.task.id, title: l.task.title }));
+    if (alive.length > 0) linksByNode.set(n.id, alive);
+  }
 
   return (
     <div className="flex h-[calc(100dvh-4rem)] flex-col">
@@ -47,6 +88,7 @@ export default async function CanvasEditorPage({
 
       <div className="flex-1 min-h-0">
         <CanvasEditor
+          workspaceId={workspaceId}
           canvasId={canvas.id}
           initialNodes={canvas.nodes.map((n) => ({
             id: n.id,
@@ -59,6 +101,7 @@ export default async function CanvasEditorPage({
             width: n.width,
             height: n.height,
             colorHex: n.colorHex,
+            linkedTasks: linksByNode.get(n.id) ?? [],
           }))}
           initialEdges={canvas.edges.map((e) => ({
             id: e.id,
@@ -68,6 +111,9 @@ export default async function CanvasEditorPage({
             style: e.style === "dashed" ? "dashed" : "solid",
           }))}
           canEdit={canEdit}
+          canCreateTask={canCreateTask}
+          workspaceTasks={tasks}
+          defaultBoardId={firstBoard?.id ?? null}
         />
       </div>
     </div>
