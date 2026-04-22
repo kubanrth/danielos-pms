@@ -1,22 +1,24 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 
 // Styled wrapper around Base UI Dialog for the intercepting-route
-// task modal. Closing routes back to the workspace overview
-// (stable regardless of how the user arrived).
+// task modal. Closing goes back in history so the intercepted route
+// unmounts naturally. Intercepting routes only apply to soft-nav, so
+// the modal is only reachable from a page that's already in history —
+// router.back() is always safe here.
 export function TaskModalShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const params = useParams();
-  const workspaceId = typeof params.workspaceId === "string" ? params.workspaceId : "";
+
+  const close = () => router.back();
 
   return (
     <BaseDialog.Root
       open
       onOpenChange={(open) => {
-        if (!open) router.push(`/w/${workspaceId}`);
+        if (!open) close();
       }}
     >
       <BaseDialog.Portal>
@@ -27,12 +29,14 @@ export function TaskModalShell({ children }: { children: React.ReactNode }) {
         >
           <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/95 px-8 py-3 backdrop-blur">
             <BaseDialog.Title className="eyebrow">Szczegóły zadania</BaseDialog.Title>
-            <BaseDialog.Close
+            <button
+              type="button"
+              onClick={close}
               className="grid h-8 w-8 place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               aria-label="Zamknij"
             >
               <X size={16} />
-            </BaseDialog.Close>
+            </button>
           </div>
           <div className="flex-1 px-8 py-8">{children}</div>
         </BaseDialog.Popup>
