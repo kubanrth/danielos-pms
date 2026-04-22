@@ -14,6 +14,7 @@ import {
   LogOut,
   Plus,
   Settings,
+  ShieldCheck,
 } from "lucide-react";
 import type { Role } from "@/lib/generated/prisma/enums";
 import { signOutAction } from "@/app/(app)/actions";
@@ -256,6 +257,15 @@ export function Sidebar({
 
       {/* Bottom: settings + signout */}
       <div className="flex flex-col gap-0.5 border-t border-sidebar-border px-2 py-2">
+        {user.isSuperAdmin && (
+          <NavItem
+            href="/admin"
+            icon={<ShieldCheck size={15} />}
+            label="Panel admina"
+            pathname={pathname}
+            collapsed={collapsed}
+          />
+        )}
         <NavItem
           href="/profile"
           icon={<Settings size={15} />}
