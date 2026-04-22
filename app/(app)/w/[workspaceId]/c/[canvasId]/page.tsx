@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { can } from "@/lib/permissions";
-import { CanvasEditor } from "@/components/canvas/canvas-editor";
+import { CanvasEditorLazy } from "@/components/canvas/canvas-editor-lazy";
 
 export default async function CanvasEditorPage({
   params,
@@ -87,7 +87,7 @@ export default async function CanvasEditorPage({
       </header>
 
       <div className="flex-1 min-h-0">
-        <CanvasEditor
+        <CanvasEditorLazy
           workspaceId={workspaceId}
           canvasId={canvas.id}
           initialNodes={canvas.nodes.map((n) => ({
