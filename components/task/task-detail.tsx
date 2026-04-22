@@ -15,6 +15,7 @@ import { RichTextEditor, type RichTextDoc } from "@/components/task/rich-text-ed
 import { CommentsSection, type CommentItem } from "@/components/task/comments-section";
 import { ActivityLog, type ActivityEntry } from "@/components/task/activity-log";
 import { AttachmentsSection, type AttachmentItem } from "@/components/task/attachments-section";
+import { assignTaskToMilestoneAction } from "@/app/(app)/w/[workspaceId]/b/[boardId]/milestone-actions";
 
 const TAG_COLORS = [
   "#EF4444",
@@ -35,10 +36,12 @@ export interface TaskDetailProps {
     title: string;
     descriptionJson: RichTextDoc | null;
     statusColumnId: string | null;
+    milestoneId: string | null;
     startAt: string | null;
     stopAt: string | null;
   };
   statusColumns: { id: string; name: string; colorHex: string }[];
+  milestones: { id: string; title: string; startAt: string; stopAt: string }[];
   allMembers: {
     id: string;
     name: string | null;
@@ -72,6 +75,7 @@ export function TaskDetail({
   workspaceId,
   task,
   statusColumns,
+  milestones,
   allMembers,
   assigneeIds,
   allTags,
@@ -212,6 +216,33 @@ export function TaskDetail({
           </div>
         )}
       </form>
+
+      {/* Milestone — instant select (MenuChange fires the action) */}
+      <section className="flex flex-col gap-3">
+        <span className="eyebrow">Milestone</span>
+        <form action={assignTaskToMilestoneAction} className="m-0 flex items-center gap-2">
+          <input type="hidden" name="taskId" value={task.id} />
+          <select
+            name="milestoneId"
+            defaultValue={task.milestoneId ?? ""}
+            disabled={!canEdit}
+            onChange={(e) => e.currentTarget.form?.requestSubmit()}
+            className="h-9 min-w-[220px] appearance-none rounded-md border border-border bg-background px-3 font-mono text-[0.82rem] uppercase tracking-[0.12em] outline-none focus:border-primary"
+          >
+            <option value="">— brak —</option>
+            {milestones.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.title}
+              </option>
+            ))}
+          </select>
+          {milestones.length === 0 && (
+            <span className="font-mono text-[0.64rem] uppercase tracking-[0.12em] text-muted-foreground">
+              utwórz milestone w roadmapie
+            </span>
+          )}
+        </form>
+      </section>
 
       {/* Assignees */}
       <section className="flex flex-col gap-3">

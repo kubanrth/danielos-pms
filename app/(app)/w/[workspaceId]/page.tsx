@@ -76,6 +76,12 @@ export default async function WorkspaceOverviewPage({
               >
                 Kanban →
               </Link>
+              <Link
+                href={`/w/${workspaceId}/b/${board.id}/roadmap`}
+                className="eyebrow transition-colors hover:text-foreground"
+              >
+                Roadmapa →
+              </Link>
             </div>
           </div>
 

@@ -93,12 +93,39 @@ async function main() {
     },
   });
 
+  const now = Date.now();
+  const day = 24 * 60 * 60 * 1000;
+  const m1 = await db.milestone.create({
+    data: {
+      workspaceId: workspace.id,
+      boardId: board.id,
+      creatorId: admin.id,
+      assigneeId: member.id,
+      title: "Brand launch",
+      startAt: new Date(now - 7 * day),
+      stopAt: new Date(now + 21 * day),
+      orderIndex: 0,
+    },
+  });
+  await db.milestone.create({
+    data: {
+      workspaceId: workspace.id,
+      boardId: board.id,
+      creatorId: admin.id,
+      title: "Public beta",
+      startAt: new Date(now + 21 * day),
+      stopAt: new Date(now + 60 * day),
+      orderIndex: 1,
+    },
+  });
+
   await db.task.create({
     data: {
       workspaceId: workspace.id,
       boardId: board.id,
       statusColumnId: board.statusColumns[0].id,
       creatorId: admin.id,
+      milestoneId: m1.id,
       title: "Zaprojektować logo DANIELOS",
       rowOrder: 1.0,
       assignees: { create: [{ userId: member.id }] },

@@ -39,6 +39,11 @@ export async function fetchTaskDetail(
       board: {
         include: {
           statusColumns: { orderBy: { order: "asc" } },
+          milestones: {
+            where: { deletedAt: null },
+            orderBy: [{ orderIndex: "asc" }, { startAt: "asc" }],
+            select: { id: true, title: true, startAt: true, stopAt: true },
+          },
         },
       },
       assignees: { select: { userId: true } },
@@ -115,9 +120,16 @@ export async function fetchTaskDetail(
       title: task.title,
       descriptionJson: normalizeDescription(task.descriptionJson),
       statusColumnId: task.statusColumnId,
+      milestoneId: task.milestoneId,
       startAt: task.startAt ? task.startAt.toISOString() : null,
       stopAt: task.stopAt ? task.stopAt.toISOString() : null,
     },
+    milestones: task.board.milestones.map((m) => ({
+      id: m.id,
+      title: m.title,
+      startAt: m.startAt.toISOString(),
+      stopAt: m.stopAt.toISOString(),
+    })),
     statusColumns: task.board.statusColumns.map((c) => ({
       id: c.id,
       name: c.name,
