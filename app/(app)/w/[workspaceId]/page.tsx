@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { PencilRuler } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { can } from "@/lib/permissions";
 import { CreateTaskButton } from "@/components/task/create-task-button";
+import { ViewSwitcher } from "@/components/view/view-switcher";
 
 export default async function WorkspaceOverviewPage({
   params,
@@ -41,16 +43,24 @@ export default async function WorkspaceOverviewPage({
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-10">
-      <div className="flex items-baseline justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <Metric label="Członkowie" value={memberCount} />
-        {firstBoard && canCreateTask && (
-          <CreateTaskButton workspaceId={workspaceId} boardId={firstBoard.id} />
-        )}
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/w/${workspaceId}/canvases`}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-3 font-sans text-[0.82rem] font-medium text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          >
+            <PencilRuler size={14} /> Whiteboard
+          </Link>
+          {firstBoard && canCreateTask && (
+            <CreateTaskButton workspaceId={workspaceId} boardId={firstBoard.id} />
+          )}
+        </div>
       </div>
 
       {boards.map((board) => (
         <section key={board.id} className="flex flex-col gap-5">
-          <div className="flex items-baseline justify-between gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-display text-[1.25rem] font-bold leading-[1.2] tracking-[-0.02em]">
               <Link
                 href={`/w/${workspaceId}/b/${board.id}/table`}
@@ -63,32 +73,11 @@ export default async function WorkspaceOverviewPage({
                 {board._count.tasks === 1 ? "zadanie" : "zadań"}
               </span>
             </h2>
-            <div className="flex items-center gap-3">
-              <Link
-                href={`/w/${workspaceId}/b/${board.id}/table`}
-                className="eyebrow transition-colors hover:text-foreground"
-              >
-                Tabela →
-              </Link>
-              <Link
-                href={`/w/${workspaceId}/b/${board.id}/kanban`}
-                className="eyebrow transition-colors hover:text-foreground"
-              >
-                Kanban →
-              </Link>
-              <Link
-                href={`/w/${workspaceId}/b/${board.id}/roadmap`}
-                className="eyebrow transition-colors hover:text-foreground"
-              >
-                Roadmapa →
-              </Link>
-              <Link
-                href={`/w/${workspaceId}/canvases`}
-                className="eyebrow transition-colors hover:text-foreground"
-              >
-                Whiteboard →
-              </Link>
-            </div>
+            <ViewSwitcher
+              workspaceId={workspaceId}
+              boardId={board.id}
+              size="sm"
+            />
           </div>
 
           {board.tasks.length === 0 ? (

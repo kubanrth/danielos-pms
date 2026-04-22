@@ -19,10 +19,14 @@ export function ViewSwitcher({
   workspaceId,
   boardId,
   active,
+  size = "md",
 }: {
   workspaceId: string;
   boardId: string;
-  active: ViewName;
+  // Omit on surfaces where the user isn't in a view yet (e.g. the
+  // workspace overview) — then no pill is highlighted.
+  active?: ViewName;
+  size?: "sm" | "md";
 }) {
   const views: ViewDescriptor[] = [
     {
@@ -51,11 +55,14 @@ export function ViewSwitcher({
     },
   ];
 
+  const heightClass = size === "sm" ? "h-7 px-2.5 text-[0.76rem]" : "h-8 px-3 text-[0.82rem]";
+  const containerPad = size === "sm" ? "p-0.5 gap-0.5" : "p-1 gap-1";
+
   return (
     <div
       role="tablist"
       aria-label="Widoki tablicy"
-      className="inline-flex items-center gap-1 rounded-lg border border-border bg-card p-1 shadow-sm"
+      className={`inline-flex items-center rounded-lg border border-border bg-card shadow-sm ${containerPad}`}
     >
       {views.map((v) => {
         const isActive = v.name === active;
@@ -66,7 +73,7 @@ export function ViewSwitcher({
             role="tab"
             aria-selected={isActive}
             data-active={isActive ? "true" : "false"}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md px-3 font-sans text-[0.82rem] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground"
+            className={`inline-flex items-center gap-1.5 rounded-md font-sans font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground ${heightClass}`}
           >
             {v.icon}
             <span>{v.label}</span>
