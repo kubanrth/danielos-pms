@@ -95,7 +95,7 @@ export default async function WorkspaceOverviewPage({
             <div className="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
               <p className="font-display text-[1.05rem] font-semibold">Brak zadań.</p>
               <p className="mt-1 font-mono text-[0.7rem] uppercase tracking-[0.14em]">
-                zacznij od przycisku „Nowe zadanie" powyżej
+                zacznij od przycisku „Nowe zadanie” powyżej
               </p>
             </div>
           ) : (
@@ -171,17 +171,6 @@ export default async function WorkspaceOverviewPage({
         </section>
       ))}
 
-      <section className="flex flex-col gap-4 border-t border-border pt-10">
-        <h3 className="font-display text-[1.1rem] font-bold leading-[1.2] tracking-[-0.02em]">
-          Dalsze kroki
-        </h3>
-        <ul className="grid gap-3 text-[0.92rem] leading-[1.55] text-muted-foreground md:grid-cols-2">
-          <Step phase="F2" label="Edytowalny widok tabeli (Jira-like)" />
-          <Step phase="F3" label="Kanban z drag & drop + real-time sync" />
-          <Step phase="F4" label="Komentarze, załączniki, audit log w modalu" />
-          <Step phase="F5" label="Roadmap + Milestones" />
-        </ul>
-      </section>
     </div>
   );
 }
@@ -197,13 +186,3 @@ function Metric({ label, value }: { label: string; value: number }) {
   );
 }
 
-function Step({ phase, label }: { phase: string; label: string }) {
-  return (
-    <li className="flex items-start gap-3 border-l-2 border-border pl-4 py-1">
-      <span className="mt-1 font-mono text-[0.68rem] uppercase tracking-[0.14em] text-primary">
-        {phase}
-      </span>
-      <span>{label}</span>
-    </li>
-  );
-}
