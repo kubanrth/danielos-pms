@@ -1,7 +1,7 @@
 "use client";
 
 import "@xyflow/react/dist/style.css";
-import { useCallback, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -14,8 +14,12 @@ import {
   type Connection,
   type Edge,
   type Node,
+  type NodeChange,
   type NodeTypes,
   type OnConnect,
+  type OnNodesChange,
+  type OnEdgesChange,
+  type EdgeChange,
 } from "@xyflow/react";
 import {
   Circle as CircleIcon,
@@ -35,6 +39,17 @@ import {
 } from "@/app/(app)/w/[workspaceId]/c/node-task-actions";
 import { ShapeNode, type NodeTaskChip, type ShapeNodeData } from "@/components/canvas/shape-node";
 import { useRouter } from "next/navigation";
+import {
+  createCanvasYDoc,
+  readCanvasSnapshot,
+  seedCanvasDoc,
+  setEdgeValue,
+  setNodeValue,
+  LOCAL_ORIGIN,
+  SEED_ORIGIN,
+  type CanvasYRefs,
+} from "@/lib/yjs/canvas-doc";
+import { createCanvasRealtimeProvider } from "@/lib/yjs/canvas-realtime-provider";
 
 export interface EditorInitialNode {
   id: string;
@@ -154,27 +169,170 @@ function CanvasEditorInner({
   const router = useRouter();
   const nodeTypes: NodeTypes = useMemo(() => ({ shape: ShapeNode }), []);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState<RFNode>(
+  const [nodes, setNodes, rfOnNodesChange] = useNodesState<RFNode>(
     initialNodes.map((n) => toRFNode(n, workspaceId)),
   );
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges.map(toRFEdge));
+  const [edges, setEdges, rfOnEdgesChange] = useEdgesState(initialEdges.map(toRFEdge));
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  const [isConnected, setIsConnected] = useState(false);
+
+  // Y.Doc is the shared source of truth between concurrent editors; the
+  // React Flow hooks above are an interactive view on top. Local actions
+  // mutate the Y.Doc (tagged LOCAL_ORIGIN) — the Supabase Realtime
+  // provider forwards those updates to peers. Remote updates arrive
+  // tagged REMOTE_ORIGIN and are re-derived into RF state by the
+  // observer below.
+  const yRefsRef = useRef<CanvasYRefs | null>(null);
+  if (yRefsRef.current === null) {
+    const refs = createCanvasYDoc();
+    seedCanvasDoc(refs, initialNodes, initialEdges);
+    yRefsRef.current = refs;
+  }
+  const yRefs = yRefsRef.current;
+
+  useEffect(() => {
+    const refs = yRefs;
+    // Observer re-derives RF state on any non-local change. We explicitly
+    // skip SEED_ORIGIN (mount bootstrap) and LOCAL_ORIGIN (our own writes
+    // are already mirrored into RF imperatively). Remote updates fall
+    // through with `origin === REMOTE_ORIGIN` or undefined (safe default).
+    const handler = (_events: unknown, transaction: { origin?: unknown }) => {
+      if (transaction.origin === LOCAL_ORIGIN) return;
+      if (transaction.origin === SEED_ORIGIN) return;
+      const snapshot = readCanvasSnapshot(refs);
+
+      // Preserve client-local linkedTasks per node id — they're a per-
+      // viewer projection, not CRDT-shared state.
+      setNodes((prev) => {
+        const prevLinks = new Map(prev.map((n) => [n.id, n.data.linkedTasks ?? []]));
+        return snapshot.nodes.map((n) => ({
+          id: n.id,
+          type: "shape",
+          position: { x: n.x, y: n.y },
+          data: {
+            shape: n.shape,
+            label: n.label,
+            colorHex: n.colorHex,
+            width: n.width,
+            height: n.height,
+            linkedTasks: prevLinks.get(n.id) ?? [],
+            workspaceId,
+          },
+          width: n.width,
+          height: n.height,
+        }));
+      });
+      setEdges(() =>
+        snapshot.edges.map((e) => ({
+          id: e.id,
+          source: e.fromNodeId,
+          target: e.toNodeId,
+          label: e.label ?? undefined,
+          style: e.style === "dashed" ? { strokeDasharray: "6 4" } : undefined,
+          data: { style: e.style },
+        })),
+      );
+    };
+    refs.nodes.observeDeep(handler);
+    refs.edges.observeDeep(handler);
+
+    const provider = createCanvasRealtimeProvider(refs, canvasId);
+    // Syncing a state flag to an external subscription is exactly the
+    // "update React state from external system" pattern useEffect is for.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsConnected(true);
+    return () => {
+      refs.nodes.unobserveDeep(handler);
+      refs.edges.unobserveDeep(handler);
+      provider.disconnect();
+      setIsConnected(false);
+    };
+    // yRefs identity is stable across renders (ref); canvasId/workspaceId are
+    // fixed for the lifetime of this component instance.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canvasId, workspaceId]);
+
+  // Write-through helpers. Every local mutation should (a) update RF
+  // state for instant feedback, (b) commit the final state to Y.Doc
+  // tagged LOCAL_ORIGIN so the provider broadcasts it.
+  const commitNodeToY = useCallback(
+    (node: RFNode) => {
+      yRefs.ydoc.transact(() => {
+        setNodeValue(yRefs.nodes, {
+          id: node.id,
+          shape: node.data.shape,
+          label: node.data.label ?? null,
+          x: node.position.x,
+          y: node.position.y,
+          width: node.data.width,
+          height: node.data.height,
+          colorHex: node.data.colorHex,
+        });
+      }, LOCAL_ORIGIN);
+    },
+    [yRefs],
+  );
+  const commitEdgeToY = useCallback(
+    (edge: Edge) => {
+      const style =
+        ((edge.data as { style?: "solid" | "dashed" } | undefined)?.style ?? "solid");
+      yRefs.ydoc.transact(() => {
+        setEdgeValue(yRefs.edges, {
+          id: edge.id,
+          fromNodeId: edge.source,
+          toNodeId: edge.target,
+          label: typeof edge.label === "string" ? edge.label : null,
+          style,
+        });
+      }, LOCAL_ORIGIN);
+    },
+    [yRefs],
+  );
+  const deleteNodeFromY = useCallback(
+    (nodeId: string) => {
+      yRefs.ydoc.transact(() => {
+        yRefs.nodes.delete(nodeId);
+        // Prune edges touching this node — RF already dropped them.
+        yRefs.edges.forEach((value, id) => {
+          const from = value.get("fromNodeId");
+          const to = value.get("toNodeId");
+          if (from === nodeId || to === nodeId) yRefs.edges.delete(id);
+        });
+      }, LOCAL_ORIGIN);
+    },
+    [yRefs],
+  );
+  const deleteEdgeFromY = useCallback(
+    (edgeId: string) => {
+      yRefs.ydoc.transact(() => {
+        yRefs.edges.delete(edgeId);
+      }, LOCAL_ORIGIN);
+    },
+    [yRefs],
+  );
 
   const onConnect: OnConnect = useCallback(
-    (params: Connection) =>
+    (params: Connection) => {
+      const id = `e_${cuidish()}`;
       setEdges((eds) =>
         addEdge(
-          {
-            ...params,
-            id: `e_${cuidish()}`,
-            data: { style: "solid" },
-          },
+          { ...params, id, data: { style: "solid" } },
           eds,
         ),
-      ),
-    [setEdges],
+      );
+      // Mirror to Y.Doc so peers see the new edge.
+      if (params.source && params.target) {
+        commitEdgeToY({
+          id,
+          source: params.source,
+          target: params.target,
+          data: { style: "solid" },
+        } as Edge);
+      }
+    },
+    [setEdges, commitEdgeToY],
   );
 
   const addShape = useCallback(
@@ -184,68 +342,104 @@ function CanvasEditorInner({
       const id = cuidish();
       const x = 120 + Math.random() * 180;
       const y = 120 + Math.random() * 140;
-      setNodes((ns) => [
-        ...ns,
-        {
-          id,
-          type: "shape",
-          position: { x, y },
-          data: {
-            shape,
-            label: null,
-            colorHex: "#FFFFFF",
-            width: shape === "CIRCLE" ? 120 : 160,
-            height: shape === "CIRCLE" ? 120 : 80,
-            linkedTasks: [],
-            workspaceId,
-          },
-          width: shape === "CIRCLE" ? 120 : 160,
-          height: shape === "CIRCLE" ? 120 : 80,
+      const width = shape === "CIRCLE" ? 120 : 160;
+      const height = shape === "CIRCLE" ? 120 : 80;
+      const rfNode: RFNode = {
+        id,
+        type: "shape",
+        position: { x, y },
+        data: {
+          shape,
+          label: null,
+          colorHex: "#FFFFFF",
+          width,
+          height,
+          linkedTasks: [],
+          workspaceId,
         },
-      ]);
+        width,
+        height,
+      };
+      setNodes((ns) => [...ns, rfNode]);
+      commitNodeToY(rfNode);
     },
-    [setNodes, workspaceId],
+    [setNodes, workspaceId, commitNodeToY],
   );
 
   const deleteSelected = useCallback(() => {
-    setNodes((ns) => ns.filter((n) => !n.selected));
-    setEdges((es) => {
-      const removedNodeIds = new Set(nodes.filter((n) => n.selected).map((n) => n.id));
-      return es.filter(
-        (e) =>
-          !e.selected &&
-          !removedNodeIds.has(e.source) &&
-          !removedNodeIds.has(e.target),
-      );
-    });
-  }, [nodes, setNodes, setEdges]);
+    const removedNodeIds = new Set(nodes.filter((n) => n.selected).map((n) => n.id));
+    const removedEdgeIds = new Set(
+      edges
+        .filter((e) => e.selected || removedNodeIds.has(e.source) || removedNodeIds.has(e.target))
+        .map((e) => e.id),
+    );
+    setNodes((ns) => ns.filter((n) => !removedNodeIds.has(n.id)));
+    setEdges((es) => es.filter((e) => !removedEdgeIds.has(e.id)));
+    for (const id of removedNodeIds) deleteNodeFromY(id);
+    for (const id of removedEdgeIds) deleteEdgeFromY(id);
+  }, [nodes, edges, setNodes, setEdges, deleteNodeFromY, deleteEdgeFromY]);
 
   const renameSelected = useCallback(() => {
     const target = nodes.find((n) => n.selected);
     if (!target) return;
-    const next = window.prompt(
-      "Etykieta węzła",
-      target.data.label ?? "",
-    );
+    const next = window.prompt("Etykieta węzła", target.data.label ?? "");
     if (next === null) return;
+    const nextLabel = next.trim() || null;
     setNodes((ns) =>
       ns.map((n) =>
-        n.id === target.id
-          ? { ...n, data: { ...n.data, label: next.trim() || null } }
-          : n,
+        n.id === target.id ? { ...n, data: { ...n.data, label: nextLabel } } : n,
       ),
     );
-  }, [nodes, setNodes]);
+    commitNodeToY({ ...target, data: { ...target.data, label: nextLabel } });
+  }, [nodes, setNodes, commitNodeToY]);
 
   const recolorSelected = useCallback(
     (hex: string) => {
+      const touched: RFNode[] = [];
       setNodes((ns) =>
-        ns.map((n) =>
-          n.selected ? { ...n, data: { ...n.data, colorHex: hex } } : n,
-        ),
+        ns.map((n) => {
+          if (!n.selected) return n;
+          const next = { ...n, data: { ...n.data, colorHex: hex } };
+          touched.push(next);
+          return next;
+        }),
       );
+      for (const n of touched) commitNodeToY(n);
     },
-    [setNodes],
+    [setNodes, commitNodeToY],
+  );
+
+  // Intercept RF's node changes so we (a) still hand them to RF's state
+  // reducer for interactive feedback, and (b) commit discrete events
+  // (drag end, delete) to Y.Doc. Intermediate drag positions stay local
+  // so we don't spam 60 broadcasts per second.
+  const onNodesChange: OnNodesChange<RFNode> = useCallback(
+    (changes: NodeChange<RFNode>[]) => {
+      rfOnNodesChange(changes);
+      for (const change of changes) {
+        if (change.type === "remove") {
+          deleteNodeFromY(change.id);
+        } else if (change.type === "position" && change.dragging === false && change.position) {
+          const existing = nodes.find((n) => n.id === change.id);
+          if (existing) {
+            commitNodeToY({ ...existing, position: change.position });
+          }
+        }
+      }
+    },
+    [rfOnNodesChange, nodes, commitNodeToY, deleteNodeFromY],
+  );
+
+  const onEdgesChange: OnEdgesChange = useCallback(
+    (changes: EdgeChange[]) => {
+      rfOnEdgesChange(changes);
+      for (const change of changes) {
+        if (change.type === "remove") {
+          deleteEdgeFromY(change.id);
+        }
+      }
+    },
+    [rfOnEdgesChange, deleteEdgeFromY],
   );
 
   const save = useCallback(() => {
@@ -447,6 +641,20 @@ function CanvasEditorInner({
           )}
         </div>
       )}
+
+      {/* Collab presence indicator — small dot bottom-right so users see
+          whether their changes are reaching peers. */}
+      <div className="pointer-events-none absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full border border-border bg-card/95 px-2 py-1 shadow-sm backdrop-blur">
+        <span
+          className={`inline-block h-1.5 w-1.5 rounded-full ${
+            isConnected ? "bg-primary" : "bg-muted-foreground/50"
+          }`}
+          aria-hidden
+        />
+        <span className="font-mono text-[0.58rem] uppercase tracking-[0.14em] text-muted-foreground">
+          {isConnected ? "live" : "offline"}
+        </span>
+      </div>
 
       {/* Side panel — only when exactly one node is selected. */}
       {canEdit && singleSelectedNode && (
