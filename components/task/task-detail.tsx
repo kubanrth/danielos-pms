@@ -14,6 +14,7 @@ import {
 import { RichTextEditor, type RichTextDoc } from "@/components/task/rich-text-editor";
 import { CommentsSection, type CommentItem } from "@/components/task/comments-section";
 import { ActivityLog, type ActivityEntry } from "@/components/task/activity-log";
+import { AttachmentsSection, type AttachmentItem } from "@/components/task/attachments-section";
 
 const TAG_COLORS = [
   "#EF4444",
@@ -54,6 +55,9 @@ export interface TaskDetailProps {
   canModerateComments: boolean;
   currentUserId: string;
   activity: ActivityEntry[];
+  attachments: AttachmentItem[];
+  canUpload: boolean;
+  canModerateAttachments: boolean;
 }
 
 function toLocalInput(iso: string | null): string {
@@ -78,6 +82,9 @@ export function TaskDetail({
   canComment,
   canModerateComments,
   activity,
+  attachments,
+  canUpload,
+  canModerateAttachments,
 }: TaskDetailProps) {
   const [state, formAction, pending] = useActionState<UpdateTaskState, FormData>(
     updateTaskAction,
@@ -246,6 +253,14 @@ export function TaskDetail({
         allTags={allTags}
         tagIds={tagIds}
         canEdit={canEdit}
+      />
+
+      {/* Attachments */}
+      <AttachmentsSection
+        taskId={task.id}
+        attachments={attachments}
+        canUpload={canUpload}
+        canModerate={canModerateAttachments}
       />
 
       {/* Comments */}

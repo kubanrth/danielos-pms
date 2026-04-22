@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { can } from "@/lib/permissions";
+import { createSignedDownloadUrl, isImageMime } from "@/lib/storage";
 import type { TaskDetailProps } from "@/components/task/task-detail";
 import type { RichTextDoc } from "@/components/task/rich-text-editor";
 
@@ -46,7 +47,7 @@ export async function fetchTaskDetail(
   });
   if (!task) notFound();
 
-  const [members, tags, comments, auditEntries] = await Promise.all([
+  const [members, tags, comments, auditEntries, attachmentRows] = await Promise.all([
     db.workspaceMembership.findMany({
       where: { workspaceId },
       include: {
@@ -75,7 +76,36 @@ export async function fetchTaskDetail(
         actor: { select: { id: true, name: true, email: true, avatarUrl: true } },
       },
     }),
+    db.attachment.findMany({
+      where: { taskId, deletedAt: null },
+      orderBy: { createdAt: "asc" },
+      include: {
+        uploader: { select: { id: true, name: true, email: true, avatarUrl: true } },
+      },
+    }),
   ]);
+
+  // Pre-sign image thumbnails at render time so the browser can render them
+  // without an extra round-trip. Non-image URLs are minted on demand from
+  // the download action so we don't waste signatures on files that aren't
+  // rendered inline.
+  const attachmentPayload = await Promise.all(
+    attachmentRows.map(async (a) => {
+      const thumbnailUrl = isImageMime(a.mimeType)
+        ? await createSignedDownloadUrl(a.storageKey).catch(() => null)
+        : null;
+      return {
+        id: a.id,
+        filename: a.filename,
+        mimeType: a.mimeType,
+        sizeBytes: a.sizeBytes,
+        uploader: a.uploader,
+        createdAt: a.createdAt.toISOString(),
+        isUploader: a.uploaderId === ctx.userId,
+        thumbnailUrl,
+      };
+    }),
+  );
 
   return {
     workspaceId,
@@ -117,5 +147,8 @@ export async function fetchTaskDetail(
       diff: (e.diff ?? null) as Record<string, unknown> | null,
       createdAt: e.createdAt.toISOString(),
     })),
+    attachments: attachmentPayload,
+    canUpload: can(ctx.role, "task.upload"),
+    canModerateAttachments: ctx.role === "ADMIN",
   };
 }
