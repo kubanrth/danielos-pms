@@ -48,6 +48,7 @@ model User {
   mentions           CommentMention[]
   auditLogs          AuditLog[]            @relation("AuditActor")
   globalAuditLogs    GlobalAuditLog[]      @relation("GlobalAuditActor")
+  adminAuditLogs     AdminAuditLog[]       @relation("AdminAuditActor")
   notifications      Notification[]
   createdCanvases    ProcessCanvas[]       @relation("CanvasCreator")
   createdTags        Tag[]                 @relation("TagCreator")
@@ -437,6 +438,29 @@ model GlobalAuditLog {
   @@index([createdAt(sort: Desc)])
   @@index([statusCode])
   @@index([actorId])
+}
+
+// Cross-workspace admin actions (ban, force-delete, restore, etc.). Kept
+// separate from AuditLog because those entries FK to Workspace, which
+// doesn't apply to system-level operations. `actorEmail` is denormalised
+// so the trail survives even if the actor's User row is later
+// soft-deleted or masked.
+model AdminAuditLog {
+  id          String   @id @default(cuid())
+  actorId     String?
+  actorEmail  String
+  action      String
+  targetType  String
+  targetId    String
+  targetLabel String?
+  diff        Json?
+  createdAt   DateTime @default(now())
+
+  actor User? @relation("AdminAuditActor", fields: [actorId], references: [id])
+
+  @@index([createdAt(sort: Desc)])
+  @@index([actorId])
+  @@index([action])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -3,15 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireSuperAdmin } from "@/lib/admin-guard";
-
-// Admin actions don't write to AuditLog — that table FKs to Workspace and
-// these operations are cross-workspace. A dedicated AdminAuditLog is on
-// the F7b list; for now, the UI surface is small and the super-admin is
-// trusted. Destructive ops log to console so server tails have a record.
-
-function logAdmin(adminEmail: string, action: string, target: string): void {
-  console.log(`[admin] ${adminEmail} ${action} ${target}`);
-}
+import { writeAdminAudit } from "@/lib/admin-audit";
 
 // ── Users ─────────────────────────────────────────────────────────
 export async function toggleUserBanAction(formData: FormData) {
@@ -38,10 +30,18 @@ export async function toggleUserBanAction(formData: FormData) {
     await db.session.deleteMany({ where: { userId: id } });
   }
 
-  logAdmin(admin.email, user.isBanned ? "unbanned" : "banned", user.email);
+  await writeAdminAudit({
+    actorId: admin.userId,
+    actorEmail: admin.email,
+    action: user.isBanned ? "user.unbanned" : "user.banned",
+    targetType: "User",
+    targetId: id,
+    targetLabel: user.email,
+  });
 
   revalidatePath("/admin/users");
   revalidatePath("/admin");
+  revalidatePath("/admin/actions");
 }
 
 export async function softDeleteUserAction(formData: FormData) {
@@ -68,10 +68,19 @@ export async function softDeleteUserAction(formData: FormData) {
     db.session.deleteMany({ where: { userId: id } }),
   ]);
 
-  logAdmin(admin.email, "deleted user", user.email);
+  await writeAdminAudit({
+    actorId: admin.userId,
+    actorEmail: admin.email,
+    action: "user.deleted",
+    targetType: "User",
+    targetId: id,
+    targetLabel: user.email,
+    diff: { maskedTo: masked },
+  });
 
   revalidatePath("/admin/users");
   revalidatePath("/admin");
+  revalidatePath("/admin/actions");
 }
 
 // ── Workspaces ────────────────────────────────────────────────────
@@ -86,14 +95,26 @@ export async function forceDeleteWorkspaceAction(formData: FormData) {
   });
   if (!ws) return;
 
+  // Write audit BEFORE the delete — AdminAuditLog doesn't FK to
+  // Workspace so it would survive anyway, but ordering the audit
+  // first means the trail never misses an action even on a rare
+  // mid-delete crash.
+  await writeAdminAudit({
+    actorId: admin.userId,
+    actorEmail: admin.email,
+    action: "workspace.forceDeleted",
+    targetType: "Workspace",
+    targetId: id,
+    targetLabel: `${ws.name} (/${ws.slug})`,
+  });
+
   // Hard delete — Prisma cascades handle memberships, boards, tasks,
   // comments, attachments, audit entries scoped to this workspaceId.
   await db.workspace.delete({ where: { id } });
 
-  logAdmin(admin.email, "force-deleted workspace", `${ws.name} (${ws.slug})`);
-
   revalidatePath("/admin/workspaces");
   revalidatePath("/admin");
+  revalidatePath("/admin/actions");
 }
 
 export async function restoreWorkspaceAction(formData: FormData) {
@@ -103,7 +124,7 @@ export async function restoreWorkspaceAction(formData: FormData) {
 
   const ws = await db.workspace.findUnique({
     where: { id },
-    select: { deletedAt: true, name: true },
+    select: { deletedAt: true, name: true, slug: true },
   });
   if (!ws || !ws.deletedAt) return;
 
@@ -112,8 +133,16 @@ export async function restoreWorkspaceAction(formData: FormData) {
     data: { deletedAt: null },
   });
 
-  logAdmin(admin.email, "restored workspace", ws.name);
+  await writeAdminAudit({
+    actorId: admin.userId,
+    actorEmail: admin.email,
+    action: "workspace.restored",
+    targetType: "Workspace",
+    targetId: id,
+    targetLabel: `${ws.name} (/${ws.slug})`,
+  });
 
   revalidatePath("/admin/workspaces");
   revalidatePath("/admin");
+  revalidatePath("/admin/actions");
 }
