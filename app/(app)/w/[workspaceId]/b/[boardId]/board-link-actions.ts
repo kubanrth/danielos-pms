@@ -8,8 +8,10 @@ import { requireWorkspaceAction } from "@/lib/workspace-guard";
 import { writeAudit } from "@/lib/audit";
 
 // Infer the link kind from URL hostname + path so the user never has to
-// tag it manually. Falls back to OTHER for non-Google URLs.
-export function detectLinkKind(url: string): BoardLinkKind {
+// tag it manually. Falls back to OTHER for non-Google URLs. Not exported
+// — Next.js 16 requires every export from a "use server" module to be
+// async, and this is a pure sync helper.
+function detectLinkKind(url: string): BoardLinkKind {
   try {
     const u = new URL(url);
     const host = u.hostname.toLowerCase();
