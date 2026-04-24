@@ -5,6 +5,8 @@ import { requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { can } from "@/lib/permissions";
 import { CreateTaskButton } from "@/components/task/create-task-button";
 import { ViewSwitcher } from "@/components/view/view-switcher";
+import { AppShell } from "@/components/layout/app-shell";
+import { computeBoardEnabledViews, parseEnabledViews } from "@/lib/board-views";
 import { taskPl } from "@/lib/pluralize";
 
 export default async function WorkspaceOverviewPage({
@@ -15,13 +17,18 @@ export default async function WorkspaceOverviewPage({
   const { workspaceId } = await params;
   const ctx = await requireWorkspaceMembership(workspaceId);
 
-  const [memberCount, boards] = await Promise.all([
+  const [workspace, memberCount, boards] = await Promise.all([
+    db.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { enabledViews: true },
+    }),
     db.workspaceMembership.count({ where: { workspaceId } }),
     db.board.findMany({
       where: { workspaceId, deletedAt: null },
       orderBy: { createdAt: "asc" },
       include: {
         statusColumns: { orderBy: { order: "asc" } },
+        views: { select: { type: true, name: true } },
         _count: { select: { tasks: { where: { deletedAt: null } } } },
         tasks: {
           where: { deletedAt: null },
@@ -41,9 +48,11 @@ export default async function WorkspaceOverviewPage({
 
   const canCreateTask = can(ctx.role, "task.create");
   const firstBoard = boards[0];
+  const workspaceEnabled = parseEnabledViews(workspace?.enabledViews);
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-10">
+    <AppShell>
+      <div className="flex flex-col gap-10">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Metric label="Członkowie" value={memberCount} />
         <div className="flex items-center gap-2">
@@ -59,10 +68,18 @@ export default async function WorkspaceOverviewPage({
         </div>
       </div>
 
-      {boards.map((board) => (
+      {boards.map((board) => {
+        // F9-10: same pill set & filtering as board pages — intersection
+        // of workspace.enabledViews with the types this board actually
+        // has BoardView rows for.
+        const boardDefaultTypes = board.views
+          .filter((v) => v.name === null)
+          .map((v) => v.type);
+        const boardEnabled = computeBoardEnabledViews(workspaceEnabled, boardDefaultTypes);
+        return (
         <section key={board.id} className="flex flex-col gap-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-display text-[1.25rem] font-bold leading-[1.2] tracking-[-0.02em]">
+            <h2 className="font-display text-[1.5rem] font-bold leading-[1.15] tracking-[-0.02em]">
               <Link
                 href={`/w/${workspaceId}/b/${board.id}/table`}
                 className="transition-colors hover:text-primary"
@@ -76,7 +93,7 @@ export default async function WorkspaceOverviewPage({
             <ViewSwitcher
               workspaceId={workspaceId}
               boardId={board.id}
-              size="sm"
+              enabled={boardEnabled}
             />
           </div>
 
@@ -158,9 +175,11 @@ export default async function WorkspaceOverviewPage({
             </ul>
           )}
         </section>
-      ))}
+        );
+      })}
 
-    </div>
+      </div>
+    </AppShell>
   );
 }
 

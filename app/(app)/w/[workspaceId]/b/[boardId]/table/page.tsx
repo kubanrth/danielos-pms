@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { can } from "@/lib/permissions";
 import { BoardTable } from "@/components/table/board-table";
-import { StatusColumnManager } from "@/components/table/status-column-manager";
+import { CollapsibleColumnManager } from "@/components/table/collapsible-column-manager";
 import { CreateTaskButton } from "@/components/task/create-task-button";
 import { BackgroundCustomizer } from "@/components/view/background-customizer";
 import { BoardShell } from "@/components/view/board-shell";
@@ -126,7 +126,7 @@ export default async function BoardTablePage({
       />
 
       {canManageBoard && (
-        <StatusColumnManager
+        <CollapsibleColumnManager
           workspaceId={workspaceId}
           boardId={board.id}
           columns={board.statusColumns.map((c) => ({
