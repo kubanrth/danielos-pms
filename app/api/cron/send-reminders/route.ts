@@ -60,7 +60,54 @@ async function runSweep(now: Date) {
     });
   }
 
-  return { tasksProcessed: due.length, emailsSent: sent, failures };
+  // F8c: same sweep for private TodoItem reminders. Recipient is always
+  // the item owner (it's a private module — no assignees).
+  const todoDue = await db.todoItem.findMany({
+    where: {
+      reminderAt: { lte: now, not: null },
+      reminderSentAt: null,
+    },
+    take: 200,
+    include: { user: { select: { id: true, email: true, name: true } } },
+  });
+
+  for (const item of todoDue) {
+    const url = appBase
+      ? `${appBase}/my/todo?itemId=${item.id}`
+      : `/my/todo?itemId=${item.id}`;
+    const when = item.reminderAt?.toLocaleString("pl-PL", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }) ?? "";
+    const html = `<!doctype html><html lang="pl"><body style="font-family:ui-sans-serif,system-ui,sans-serif;color:#0F172A;padding:24px">
+      <div style="max-width:540px;margin:0 auto;background:#fff;border:1px solid #E2E8F0;border-radius:12px;overflow:hidden">
+        <div style="padding:20px 24px">
+          <div style="font-family:ui-monospace,monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#7B68EE">Przypomnienie · TO DO</div>
+          <h1 style="margin:6px 0 12px;font-size:20px;line-height:1.25">${escape(item.content)}</h1>
+          <p style="margin:0 0 6px;color:#475569;line-height:1.55">Prywatne zadanie z TO DO — ustawione na <strong>${escape(when)}</strong>.</p>
+          <a href="${url}" style="display:inline-block;margin-top:14px;padding:10px 18px;background:linear-gradient(135deg,#7B68EE,#BA68C8);color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Otwórz zadanie</a>
+        </div>
+      </div>
+    </body></html>`;
+    const r = await sendEmail({
+      to: item.user.email,
+      subject: `⏰ TO DO: ${item.content}`,
+      html,
+    });
+    if (r.sent) sent++;
+    else failures.push(`${item.user.email}: ${r.error ?? r.skipped ?? "unknown"}`);
+    await db.todoItem.update({
+      where: { id: item.id },
+      data: { reminderSentAt: now },
+    });
+  }
+
+  return {
+    tasksProcessed: due.length,
+    todosProcessed: todoDue.length,
+    emailsSent: sent,
+    failures,
+  };
 }
 
 function escape(s: string): string {

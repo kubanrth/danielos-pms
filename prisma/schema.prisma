@@ -708,21 +708,55 @@ model TodoList {
 }
 
 model TodoItem {
-  id        String    @id @default(cuid())
-  listId    String
-  userId    String
-  content   String
-  completed Boolean   @default(false)
-  dueDate   DateTime?
-  order     Float     @default(0)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  listId         String
+  userId         String
+  content        String
+  completed      Boolean   @default(false)
+  dueDate        DateTime?
+  order          Float     @default(0)
+  // F8c: Microsoft To Do parity.
+  // important — star / "Ważne" smart list feeds off this.
+  // myDayAt    — timestamp when user added it to "My Day". Shown in the
+  //              Mój dzień smart list when `myDayAt >= todayStart`; auto-
+  //              drops out on the next calendar day.
+  // notes      — free-form long text under the title.
+  // reminderAt / reminderSentAt — handled by the same cron that sends
+  //              Task reminders (see /api/cron/send-reminders).
+  important      Boolean   @default(false)
+  myDayAt        DateTime?
+  notes          String?
+  reminderAt     DateTime?
+  reminderSentAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  list TodoList @relation(fields: [listId], references: [id], onDelete: Cascade)
-  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  list  TodoList   @relation(fields: [listId], references: [id], onDelete: Cascade)
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  steps TodoStep[]
 
   @@index([listId, order])
   @@index([userId, dueDate])
+  @@index([userId, important])
+  @@index([userId, myDayAt])
+  @@index([reminderAt, reminderSentAt])
+}
+
+// F8c: Steps inside a TodoItem (nested checklist, matching MS To Do's
+// "Kroki"). Separate table so we can reorder / tick individual steps
+// without rewriting the parent row.
+model TodoStep {
+  id        String   @id @default(cuid())
+  itemId    String
+  title     String
+  completed Boolean  @default(false)
+  order     Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  item TodoItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId, order])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
