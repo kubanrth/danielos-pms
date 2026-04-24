@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { z } from "zod";
 import { db } from "@/lib/db";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { requireWorkspaceAction } from "@/lib/workspace-guard";
@@ -130,17 +131,17 @@ export async function updateTaskAction(
   const parsed = updateTaskSchema.safeParse({
     id: formData.get("id"),
     title: formData.get("title"),
-    descriptionJson: formData.get("descriptionJson"),
     statusColumnId: formData.get("statusColumnId"),
     startAt: formData.get("startAt"),
     stopAt: formData.get("stopAt"),
+    reminderOffset: formData.get("reminderOffset"),
   });
 
   if (!parsed.success) {
     const fe: UpdateFieldErrors = {};
     for (const issue of parsed.error.issues) {
       const k = issue.path[0];
-      if (k === "title" || k === "descriptionJson" || k === "statusColumnId" || k === "startAt" || k === "stopAt")
+      if (k === "title" || k === "statusColumnId" || k === "startAt" || k === "stopAt")
         fe[k] = issue.message;
     }
     return { ok: false, fieldErrors: fe };
@@ -158,9 +159,7 @@ export async function updateTaskAction(
     where: { id: parsed.data.id },
     data: {
       title: parsed.data.title,
-      descriptionJson: parsed.data.descriptionJson
-        ? (parsed.data.descriptionJson as Prisma.InputJsonValue)
-        : Prisma.DbNull,
+      // Note: descriptionJson is handled by updateTaskDescriptionAction.
       statusColumnId: parsed.data.statusColumnId || null,
       startAt: parseDate(formData.get("startAt")),
       stopAt,
@@ -215,6 +214,59 @@ export async function deleteTaskAction(formData: FormData) {
   await broadcastWorkspaceChange(workspaceId, { type: "task.changed", taskId: id });
   redirect(`/w/${workspaceId}`);
 }
+
+// F9-03: dedicated description save — lets the task-detail UI flip
+// description to "view mode" (rendered prose) after save without
+// round-tripping other fields.
+const updateDescriptionSchema = z.object({
+  id: z.string().min(1),
+  descriptionJson: z.string().max(50_000).optional().or(z.literal("")),
+});
+
+export async function updateTaskDescriptionAction(formData: FormData) {
+  const parsed = updateDescriptionSchema.safeParse({
+    id: formData.get("id"),
+    descriptionJson: formData.get("descriptionJson") ?? "",
+  });
+  if (!parsed.success) return;
+
+  const existing = await db.task.findUnique({ where: { id: parsed.data.id } });
+  if (!existing) return;
+  const ctx = await requireWorkspaceAction(existing.workspaceId, "task.update");
+
+  let doc: Prisma.InputJsonValue | null = null;
+  if (parsed.data.descriptionJson && parsed.data.descriptionJson.length > 0) {
+    try {
+      const parsedDoc = JSON.parse(parsed.data.descriptionJson);
+      if (parsedDoc && typeof parsedDoc === "object" && (parsedDoc as { type?: string }).type === "doc") {
+        doc = parsedDoc as Prisma.InputJsonValue;
+      }
+    } catch {
+      /* malformed → treat as null */
+    }
+  }
+
+  await db.task.update({
+    where: { id: parsed.data.id },
+    data: {
+      descriptionJson: doc ?? Prisma.DbNull,
+      version: { increment: 1 },
+    },
+  });
+
+  await writeAudit({
+    workspaceId: existing.workspaceId,
+    objectType: "Task",
+    objectId: existing.id,
+    actorId: ctx.userId,
+    action: "task.descriptionUpdated",
+  });
+
+  revalidatePath(`/w/${existing.workspaceId}/t/${existing.id}`);
+}
+
+// Need z import for the new schema above.
+// (z is imported at top of file via "zod"? let's check)
 
 // Small-field patches used by the Table view's inline-edit cells.
 // Unlike updateTaskAction, this updates only the fields present in

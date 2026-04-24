@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Sidebar } from "@/components/layout/sidebar";
 import type { SidebarWorkspace } from "@/components/layout/sidebar";
+import { parseEnabledViews } from "@/lib/board-views";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -28,6 +29,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           },
         },
       },
+      // Note: we include workspace.enabledViews by virtue of `include:
+      // workspace` above (full row).
       orderBy: { joinedAt: "asc" },
     }),
     db.notification.count({
@@ -42,6 +45,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     slug: m.workspace.slug,
     role: m.role,
     boards: m.workspace.boards,
+    // Map lowercase ViewName → uppercase ViewType expected by sidebar.
+    enabledViews: parseEnabledViews(m.workspace.enabledViews).map((v) =>
+      v.toUpperCase(),
+    ) as SidebarWorkspace["enabledViews"],
   }));
 
   return (

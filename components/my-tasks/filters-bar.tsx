@@ -1,8 +1,17 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Search, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Check,
+  ChevronDown,
+  Clock,
+  History,
+  Search,
+  X,
+} from "lucide-react";
 
 export interface BoardOption {
   id: string;
@@ -25,6 +34,15 @@ const SORT_LABELS: Record<SortMode, string> = {
   dueDesc: "Najdalszy termin",
   createdAsc: "Najstarsze",
   createdDesc: "Najnowsze",
+};
+
+const SORT_ICONS: Record<SortMode, typeof Clock> = {
+  updatedDesc: Clock,
+  updatedAsc: History,
+  dueAsc: ArrowUp,
+  dueDesc: ArrowDown,
+  createdAsc: History,
+  createdDesc: Clock,
 };
 
 // URL-synced filter bar. Each interaction writes shallow to the search
@@ -122,17 +140,7 @@ export function FiltersBar({
           />
         </div>
 
-        <select
-          value={sort}
-          onChange={(e) => changeSort(e.target.value as SortMode)}
-          className="h-9 rounded-lg border border-border bg-background px-3 font-mono text-[0.72rem] uppercase tracking-[0.12em] outline-none focus:border-primary"
-        >
-          {Object.entries(SORT_LABELS).map(([v, label]) => (
-            <option key={v} value={v}>
-              {label}
-            </option>
-          ))}
-        </select>
+        <SortDropdown current={sort} onPick={(next) => changeSort(next)} />
 
         {activeCount > 0 && (
           <button
@@ -168,6 +176,90 @@ export function FiltersBar({
             );
           })}
         </div>
+      )}
+    </div>
+  );
+}
+
+// Custom sort dropdown — replaces the native <select> so the look matches
+// the rest of the app (rounded pill button + animated chevron + menu
+// with per-option icon and checkmark on the active item).
+function SortDropdown({
+  current,
+  onPick,
+}: {
+  current: SortMode;
+  onPick: (v: SortMode) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const CurrentIcon = SORT_ICONS[current];
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-background px-3 font-mono text-[0.72rem] uppercase tracking-[0.12em] text-foreground transition-colors hover:border-primary/60 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"
+      >
+        <CurrentIcon size={12} className="text-muted-foreground" />
+        <span>{SORT_LABELS[current]}</span>
+        <ChevronDown
+          size={12}
+          className={`text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <ul
+          role="listbox"
+          className="absolute right-0 top-[calc(100%+6px)] z-30 w-[220px] overflow-hidden rounded-lg border border-border bg-popover p-1 shadow-[0_12px_32px_-12px_rgba(10,10,40,0.25)]"
+        >
+          {(Object.entries(SORT_LABELS) as [SortMode, string][]).map(([k, label]) => {
+            const Icon = SORT_ICONS[k];
+            const active = k === current;
+            return (
+              <li key={k}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  onClick={() => {
+                    onPick(k);
+                    setOpen(false);
+                  }}
+                  data-active={active ? "true" : "false"}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left font-mono text-[0.72rem] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground data-[active=true]:bg-primary/10 data-[active=true]:text-foreground"
+                >
+                  <Icon
+                    size={12}
+                    className={active ? "text-primary" : "text-muted-foreground"}
+                  />
+                  <span className="flex-1 truncate">{label}</span>
+                  {active && <Check size={12} className="text-primary" />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );

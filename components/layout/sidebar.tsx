@@ -37,6 +37,7 @@ export interface SidebarWorkspace {
   slug: string;
   role: Role;
   boards: { id: string; name: string }[];
+  enabledViews: Array<"TABLE" | "KANBAN" | "ROADMAP" | "GANTT" | "WHITEBOARD">;
 }
 
 const STORAGE_KEY = "danielos.sidebar.collapsed";
@@ -221,7 +222,10 @@ export function Sidebar({
                     )}
                   </Link>
                   {!collapsed && canManage(ws.role) && (
-                    <CreateBoardDialog workspaceId={ws.id} />
+                    <CreateBoardDialog
+                      workspaceId={ws.id}
+                      workspaceEnabledViews={ws.enabledViews}
+                    />
                   )}
                   {!collapsed && (
                     <button

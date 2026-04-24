@@ -27,7 +27,13 @@ export async function createPollAction(formData: FormData) {
 
   const task = await db.task.findUnique({
     where: { id: parsed.data.taskId },
-    select: { workspaceId: true, poll: { select: { id: true } } },
+    select: {
+      workspaceId: true,
+      boardId: true,
+      title: true,
+      board: { select: { name: true } },
+      poll: { select: { id: true } },
+    },
   });
   if (!task || task.poll) return;
 
@@ -44,6 +50,32 @@ export async function createPollAction(formData: FormData) {
     },
   });
 
+  // F9-06: notify every workspace member (except the author) that a new
+  // poll dropped — they'll see it in /inbox next to mentions.
+  const members = await db.workspaceMembership.findMany({
+    where: {
+      workspaceId: task.workspaceId,
+      userId: { not: ctx.userId },
+    },
+    select: { userId: true },
+  });
+  if (members.length > 0) {
+    await db.notification.createMany({
+      data: members.map((m) => ({
+        userId: m.userId,
+        type: "poll.created",
+        payload: {
+          workspaceId: task.workspaceId,
+          taskId: parsed.data.taskId,
+          taskTitle: task.title,
+          boardName: task.board.name,
+          question: parsed.data.question,
+          authorName: null,
+        },
+      })),
+    });
+  }
+
   await writeAudit({
     workspaceId: task.workspaceId,
     objectType: "Task",
@@ -53,6 +85,7 @@ export async function createPollAction(formData: FormData) {
     diff: { question: parsed.data.question, options: rawOptions },
   });
   revalidatePath(`/w/${task.workspaceId}/t/${parsed.data.taskId}`);
+  revalidatePath("/inbox");
 }
 
 const voteSchema = z.object({

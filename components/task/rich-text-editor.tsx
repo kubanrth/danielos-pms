@@ -37,6 +37,9 @@ export interface RichTextEditorProps {
   // inserts a mention node. The Mention node is always registered in the
   // schema so display-variant editors can still render mention chips.
   mentionMembers?: MentionMember[];
+  // Optional live feedback — invoked on every doc change so parent can
+  // keep a local draft without posting a form submit.
+  onChange?: (doc: RichTextDoc | null) => void;
 }
 
 // Suggestion config with no matches — used when the editor has no members
@@ -123,6 +126,7 @@ export function RichTextEditor({
   placeholder = "Kontekst, acceptance criteria, linki…",
   variant = "field",
   mentionMembers,
+  onChange,
 }: RichTextEditorProps) {
   const [json, setJson] = useState<string>(
     initial && !isDocEmpty(initial) ? JSON.stringify(initial) : "",
@@ -164,7 +168,9 @@ export function RichTextEditor({
     },
     onUpdate: ({ editor }) => {
       const doc = editor.getJSON() as RichTextDoc;
-      setJson(isDocEmpty(doc) ? "" : JSON.stringify(doc));
+      const empty = isDocEmpty(doc);
+      setJson(empty ? "" : JSON.stringify(doc));
+      onChange?.(empty ? null : doc);
     },
   });
 

@@ -28,6 +28,9 @@ export function SubtasksSection({
   const [title, setTitle] = useState("");
 
   const doneCount = subtasks.filter((s) => s.completed).length;
+  // F9-02: progress bar aiming for 100%. 0 subtasks = 0% (hidden).
+  const pct = subtasks.length === 0 ? 0 : Math.round((doneCount / subtasks.length) * 100);
+  const complete = subtasks.length > 0 && doneCount === subtasks.length;
 
   return (
     <section className="flex flex-col gap-3">
@@ -51,6 +54,31 @@ export function SubtasksSection({
           </button>
         )}
       </div>
+
+      {subtasks.length > 0 && (
+        <div className="flex items-center gap-3">
+          <div
+            className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            aria-valuenow={pct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`Postęp podzadań: ${pct}%`}
+          >
+            <div
+              className="h-full rounded-full bg-brand-gradient transition-[width] duration-500 data-[complete=true]:bg-gradient-to-r data-[complete=true]:from-emerald-400 data-[complete=true]:to-emerald-500"
+              data-complete={complete ? "true" : "false"}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <span
+            data-complete={complete ? "true" : "false"}
+            className="shrink-0 font-mono text-[0.66rem] font-semibold tracking-[0.12em] text-muted-foreground data-[complete=true]:text-emerald-500"
+          >
+            {pct}%
+          </span>
+        </div>
+      )}
 
       {subtasks.length > 0 && (
         <ul className="flex flex-col gap-1 rounded-xl border border-border bg-card p-1">

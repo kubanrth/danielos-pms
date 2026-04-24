@@ -44,3 +44,20 @@ export function parseEnabledViews(raw: unknown): ViewName[] {
   }
   return out.length > 0 ? out : ALL_VIEWS;
 }
+
+// F9-04: per-board enabled views = intersection of workspace-level
+// `enabledViews` with the BoardView `type`s this board has default rows
+// for (name IS NULL). Boards that predate this system (zero BoardView
+// rows) fall back to the workspace set so nothing disappears on them.
+export function computeBoardEnabledViews(
+  workspaceEnabled: ViewName[],
+  defaultBoardViewTypes: string[],
+): ViewName[] {
+  if (defaultBoardViewTypes.length === 0) return workspaceEnabled;
+  const boardSet = new Set<ViewName>();
+  for (const t of defaultBoardViewTypes) {
+    const name = viewTypeToName(t);
+    if (name) boardSet.add(name);
+  }
+  return workspaceEnabled.filter((v) => boardSet.has(v));
+}

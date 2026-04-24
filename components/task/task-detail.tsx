@@ -11,7 +11,8 @@ import {
   updateTaskAction,
   type UpdateTaskState,
 } from "@/app/(app)/w/[workspaceId]/t/actions";
-import { RichTextEditor, type RichTextDoc } from "@/components/task/rich-text-editor";
+import { type RichTextDoc } from "@/components/task/rich-text-editor";
+import { DescriptionSection } from "@/components/task/description-section";
 import { CommentsSection, type CommentItem } from "@/components/task/comments-section";
 import { ActivityLog, type ActivityEntry } from "@/components/task/activity-log";
 import { AttachmentsSection, type AttachmentItem } from "@/components/task/attachments-section";
@@ -225,15 +226,6 @@ export function TaskDetail({
           )}
         </div>
 
-        <div className="flex flex-col gap-2">
-          <span className="eyebrow">Opis</span>
-          <RichTextEditor
-            name="descriptionJson"
-            initial={task.descriptionJson}
-            readOnly={!canEdit}
-          />
-        </div>
-
         {!state?.ok && state?.error && (
           <p className="font-mono text-[0.72rem] uppercase tracking-[0.14em] text-destructive">
             {state.error}
@@ -257,6 +249,13 @@ export function TaskDetail({
           </div>
         )}
       </form>
+
+      {/* Description — own save flow (view/edit modes) */}
+      <DescriptionSection
+        taskId={task.id}
+        initial={task.descriptionJson}
+        canEdit={canEdit}
+      />
 
       {/* Milestone — instant select (MenuChange fires the action) */}
       <section className="flex flex-col gap-3">

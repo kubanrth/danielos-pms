@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { AtSign, Check } from "lucide-react";
+import { AtSign, Check, Vote } from "lucide-react";
 import { markAllNotificationsReadAction, markNotificationReadAction } from "./actions";
 import { unreadPl } from "@/lib/pluralize";
 import { AppShell } from "@/components/layout/app-shell";
@@ -14,6 +14,15 @@ interface MentionPayload {
   authorName?: string;
   taskTitle?: string;
   snippet?: string;
+}
+
+interface PollCreatedPayload {
+  workspaceId?: string;
+  taskId?: string;
+  taskTitle?: string;
+  boardName?: string;
+  question?: string;
+  authorName?: string | null;
 }
 
 async function loadNotifications(userId: string) {
@@ -112,7 +121,8 @@ function NotificationRow({
   notification: NotificationItem;
   unread: boolean;
 }) {
-  const payload = (notification.payload ?? {}) as MentionPayload;
+  const isPoll = notification.type === "poll.created";
+  const payload = (notification.payload ?? {}) as MentionPayload & PollCreatedPayload;
   const href = payload.workspaceId && payload.taskId
     ? `/w/${payload.workspaceId}/t/${payload.taskId}`
     : "/inbox";
@@ -124,6 +134,18 @@ function NotificationRow({
         {" oznaczył(a) Cię w komentarzu do "}
         <span className="font-semibold text-foreground">{payload.taskTitle ?? "zadania"}</span>.
       </>
+    ) : isPoll ? (
+      <>
+        Na tablicy{" "}
+        <span className="font-semibold text-foreground">
+          {payload.boardName ?? "?"}
+        </span>{" "}
+        pojawiło się głosowanie w zadaniu{" "}
+        <span className="font-semibold text-foreground">
+          {payload.taskTitle ?? "?"}
+        </span>
+        . <span className="text-primary">Przejdź do głosowania →</span>
+      </>
     ) : (
       <span className="text-muted-foreground">{notification.type}</span>
     );
@@ -131,7 +153,9 @@ function NotificationRow({
   const snippet =
     notification.type === "comment.mention" && payload.snippet
       ? payload.snippet
-      : null;
+      : isPoll && payload.question
+        ? payload.question
+        : null;
 
   return (
     <div
@@ -139,10 +163,12 @@ function NotificationRow({
       className="group flex items-center gap-3 px-4 py-3 transition-colors data-[unread=true]:bg-primary/[0.04] hover:bg-accent/60"
     >
       <span
-        className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"
+        className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${
+          isPoll ? "bg-amber-500/10 text-amber-500" : "bg-primary/10 text-primary"
+        }`}
         aria-hidden
       >
-        <AtSign size={14} />
+        {isPoll ? <Vote size={14} /> : <AtSign size={14} />}
       </span>
       <Link
         href={href}

@@ -5,12 +5,32 @@ import {
   CalendarMonthGrid,
   type CalendarEvent,
 } from "@/components/my/calendar/month-grid";
+import { CalendarWorkspaceFilter } from "@/components/my/calendar/workspace-filter";
 import { AppShell } from "@/components/layout/app-shell";
 
-export default async function MyCalendarPage() {
+export default async function MyCalendarPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ workspace?: string }>;
+}) {
   const session = await auth();
   if (!session?.user) redirect("/secure-access-portal");
   const userId = session.user.id;
+  const params = await searchParams;
+  // `?workspace=all` or omitted = show everything. Any other value is
+  // treated as a specific workspace id.
+  const selectedWorkspace = params.workspace ?? "all";
+
+  // Workspaces the user is actually a member of — powers the dropdown.
+  const memberships = await db.workspaceMembership.findMany({
+    where: { userId, workspace: { deletedAt: null } },
+    include: { workspace: { select: { id: true, name: true } } },
+    orderBy: { joinedAt: "asc" },
+  });
+  const availableWorkspaces = memberships.map((m) => ({
+    id: m.workspace.id,
+    name: m.workspace.name,
+  }));
 
   // Fetch every assignment that has at least one date — we still need the
   // task row for title, workspace, and status color.
@@ -19,6 +39,9 @@ export default async function MyCalendarPage() {
       userId,
       task: {
         deletedAt: null,
+        ...(selectedWorkspace !== "all"
+          ? { workspaceId: selectedWorkspace }
+          : {}),
         OR: [{ startAt: { not: null } }, { stopAt: { not: null } }],
       },
     },
@@ -46,7 +69,7 @@ export default async function MyCalendarPage() {
 
   return (
     <AppShell>
-      <div className="mb-8 flex flex-col gap-2">
+      <div className="mb-6 flex flex-col gap-2">
         <span className="eyebrow">Twój kalendarz</span>
         <h1 className="font-display text-[2.2rem] font-bold leading-[1.1] tracking-[-0.03em]">
           Co masz <span className="text-brand-gradient">na osi</span>.
@@ -55,6 +78,13 @@ export default async function MyCalendarPage() {
           Wszystkie zadania, w których jesteś assignee, na siatce miesiąca.
           Klik = otwarcie karty zadania.
         </p>
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center justify-end gap-3">
+        <CalendarWorkspaceFilter
+          workspaces={availableWorkspaces}
+          selected={selectedWorkspace}
+        />
       </div>
 
       <CalendarMonthGrid events={events} />

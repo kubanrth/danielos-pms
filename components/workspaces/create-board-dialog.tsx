@@ -1,7 +1,14 @@
 "use client";
 
 import { useActionState, useState, startTransition } from "react";
-import { Plus } from "lucide-react";
+import {
+  BarChart3,
+  GitBranch,
+  KanbanSquare,
+  Pencil,
+  Plus,
+  Table2,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +21,17 @@ import {
   type CreateBoardState,
 } from "@/app/(app)/w/[workspaceId]/b/actions";
 
+// Same 5 options as the workspace creator — we filter this list down by
+// the workspace's own enabledViews before rendering, so you can't pick a
+// view that the workspace itself doesn't enable.
+const VIEW_PRESETS = [
+  { value: "TABLE", label: "Tabela", icon: Table2 },
+  { value: "KANBAN", label: "Kanban", icon: KanbanSquare },
+  { value: "ROADMAP", label: "Roadmapa", icon: GitBranch },
+  { value: "GANTT", label: "Gantt", icon: BarChart3 },
+  { value: "WHITEBOARD", label: "Whiteboard", icon: Pencil },
+] as const;
+
 // Compact `+` button intended for the sidebar (next to each workspace
 // row, gated by role=ADMIN). Opens a dialog with just name + optional
 // description; the action seeds columns + BoardView rows.
@@ -21,17 +39,31 @@ export function CreateBoardDialog({
   workspaceId,
   size = "sm",
   label,
+  workspaceEnabledViews,
 }: {
   workspaceId: string;
   size?: "sm" | "md";
   // Optional label — when omitted we render just the "+" glyph (sidebar use).
   label?: string;
+  // Parent workspace's enabled views — the new board can only enable a
+  // subset of these. If omitted, all 5 defaults are shown.
+  workspaceEnabledViews?: Array<"TABLE" | "KANBAN" | "ROADMAP" | "GANTT" | "WHITEBOARD">;
 }) {
   const [open, setOpen] = useState(false);
   const [state, formAction, pending] = useActionState<CreateBoardState, FormData>(
     createBoardAction,
     null,
   );
+  const parentEnabled = workspaceEnabledViews ?? ["TABLE", "KANBAN", "ROADMAP", "GANTT", "WHITEBOARD"];
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(parentEnabled));
+  const toggle = (v: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(v)) next.delete(v);
+      else next.add(v);
+      return next;
+    });
+  };
 
   return (
     <>
@@ -101,6 +133,40 @@ export function CreateBoardDialog({
                 className="min-h-[2.5rem] resize-none border-b border-border bg-transparent pb-1 font-sans text-[0.95rem] outline-none focus:border-primary"
               />
             </label>
+
+            <div className="flex flex-col gap-2">
+              <span className="eyebrow">Widoki tej tablicy</span>
+              <p className="font-mono text-[0.66rem] uppercase tracking-[0.12em] text-muted-foreground/80">
+                wybierz, które widoki chcesz mieć
+              </p>
+              <div className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {VIEW_PRESETS.filter((p) => parentEnabled.includes(p.value)).map((p) => {
+                  const on = selected.has(p.value);
+                  const Icon = p.icon;
+                  return (
+                    <label
+                      key={p.value}
+                      data-on={on ? "true" : "false"}
+                      className="group flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 font-mono text-[0.7rem] uppercase tracking-[0.12em] text-muted-foreground transition-all data-[on=true]:border-primary/60 data-[on=true]:bg-primary/10 data-[on=true]:text-foreground hover:border-primary/40"
+                    >
+                      <input
+                        type="checkbox"
+                        name="enabledViews"
+                        value={p.value}
+                        checked={on}
+                        onChange={() => toggle(p.value)}
+                        className="sr-only"
+                      />
+                      <Icon
+                        size={13}
+                        className="text-muted-foreground group-data-[on=true]:text-primary"
+                      />
+                      <span className="flex-1">{p.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
 
             {!state?.ok && state?.error && (
               <p className="font-mono text-[0.72rem] uppercase tracking-[0.14em] text-destructive">

@@ -4,7 +4,11 @@ import { requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { can } from "@/lib/permissions";
 import { BoardHeader } from "@/components/view/board-header";
 import type { CustomViewDescriptor } from "@/components/view/view-switcher";
-import { viewTypeToName, type ViewName } from "@/lib/board-views";
+import {
+  computeBoardEnabledViews,
+  viewTypeToName,
+  type ViewName,
+} from "@/lib/board-views";
 import { CreateViewDialog } from "@/components/view/create-view-dialog";
 
 // Server wrapper that hydrates BoardHeader with custom views from the DB
@@ -32,13 +36,18 @@ export async function BoardHeaderServer({
   const ctx = await requireWorkspaceMembership(workspaceId);
   const canManage = can(ctx.role, "board.update");
 
-  const custom = await db.boardView.findMany({
-    where: {
-      boardId,
-      name: { not: null },
-    },
+  // One query for both custom views (name != null) and default view-type
+  // markers (name = null) — we narrow in JS to avoid two round-trips.
+  const allViews = await db.boardView.findMany({
+    where: { boardId },
     orderBy: { createdAt: "asc" },
   });
+  const custom = allViews.filter((v) => v.name !== null);
+  const defaultTypes = allViews
+    .filter((v) => v.name === null)
+    .map((v) => v.type);
+
+  const effectiveEnabled = computeBoardEnabledViews(enabledViews, defaultTypes);
 
   const customViews: CustomViewDescriptor[] = custom.map((v) => ({
     id: v.id,
@@ -54,7 +63,7 @@ export async function BoardHeaderServer({
       board={board}
       active={active}
       activeViewId={activeViewId}
-      enabledViews={enabledViews}
+      enabledViews={effectiveEnabled}
       customViews={customViews}
       canManageViews={canManage}
       createViewButton={
@@ -62,7 +71,7 @@ export async function BoardHeaderServer({
           <CreateViewDialog
             workspaceId={workspaceId}
             boardId={boardId}
-            enabled={enabledViews}
+            enabled={effectiveEnabled}
           />
         ) : null
       }

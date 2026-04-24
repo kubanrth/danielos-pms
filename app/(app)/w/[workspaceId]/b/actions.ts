@@ -49,12 +49,19 @@ export async function createBoardAction(
   });
   if (!ws) return { ok: false, error: "Workspace nie istnieje." };
 
-  const enabledViews = parseEnabledViews(ws.enabledViews);
-  const boardViewTypes: ViewType[] = [];
-  for (const v of enabledViews) {
-    if (v === "whiteboard") continue;
-    boardViewTypes.push(v.toUpperCase() as ViewType);
-  }
+  // F9-04: pick up user-selected view types from the checkbox group.
+  // Must be a subset of workspace.enabledViews — illegal values are
+  // stripped silently (we won't block submit on a mismatched box).
+  const workspaceEnabled = new Set(
+    parseEnabledViews(ws.enabledViews).map((v) => v.toUpperCase()),
+  );
+  const raw = formData.getAll("enabledViews").map(String);
+  const rawFiltered = raw.filter((v) => workspaceEnabled.has(v));
+  const selectedTypes: ViewType[] =
+    rawFiltered.length > 0
+      ? (rawFiltered as ViewType[])
+      : // No boxes ticked (e.g. programmatic call) → match workspace default.
+        (Array.from(workspaceEnabled) as ViewType[]);
 
   const board = await db.board.create({
     data: {
@@ -71,7 +78,10 @@ export async function createBoardAction(
         ],
       },
       views: {
-        create: boardViewTypes.map((type) => ({ type })),
+        // Seed one BoardView row per selected type — even WHITEBOARD,
+        // which usually uses ProcessCanvas but needs a BoardView marker
+        // so ViewSwitcher knows the view is enabled for this board.
+        create: selectedTypes.map((type) => ({ type })),
       },
     },
   });
@@ -87,7 +97,17 @@ export async function createBoardAction(
 
   revalidatePath(`/w/${parsed.data.workspaceId}`);
   revalidatePath("/workspaces");
-  // Pick the first enabled non-whiteboard view for the landing URL.
-  const firstView = viewTypeToName(boardViewTypes[0] ?? "TABLE") ?? "table";
+  // Pick a landing view. Table if enabled (best default), otherwise the
+  // first selected non-whiteboard type, otherwise fall through to table.
+  const preferredOrder: ViewType[] = [
+    ViewType.TABLE,
+    ViewType.KANBAN,
+    ViewType.ROADMAP,
+    ViewType.GANTT,
+    ViewType.WHITEBOARD,
+  ];
+  const firstType =
+    preferredOrder.find((t) => selectedTypes.includes(t)) ?? ViewType.TABLE;
+  const firstView = viewTypeToName(firstType) ?? "table";
   redirect(`/w/${parsed.data.workspaceId}/b/${board.id}/${firstView}`);
 }
