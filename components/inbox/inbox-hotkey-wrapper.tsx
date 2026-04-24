@@ -1,0 +1,216 @@
+"use client";
+
+import Link from "next/link";
+import { startTransition } from "react";
+import { AtSign, Check, Vote } from "lucide-react";
+import {
+  useAssignHotkey,
+  type AssignMember,
+} from "@/components/task/assign-hotkey";
+import {
+  markAllNotificationsReadAction,
+  markNotificationReadAction,
+} from "@/app/(app)/inbox/actions";
+
+export interface InboxNotification {
+  id: string;
+  type: string;
+  createdAt: string;
+  unread: boolean;
+  // Normalized payload — server picks out only what we render.
+  payload: {
+    workspaceId?: string;
+    taskId?: string;
+    taskTitle?: string;
+    authorName?: string | null;
+    snippet?: string;
+    boardName?: string;
+    question?: string;
+  };
+  // F9-13: server pre-computes the assigneeIds for the task this
+  // notification refers to, so the hotkey popup can mark them as
+  // already-assigned. null for non-task notifications.
+  assigneeIds: string[] | null;
+}
+
+export function InboxHotkeyList({
+  members,
+  unread,
+  read,
+}: {
+  members: AssignMember[];
+  unread: InboxNotification[];
+  read: InboxNotification[];
+}) {
+  const assign = useAssignHotkey({ members, workspaceId: "" });
+
+  const total = unread.length + read.length;
+
+  if (total === 0) {
+    return (
+      <>
+        <div className="rounded-xl border border-dashed border-border p-10 text-center">
+          <p className="font-display text-[1.1rem] font-semibold">Pusto.</p>
+          <p className="mt-2 text-[0.92rem] text-muted-foreground">
+            Jak ktoś Cię oznaczy w komentarzu albo przypisze do zadania, trafi to tutaj.
+          </p>
+        </div>
+        {assign.menu}
+      </>
+    );
+  }
+
+  return (
+    <>
+      {unread.length > 0 && (
+        <>
+          <div className="flex items-end justify-between gap-4">
+            <h2 className="eyebrow text-primary">Nieprzeczytane</h2>
+            {unread.length > 0 && (
+              <form action={markAllNotificationsReadAction}>
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 font-mono text-[0.7rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
+                >
+                  <Check size={12} /> Oznacz wszystkie jako przeczytane
+                </button>
+              </form>
+            )}
+          </div>
+          <Bucket items={unread} assign={assign} />
+        </>
+      )}
+
+      {read.length > 0 && (
+        <>
+          <h2 className="eyebrow text-muted-foreground">Przeczytane</h2>
+          <Bucket items={read} assign={assign} />
+        </>
+      )}
+
+      {assign.menu}
+    </>
+  );
+}
+
+function Bucket({
+  items,
+  assign,
+}: {
+  items: InboxNotification[];
+  assign: ReturnType<typeof useAssignHotkey>;
+}) {
+  return (
+    <ul className="flex flex-col rounded-xl border border-border bg-card overflow-hidden">
+      {items.map((n) => (
+        <li key={n.id} className="border-b border-border last:border-b-0">
+          <NotificationRow notification={n} assign={assign} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function NotificationRow({
+  notification,
+  assign,
+}: {
+  notification: InboxNotification;
+  assign: ReturnType<typeof useAssignHotkey>;
+}) {
+  const { payload, type, unread, assigneeIds } = notification;
+  const isPoll = type === "poll.created";
+  const href =
+    payload.workspaceId && payload.taskId
+      ? `/w/${payload.workspaceId}/t/${payload.taskId}`
+      : "/inbox";
+
+  // Only attach hotkey hooks when the notification actually points to a
+  // task (and we have its assignee list).
+  const hotkeyProps =
+    payload.taskId && assigneeIds
+      ? assign.rowProps(payload.taskId, assigneeIds)
+      : null;
+
+  const body =
+    type === "comment.mention" ? (
+      <>
+        <span className="font-semibold text-foreground">{payload.authorName ?? "Ktoś"}</span>
+        {" oznaczył(a) Cię w komentarzu do "}
+        <span className="font-semibold text-foreground">{payload.taskTitle ?? "zadania"}</span>.
+      </>
+    ) : isPoll ? (
+      <>
+        Na tablicy{" "}
+        <span className="font-semibold text-foreground">{payload.boardName ?? "?"}</span>{" "}
+        pojawiło się głosowanie w zadaniu{" "}
+        <span className="font-semibold text-foreground">{payload.taskTitle ?? "?"}</span>.{" "}
+        <span className="text-primary">Przejdź do głosowania →</span>
+      </>
+    ) : (
+      <span className="text-muted-foreground">{type}</span>
+    );
+
+  const snippet =
+    type === "comment.mention" && payload.snippet
+      ? payload.snippet
+      : isPoll && payload.question
+        ? payload.question
+        : null;
+
+  return (
+    <div
+      data-unread={unread ? "true" : "false"}
+      {...(hotkeyProps ?? {})}
+      className="group flex items-center gap-3 px-4 py-3 transition-colors data-[unread=true]:bg-primary/[0.04] hover:bg-accent/60"
+    >
+      <span
+        className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${
+          isPoll ? "bg-amber-500/10 text-amber-500" : "bg-primary/10 text-primary"
+        }`}
+        aria-hidden
+      >
+        {isPoll ? <Vote size={14} /> : <AtSign size={14} />}
+      </span>
+      <Link href={href} className="flex min-w-0 flex-1 flex-col gap-0.5 focus-visible:outline-none">
+        <span className="truncate text-[0.92rem] leading-tight text-muted-foreground group-hover:text-foreground">
+          {body}
+        </span>
+        {snippet && (
+          <span className="truncate text-[0.86rem] italic text-muted-foreground/90">„{snippet}"</span>
+        )}
+        <span className="font-mono text-[0.64rem] uppercase tracking-[0.12em] text-muted-foreground/80">
+          {formatRelative(notification.createdAt)}
+        </span>
+      </Link>
+      {unread && (
+        <form action={markNotificationReadAction} className="m-0">
+          <input type="hidden" name="id" value={notification.id} />
+          <button
+            type="submit"
+            aria-label="Oznacz jako przeczytane"
+            title="Oznacz jako przeczytane"
+            className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <Check size={13} />
+          </button>
+        </form>
+      )}
+    </div>
+  );
+}
+
+function formatRelative(iso: string): string {
+  const then = new Date(iso).getTime();
+  const now = Date.now();
+  const diff = Math.round((now - then) / 1000);
+  if (diff < 45) return "przed chwilą";
+  if (diff < 60 * 60) return `${Math.round(diff / 60)} min temu`;
+  if (diff < 60 * 60 * 24) return `${Math.round(diff / 3600)} godz. temu`;
+  if (diff < 60 * 60 * 24 * 7) return `${Math.round(diff / 86400)} dni temu`;
+  return new Date(iso).toLocaleDateString("pl-PL", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}

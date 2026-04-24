@@ -22,6 +22,10 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { patchTaskAction } from "@/app/(app)/w/[workspaceId]/t/actions";
 import { useWorkspaceRealtime } from "@/hooks/use-workspace-realtime";
+import {
+  useAssignHotkey,
+  type AssignMember,
+} from "@/components/task/assign-hotkey";
 
 export interface KanbanTask {
   id: string;
@@ -54,12 +58,16 @@ export function KanbanBoard({
   boardId,
   statusColumns,
   initialTasks,
+  members,
 }: {
   workspaceId: string;
   boardId: string;
   statusColumns: KanbanStatusColumn[];
   initialTasks: KanbanTask[];
+  // F9-13 extension: needed for `M` hotkey popup.
+  members: AssignMember[];
 }) {
+  const assign = useAssignHotkey({ members, workspaceId });
   const [tasks, setTasks] = useState<KanbanTask[]>(initialTasks);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [, startPatch] = useTransition();
@@ -231,6 +239,12 @@ export function KanbanBoard({
               tasks={colTasks}
               workspaceId={workspaceId}
               boardId={boardId}
+              getHotkeyProps={(t) =>
+                assign.rowProps(
+                  t.id,
+                  t.assignees.map((a) => a.id),
+                )
+              }
             />
           );
         })}
@@ -240,6 +254,7 @@ export function KanbanBoard({
           <CardShell task={activeTask} workspaceId={workspaceId} dragging />
         ) : null}
       </DragOverlay>
+      {assign.menu}
     </DndContext>
   );
 }
@@ -249,13 +264,18 @@ function Column({
   column,
   tasks,
   workspaceId,
-  boardId,
+  boardId: _boardId,
+  getHotkeyProps,
 }: {
   id: string;
   column: KanbanStatusColumn | null;
   tasks: KanbanTask[];
   workspaceId: string;
   boardId: string;
+  getHotkeyProps?: (task: KanbanTask) => {
+    onMouseEnter: () => void;
+    onMouseLeave: () => void;
+  };
 }) {
   const color = column?.colorHex ?? "#94A3B8";
   const name = column?.name ?? "Bez statusu";
@@ -279,7 +299,12 @@ function Column({
         <ColumnDropZone id={id}>
           <div className="flex flex-col gap-2 min-h-[40px]">
             {tasks.map((t) => (
-              <SortableCard key={t.id} task={t} workspaceId={workspaceId} />
+              <SortableCard
+                key={t.id}
+                task={t}
+                workspaceId={workspaceId}
+                hotkeyProps={getHotkeyProps?.(t)}
+              />
             ))}
             {tasks.length === 0 && (
               <div className="rounded-lg border border-dashed border-border bg-background/40 py-6 text-center text-[0.72rem] uppercase tracking-[0.14em] text-muted-foreground/60">
@@ -307,9 +332,16 @@ function ColumnDropZone({ id, children }: { id: string; children: React.ReactNod
 function SortableCard({
   task,
   workspaceId,
+  hotkeyProps,
 }: {
   task: KanbanTask;
   workspaceId: string;
+  // F9-13: spread on the article so the `M` hotkey knows which card
+  // is hovered. Passed from KanbanBoard via useAssignHotkey.
+  hotkeyProps?: {
+    onMouseEnter: () => void;
+    onMouseLeave: () => void;
+  };
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id });
@@ -325,7 +357,7 @@ function SortableCard({
       {...attributes}
       {...listeners}
     >
-      <CardShell task={task} workspaceId={workspaceId} />
+      <CardShell task={task} workspaceId={workspaceId} hotkeyProps={hotkeyProps} />
     </div>
   );
 }
@@ -334,13 +366,19 @@ function CardShell({
   task,
   workspaceId,
   dragging,
+  hotkeyProps,
 }: {
   task: KanbanTask;
   workspaceId: string;
   dragging?: boolean;
+  hotkeyProps?: {
+    onMouseEnter: () => void;
+    onMouseLeave: () => void;
+  };
 }) {
   return (
     <article
+      {...(hotkeyProps ?? {})}
       className={`flex cursor-grab flex-col gap-2 rounded-lg border border-border bg-card p-3 shadow-[0_1px_2px_rgba(10,10,40,0.04)] transition-shadow hover:shadow-[0_6px_16px_-8px_rgba(123,104,238,0.35)] active:cursor-grabbing ${
         dragging ? "ring-2 ring-primary/50 shadow-[0_20px_32px_-12px_rgba(123,104,238,0.45)]" : ""
       }`}

@@ -1,10 +1,14 @@
-import Link from "next/link";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { taskPl } from "@/lib/pluralize";
 import { FiltersBar, type SortMode } from "@/components/my-tasks/filters-bar";
 import { AppShell } from "@/components/layout/app-shell";
+import {
+  HotkeyTaskList,
+  type TaskListRow,
+  type TaskListSection,
+} from "@/components/my-tasks/hotkey-task-list";
 
 // Search params are URL-synced filters maintained by FiltersBar.
 interface MyTasksSearchParams {
@@ -62,6 +66,9 @@ async function loadAssignments(
           board: { select: { id: true, name: true } },
           statusColumn: true,
           tags: { include: { tag: true } },
+          // F9-13: needed for the assign hotkey "already-assigned"
+          // highlight in the popup menu.
+          assignees: { select: { userId: true } },
         },
       },
     },
@@ -88,7 +95,7 @@ export default async function MyTasksPage({
     sort: (params.sort ?? "updatedDesc") as SortMode,
   };
 
-  const [assignments, boardOptions] = await Promise.all([
+  const [assignments, boardOptions, userWorkspaces] = await Promise.all([
     loadAssignments(userId, filters),
     // Dedupe boards for the filter pills, only those the user actually has
     // assignments on.
@@ -104,7 +111,31 @@ export default async function MyTasksPage({
         },
       },
     }),
+    // F9-13: collect every member across every workspace the user belongs
+    // to → union powers the assign-hotkey popup. toggleAssigneeAction
+    // validates membership server-side, so we can safely offer everyone.
+    db.workspaceMembership.findMany({
+      where: {
+        workspace: {
+          deletedAt: null,
+          memberships: { some: { userId } },
+        },
+      },
+      include: {
+        user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+      },
+    }),
   ]);
+
+  // Dedupe members by user id — same person in multiple workspaces
+  // would otherwise appear twice in the hotkey menu.
+  const memberMap = new Map<string, { id: string; name: string | null; email: string; avatarUrl: string | null }>();
+  for (const m of userWorkspaces) {
+    if (!memberMap.has(m.user.id)) memberMap.set(m.user.id, m.user);
+  }
+  const allMembers = Array.from(memberMap.values()).sort((a, b) =>
+    (a.name ?? a.email).localeCompare(b.name ?? b.email),
+  );
 
   const boardMap = new Map<string, { id: string; name: string; workspaceName: string }>();
   for (const a of boardOptions) {
@@ -144,6 +175,35 @@ export default async function MyTasksPage({
 
   const totalCount = active.length;
 
+  // Map each assignment onto the TaskListRow shape expected by the
+  // client-side HotkeyTaskList.
+  const toRow = (a: Assignment): TaskListRow => ({
+    id: a.task.id,
+    title: a.task.title,
+    workspaceId: a.task.workspace.id,
+    workspaceName: a.task.workspace.name,
+    boardName: a.task.board.name,
+    status: a.task.statusColumn
+      ? { name: a.task.statusColumn.name, colorHex: a.task.statusColumn.colorHex }
+      : null,
+    tags: a.task.tags.map((t) => ({
+      id: t.tag.id,
+      name: t.tag.name,
+      colorHex: t.tag.colorHex,
+    })),
+    stopAt: a.task.stopAt ? a.task.stopAt.toISOString() : null,
+    assigneeIds: a.task.assignees.map((x) => x.userId),
+  });
+
+  const sections: TaskListSection[] = showBuckets
+    ? [
+        { key: "overdue", label: "Zaległe", accent: "destructive", rows: buckets.overdue.map(toRow) },
+        { key: "today", label: "Na dziś", accent: "primary", rows: buckets.today.map(toRow) },
+        { key: "upcoming", label: "Nadchodzące", accent: "muted", rows: buckets.upcoming.map(toRow) },
+        { key: "nodate", label: "Bez terminu", accent: "muted", rows: buckets.nodate.map(toRow) },
+      ]
+    : [{ key: "flat", label: "Wszystkie", accent: "none", rows: active.map(toRow) }];
+
   return (
     <AppShell>
       <div className="flex flex-col gap-8">
@@ -154,8 +214,9 @@ export default async function MyTasksPage({
             {taskPl(totalCount)}.
           </h1>
           <p className="max-w-[60ch] text-[0.95rem] leading-[1.55] text-muted-foreground">
-            Wszystko, gdzie Ty jesteś assignee — ze wszystkich twoich przestrzeni
-            roboczych.
+            Wszystko, gdzie Ty jesteś assignee. Najedź na zadanie i wciśnij{" "}
+            <kbd className="rounded-sm border border-border bg-muted px-1 text-[0.7rem]">M</kbd>{" "}
+            aby przypisać osobę.
           </p>
         </div>
 
@@ -166,129 +227,25 @@ export default async function MyTasksPage({
           initialSort={filters.sort}
         />
 
-        {showBuckets ? (
-          <>
-            <Bucket label="Zaległe" accent="destructive" items={buckets.overdue} />
-            <Bucket label="Na dziś" accent="primary" items={buckets.today} />
-            <Bucket label="Nadchodzące" accent="muted" items={buckets.upcoming} />
-            <Bucket label="Bez terminu" accent="muted" items={buckets.nodate} />
-          </>
-        ) : (
-          <FlatList items={active} />
-        )}
-
-        {totalCount === 0 && (
-          <div className="rounded-xl border border-dashed border-border p-10 text-center">
-            <p className="font-display text-[1.1rem] font-semibold">
-              {filters.search || filters.boardIds.length > 0
-                ? "Nic nie pasuje do filtrów."
-                : "Nikt Cię nie przypisał."}
-            </p>
-            <p className="mt-2 text-[0.92rem] text-muted-foreground">
-              {filters.search || filters.boardIds.length > 0
-                ? "Spróbuj wyczyścić filtry."
-                : "Jak ktoś przypisze Cię do zadania, pojawi się tutaj."}
-            </p>
-          </div>
-        )}
+        <HotkeyTaskList
+          members={allMembers}
+          sections={sections}
+          emptyState={
+            <div className="rounded-xl border border-dashed border-border p-10 text-center">
+              <p className="font-display text-[1.1rem] font-semibold">
+                {filters.search || filters.boardIds.length > 0
+                  ? "Nic nie pasuje do filtrów."
+                  : "Nikt Cię nie przypisał."}
+              </p>
+              <p className="mt-2 text-[0.92rem] text-muted-foreground">
+                {filters.search || filters.boardIds.length > 0
+                  ? "Spróbuj wyczyścić filtry."
+                  : "Jak ktoś przypisze Cię do zadania, pojawi się tutaj."}
+              </p>
+            </div>
+          }
+        />
       </div>
     </AppShell>
-  );
-}
-
-function FlatList({ items }: { items: Assignment[] }) {
-  if (items.length === 0) return null;
-  return (
-    <ul className="flex flex-col rounded-xl border border-border bg-card overflow-hidden">
-      {items.map((a) => (
-        <li key={a.taskId} className="border-b border-border last:border-b-0">
-          <TaskRow a={a} />
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function Bucket({
-  label,
-  accent,
-  items,
-}: {
-  label: string;
-  accent: "destructive" | "primary" | "muted";
-  items: Assignment[];
-}) {
-  if (items.length === 0) return null;
-  const accentClass =
-    accent === "destructive"
-      ? "text-destructive"
-      : accent === "primary"
-        ? "text-primary"
-        : "text-muted-foreground";
-  return (
-    <section className="flex flex-col gap-3">
-      <div className="flex items-baseline gap-3">
-        <h2 className={`eyebrow ${accentClass}`}>{label}</h2>
-        <span className="font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground">
-          {items.length}
-        </span>
-      </div>
-      <ul className="flex flex-col rounded-xl border border-border bg-card overflow-hidden">
-        {items.map((a) => (
-          <li key={a.taskId} className="border-b border-border last:border-b-0">
-            <TaskRow a={a} />
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function TaskRow({ a }: { a: Assignment }) {
-  return (
-    <Link
-      href={`/w/${a.task.workspace.id}/t/${a.task.id}`}
-      className="group flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-accent/60 focus-visible:bg-accent/60 focus-visible:outline-none"
-    >
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <div className="flex flex-wrap items-center gap-2">
-          {a.task.statusColumn && (
-            <span
-              className="inline-flex h-5 items-center rounded-full px-2 font-mono text-[0.6rem] uppercase tracking-[0.12em] font-semibold"
-              style={{
-                color: a.task.statusColumn.colorHex,
-                background: `${a.task.statusColumn.colorHex}22`,
-              }}
-            >
-              {a.task.statusColumn.name}
-            </span>
-          )}
-          {a.task.tags.map(({ tag }) => (
-            <span
-              key={tag.id}
-              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.7rem] font-medium"
-              style={{ background: `${tag.colorHex}1A`, color: tag.colorHex }}
-            >
-              <span className="h-1.5 w-1.5 rounded-full" style={{ background: tag.colorHex }} />
-              {tag.name}
-            </span>
-          ))}
-        </div>
-        <span className="truncate font-display text-[0.98rem] font-semibold leading-tight tracking-[-0.01em] transition-colors group-hover:text-primary">
-          {a.task.title}
-        </span>
-        <span className="font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground">
-          {a.task.workspace.name} · /{a.task.board.name}
-        </span>
-      </div>
-      {a.task.stopAt && (
-        <span className="font-mono text-[0.72rem] uppercase tracking-[0.12em] text-muted-foreground shrink-0">
-          {new Date(a.task.stopAt).toLocaleDateString("pl-PL", {
-            day: "numeric",
-            month: "short",
-          })}
-        </span>
-      )}
-    </Link>
   );
 }

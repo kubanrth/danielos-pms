@@ -1,10 +1,11 @@
-import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { AtSign, Check, Vote } from "lucide-react";
-import { markAllNotificationsReadAction, markNotificationReadAction } from "./actions";
 import { unreadPl } from "@/lib/pluralize";
 import { AppShell } from "@/components/layout/app-shell";
+import {
+  InboxHotkeyList,
+  type InboxNotification,
+} from "@/components/inbox/inbox-hotkey-wrapper";
 
 interface MentionPayload {
   commentId?: string;
@@ -33,16 +34,82 @@ async function loadNotifications(userId: string) {
   });
 }
 
-type NotificationItem = Awaited<ReturnType<typeof loadNotifications>>[number];
-
 export default async function InboxPage() {
   const session = await auth();
   const userId = session!.user.id;
 
   const notifications = await loadNotifications(userId);
 
-  const unread = notifications.filter((n) => !n.readAt);
-  const read = notifications.filter((n) => n.readAt);
+  // Pre-fetch assignees for every task referenced in the feed — the
+  // hotkey popup needs these to highlight already-assigned people.
+  const taskIds = Array.from(
+    new Set(
+      notifications
+        .map((n) => {
+          const p = (n.payload ?? {}) as MentionPayload & PollCreatedPayload;
+          return p.taskId;
+        })
+        .filter((x): x is string => !!x),
+    ),
+  );
+  const assigneesByTask = new Map<string, string[]>();
+  if (taskIds.length > 0) {
+    const rows = await db.taskAssignee.findMany({
+      where: { taskId: { in: taskIds } },
+      select: { taskId: true, userId: true },
+    });
+    for (const r of rows) {
+      const arr = assigneesByTask.get(r.taskId) ?? [];
+      arr.push(r.userId);
+      assigneesByTask.set(r.taskId, arr);
+    }
+  }
+
+  // F9-13 extension: union of every workspace member so the hotkey
+  // popup can offer the full roster regardless of which workspace the
+  // task belongs to. toggleAssigneeAction re-validates per-workspace
+  // server-side.
+  const memberships = await db.workspaceMembership.findMany({
+    where: {
+      workspace: {
+        deletedAt: null,
+        memberships: { some: { userId } },
+      },
+    },
+    include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+  });
+  const memberMap = new Map<string, { id: string; name: string | null; email: string; avatarUrl: string | null }>();
+  for (const m of memberships) {
+    if (!memberMap.has(m.user.id)) memberMap.set(m.user.id, m.user);
+  }
+  const members = Array.from(memberMap.values()).sort((a, b) =>
+    (a.name ?? a.email).localeCompare(b.name ?? b.email),
+  );
+
+  const toRow = (n: (typeof notifications)[number]): InboxNotification => {
+    const payload = (n.payload ?? {}) as MentionPayload & PollCreatedPayload;
+    return {
+      id: n.id,
+      type: n.type,
+      createdAt: n.createdAt.toISOString(),
+      unread: !n.readAt,
+      payload: {
+        workspaceId: payload.workspaceId,
+        taskId: payload.taskId,
+        taskTitle: payload.taskTitle,
+        authorName: payload.authorName,
+        snippet: payload.snippet,
+        boardName: payload.boardName,
+        question: payload.question,
+      },
+      assigneeIds: payload.taskId
+        ? assigneesByTask.get(payload.taskId) ?? []
+        : null,
+    };
+  };
+
+  const unread = notifications.filter((n) => !n.readAt).map(toRow);
+  const read = notifications.filter((n) => n.readAt).map(toRow);
 
   return (
     <AppShell>
@@ -51,169 +118,19 @@ export default async function InboxPage() {
           <div className="flex flex-col gap-2">
             <span className="eyebrow">Powiadomienia</span>
             <h1 className="font-display text-[2.2rem] font-bold leading-[1.1] tracking-[-0.03em]">
-              Inbox.{" "}
-              <span className="text-brand-gradient">{unread.length}</span>{" "}
+              Inbox. <span className="text-brand-gradient">{unread.length}</span>{" "}
               {unreadPl(unread.length)}.
             </h1>
-          </div>
-          {unread.length > 0 && (
-            <form action={markAllNotificationsReadAction}>
-              <button
-                type="submit"
-                className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 font-mono text-[0.7rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
-              >
-                <Check size={12} /> Oznacz wszystkie jako przeczytane
-              </button>
-            </form>
-          )}
-        </div>
-
-        {unread.length > 0 && (
-          <Bucket label="Nieprzeczytane" items={unread} unread />
-        )}
-        {read.length > 0 && <Bucket label="Przeczytane" items={read} unread={false} />}
-
-        {notifications.length === 0 && (
-          <div className="rounded-xl border border-dashed border-border p-10 text-center">
-            <p className="font-display text-[1.1rem] font-semibold">Pusto.</p>
-            <p className="mt-2 text-[0.92rem] text-muted-foreground">
-              Jak ktoś Cię oznaczy w komentarzu albo przypisze do zadania, trafi to tutaj.
+            <p className="text-[0.9rem] text-muted-foreground">
+              Najedź na zadanie i wciśnij{" "}
+              <kbd className="rounded-sm border border-border bg-muted px-1 text-[0.7rem]">M</kbd>{" "}
+              aby szybko kogoś przypisać.
             </p>
           </div>
-        )}
+        </div>
+
+        <InboxHotkeyList members={members} unread={unread} read={read} />
       </div>
     </AppShell>
   );
-}
-
-function Bucket({
-  label,
-  items,
-  unread,
-}: {
-  label: string;
-  items: NotificationItem[];
-  unread: boolean;
-}) {
-  return (
-    <section className="flex flex-col gap-3">
-      <div className="flex items-baseline gap-3">
-        <h2 className={`eyebrow ${unread ? "text-primary" : "text-muted-foreground"}`}>{label}</h2>
-        <span className="font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground">
-          {items.length}
-        </span>
-      </div>
-      <ul className="flex flex-col rounded-xl border border-border bg-card overflow-hidden">
-        {items.map((n) => (
-          <li key={n.id} className="border-b border-border last:border-b-0">
-            <NotificationRow notification={n} unread={unread} />
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function NotificationRow({
-  notification,
-  unread,
-}: {
-  notification: NotificationItem;
-  unread: boolean;
-}) {
-  const isPoll = notification.type === "poll.created";
-  const payload = (notification.payload ?? {}) as MentionPayload & PollCreatedPayload;
-  const href = payload.workspaceId && payload.taskId
-    ? `/w/${payload.workspaceId}/t/${payload.taskId}`
-    : "/inbox";
-
-  const body =
-    notification.type === "comment.mention" ? (
-      <>
-        <span className="font-semibold text-foreground">{payload.authorName ?? "Ktoś"}</span>
-        {" oznaczył(a) Cię w komentarzu do "}
-        <span className="font-semibold text-foreground">{payload.taskTitle ?? "zadania"}</span>.
-      </>
-    ) : isPoll ? (
-      <>
-        Na tablicy{" "}
-        <span className="font-semibold text-foreground">
-          {payload.boardName ?? "?"}
-        </span>{" "}
-        pojawiło się głosowanie w zadaniu{" "}
-        <span className="font-semibold text-foreground">
-          {payload.taskTitle ?? "?"}
-        </span>
-        . <span className="text-primary">Przejdź do głosowania →</span>
-      </>
-    ) : (
-      <span className="text-muted-foreground">{notification.type}</span>
-    );
-
-  const snippet =
-    notification.type === "comment.mention" && payload.snippet
-      ? payload.snippet
-      : isPoll && payload.question
-        ? payload.question
-        : null;
-
-  return (
-    <div
-      data-unread={unread ? "true" : "false"}
-      className="group flex items-center gap-3 px-4 py-3 transition-colors data-[unread=true]:bg-primary/[0.04] hover:bg-accent/60"
-    >
-      <span
-        className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${
-          isPoll ? "bg-amber-500/10 text-amber-500" : "bg-primary/10 text-primary"
-        }`}
-        aria-hidden
-      >
-        {isPoll ? <Vote size={14} /> : <AtSign size={14} />}
-      </span>
-      <Link
-        href={href}
-        className="flex min-w-0 flex-1 flex-col gap-0.5 focus-visible:outline-none"
-      >
-        <span className="truncate text-[0.92rem] leading-tight text-muted-foreground group-hover:text-foreground">
-          {body}
-        </span>
-        {snippet && (
-          <span className="truncate text-[0.86rem] italic text-muted-foreground/90">
-            „{snippet}”
-          </span>
-        )}
-        <span className="font-mono text-[0.64rem] uppercase tracking-[0.12em] text-muted-foreground/80">
-          {formatRelative(notification.createdAt)}
-        </span>
-      </Link>
-      {unread && (
-        <form action={markNotificationReadAction} className="m-0">
-          <input type="hidden" name="id" value={notification.id} />
-          <button
-            type="submit"
-            aria-label="Oznacz jako przeczytane"
-            title="Oznacz jako przeczytane"
-            className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <Check size={13} />
-          </button>
-        </form>
-      )}
-    </div>
-  );
-}
-
-function formatRelative(date: Date): string {
-  const then = date.getTime();
-  const now = Date.now();
-  const diff = Math.round((now - then) / 1000);
-  if (diff < 45) return "przed chwilą";
-  if (diff < 60 * 60) return `${Math.round(diff / 60)} min temu`;
-  if (diff < 60 * 60 * 24) return `${Math.round(diff / 3600)} godz. temu`;
-  if (diff < 60 * 60 * 24 * 7) return `${Math.round(diff / 86400)} dni temu`;
-  return date.toLocaleDateString("pl-PL", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
 }

@@ -40,6 +40,12 @@ export default async function BoardKanbanPage({
   });
   if (!board) notFound();
 
+  const memberships = await db.workspaceMembership.findMany({
+    where: { workspaceId },
+    include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+    orderBy: { joinedAt: "asc" },
+  });
+
   const canCreate = can(ctx.role, "task.create");
   const canManageBoard = can(ctx.role, "board.update");
   const canCustomize = can(ctx.role, "background.customize");
@@ -113,6 +119,7 @@ export default async function BoardKanbanPage({
             colorHex: tt.tag.colorHex,
           })),
         }))}
+        members={memberships.map((m) => m.user)}
       />
     </BoardShell>
   );

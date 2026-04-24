@@ -211,22 +211,29 @@ async function KanbanRenderer({
   workspaceId: string;
   boardId: string;
 }) {
-  const board = await db.board.findFirst({
-    where: { id: boardId },
-    include: {
-      statusColumns: { orderBy: { order: "asc" } },
-      tasks: {
-        where: { deletedAt: null },
-        orderBy: [{ statusColumn: { order: "asc" } }, { rowOrder: "asc" }],
-        include: {
-          assignees: {
-            include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+  const [board, memberships] = await Promise.all([
+    db.board.findFirst({
+      where: { id: boardId },
+      include: {
+        statusColumns: { orderBy: { order: "asc" } },
+        tasks: {
+          where: { deletedAt: null },
+          orderBy: [{ statusColumn: { order: "asc" } }, { rowOrder: "asc" }],
+          include: {
+            assignees: {
+              include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+            },
+            tags: { include: { tag: true } },
           },
-          tags: { include: { tag: true } },
         },
       },
-    },
-  });
+    }),
+    db.workspaceMembership.findMany({
+      where: { workspaceId },
+      include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+      orderBy: { joinedAt: "asc" },
+    }),
+  ]);
   if (!board) return null;
   return (
     <KanbanBoard
@@ -256,6 +263,7 @@ async function KanbanRenderer({
           colorHex: tt.tag.colorHex,
         })),
       }))}
+      members={memberships.map((m) => m.user)}
     />
   );
 }
