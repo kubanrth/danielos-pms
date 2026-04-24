@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { startTransition } from "react";
 import {
   Bell,
   BookOpen,
@@ -21,12 +20,11 @@ import {
   Settings,
   ShieldCheck,
   StickyNote,
-  Trash2,
 } from "lucide-react";
-import { deleteBoardAction } from "@/app/(app)/w/[workspaceId]/b/actions";
 import type { Role } from "@/lib/generated/prisma/enums";
 import { signOutAction } from "@/app/(app)/actions";
 import { CreateBoardDialog } from "@/components/workspaces/create-board-dialog";
+import { DeleteBoardDialog } from "@/components/workspaces/delete-board-dialog";
 
 export interface SidebarUser {
   id: string;
@@ -281,31 +279,11 @@ export function Sidebar({
                           {b.name}
                         </Link>
                         {canManage(ws.role) && (
-                          <form
-                            action={(fd) => {
-                              // Window confirm stops accidental destroys —
-                              // sidebar hover zone is small + edge-click heavy.
-                              if (
-                                !window.confirm(
-                                  `Usunąć tablicę „${b.name}"? Zadania pozostaną w bazie, ale znikną z widoku.`,
-                                )
-                              )
-                                return;
-                              startTransition(() => deleteBoardAction(fd));
-                            }}
-                            className="m-0 shrink-0"
-                          >
-                            <input type="hidden" name="workspaceId" value={ws.id} />
-                            <input type="hidden" name="boardId" value={b.id} />
-                            <button
-                              type="submit"
-                              aria-label={`Usuń tablicę ${b.name}`}
-                              title="Usuń tablicę"
-                              className="grid h-5 w-5 place-items-center rounded-sm text-muted-foreground/70 opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
-                            >
-                              <Trash2 size={10} />
-                            </button>
-                          </form>
+                          <DeleteBoardDialog
+                            workspaceId={ws.id}
+                            boardId={b.id}
+                            boardName={b.name}
+                          />
                         )}
                       </div>
                     ))}
