@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { ViewType } from "@/lib/generated/prisma/enums";
 import { requireWorkspaceAction } from "@/lib/workspace-guard";
 import { writeAudit } from "@/lib/audit";
-import { parseEnabledViews, viewTypeToName } from "@/components/view/view-switcher";
+import { parseEnabledViews, viewTypeToName } from "@/lib/board-views";
 
 const createBoardSchema = z.object({
   workspaceId: z.string().min(1),

@@ -12,10 +12,7 @@ import { BackgroundCustomizer } from "@/components/view/background-customizer";
 import { BoardShell } from "@/components/view/board-shell";
 import { BoardHeaderServer } from "@/components/view/board-header-server";
 import { BoardLinksServer } from "@/components/board/board-links-server";
-import {
-  parseEnabledViews,
-  viewTypeToName,
-} from "@/components/view/view-switcher";
+import { parseEnabledViews, viewTypeToName } from "@/lib/board-views";
 import { backgroundToCss, type BackgroundConfig } from "@/lib/schemas/background";
 
 // Unified route for any custom BoardView. Picks the right renderer based

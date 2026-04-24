@@ -11,8 +11,13 @@ import {
   X,
 } from "lucide-react";
 import { deleteBoardViewAction } from "@/app/(app)/w/[workspaceId]/b/[boardId]/actions";
+import type { ViewName } from "@/lib/board-views";
 
-export type ViewName = "table" | "kanban" | "roadmap" | "gantt" | "whiteboard";
+// Pure helpers (parseEnabledViews, viewTypeToName, ALL_VIEWS, ViewName)
+// live in @/lib/board-views — re-exporting them from a "use client"
+// module breaks server callers because Next marks the whole module as
+// client-only.
+export type { ViewName };
 
 interface ViewDescriptor {
   name: ViewName;
@@ -26,28 +31,6 @@ export interface CustomViewDescriptor {
   name: string;
   type: ViewName;
   path: string;
-}
-
-export const ALL_VIEWS: ViewName[] = ["table", "kanban", "roadmap", "gantt", "whiteboard"];
-
-// Maps `ViewType` enum values (DB) to the lowercase ViewName used in URLs
-// and in Workspace.enabledViews JSON. Kept here so callers only pass
-// lowercase names.
-export function viewTypeToName(type: string): ViewName | null {
-  switch (type.toUpperCase()) {
-    case "TABLE":
-      return "table";
-    case "KANBAN":
-      return "kanban";
-    case "ROADMAP":
-      return "roadmap";
-    case "GANTT":
-      return "gantt";
-    case "WHITEBOARD":
-      return "whiteboard";
-    default:
-      return null;
-  }
 }
 
 const DEFAULT_ICONS: Record<ViewName, React.ReactNode> = {
@@ -198,20 +181,3 @@ export function ViewSwitcher({
   );
 }
 
-// Label for custom views in the ViewSwitcher pill.
-export function defaultViewLabel(name: ViewName): string {
-  return DEFAULT_LABELS[name];
-}
-
-// Parse Workspace.enabledViews (Json) into typed ViewName[]. Falls back
-// to all views when the field is missing / malformed.
-export function parseEnabledViews(raw: unknown): ViewName[] {
-  if (!Array.isArray(raw)) return ALL_VIEWS;
-  const out: ViewName[] = [];
-  for (const entry of raw) {
-    if (typeof entry !== "string") continue;
-    const name = viewTypeToName(entry);
-    if (name && !out.includes(name)) out.push(name);
-  }
-  return out.length > 0 ? out : ALL_VIEWS;
-}

@@ -3,11 +3,8 @@ import { db } from "@/lib/db";
 import { requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { can } from "@/lib/permissions";
 import { BoardHeader } from "@/components/view/board-header";
-import {
-  type CustomViewDescriptor,
-  type ViewName,
-  viewTypeToName,
-} from "@/components/view/view-switcher";
+import type { CustomViewDescriptor } from "@/components/view/view-switcher";
+import { viewTypeToName, type ViewName } from "@/lib/board-views";
 import { CreateViewDialog } from "@/components/view/create-view-dialog";
 
 // Server wrapper that hydrates BoardHeader with custom views from the DB

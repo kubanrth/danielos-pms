@@ -6,7 +6,7 @@ import { CanvasEditorLazy } from "@/components/canvas/canvas-editor-lazy";
 import { BoardShell } from "@/components/view/board-shell";
 import { BoardHeaderServer } from "@/components/view/board-header-server";
 import { BoardLinksServer } from "@/components/board/board-links-server";
-import { parseEnabledViews } from "@/components/view/view-switcher";
+import { parseEnabledViews } from "@/lib/board-views";
 
 // One canvas per board. Auto-created on first visit so users never see an
 // empty state — gives the per-board whiteboard "zero config" feel.

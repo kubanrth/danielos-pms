@@ -7,7 +7,7 @@ import { BackgroundCustomizer } from "@/components/view/background-customizer";
 import { BoardShell } from "@/components/view/board-shell";
 import { BoardHeaderServer } from "@/components/view/board-header-server";
 import { BoardLinksServer } from "@/components/board/board-links-server";
-import { parseEnabledViews } from "@/components/view/view-switcher";
+import { parseEnabledViews } from "@/lib/board-views";
 import { backgroundToCss, type BackgroundConfig } from "@/lib/schemas/background";
 
 export default async function RoadmapPage({
