@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { taskPl } from "@/lib/pluralize";
 import { FiltersBar, type SortMode } from "@/components/my-tasks/filters-bar";
+import { AppShell } from "@/components/layout/app-shell";
 
 // Search params are URL-synced filters maintained by FiltersBar.
 interface MyTasksSearchParams {
@@ -144,8 +145,8 @@ export default async function MyTasksPage({
   const totalCount = active.length;
 
   return (
-    <main className="flex-1 px-8 py-12 md:px-14 md:py-16">
-      <div className="mx-auto flex max-w-5xl flex-col gap-8">
+    <AppShell>
+      <div className="flex flex-col gap-8">
         <div className="flex flex-col gap-2">
           <span className="eyebrow">Zadania dla Ciebie</span>
           <h1 className="font-display text-[2.2rem] font-bold leading-[1.1] tracking-[-0.03em]">
@@ -191,7 +192,7 @@ export default async function MyTasksPage({
           </div>
         )}
       </div>
-    </main>
+    </AppShell>
   );
 }
 

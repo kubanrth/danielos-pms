@@ -5,6 +5,7 @@ import {
   CalendarMonthGrid,
   type CalendarEvent,
 } from "@/components/my/calendar/month-grid";
+import { AppShell } from "@/components/layout/app-shell";
 
 export default async function MyCalendarPage() {
   const session = await auth();
@@ -44,21 +45,19 @@ export default async function MyCalendarPage() {
   }));
 
   return (
-    <main className="flex-1 px-8 py-10 md:px-14 md:py-14">
-      <div className="mx-auto max-w-6xl">
-        <div className="mb-8 flex flex-col gap-2">
-          <span className="eyebrow">Twój kalendarz</span>
-          <h1 className="font-display text-[2.2rem] font-bold leading-[1.1] tracking-[-0.03em]">
-            Co masz <span className="text-brand-gradient">na osi</span>.
-          </h1>
-          <p className="max-w-[60ch] text-[0.95rem] leading-[1.55] text-muted-foreground">
-            Wszystkie zadania, w których jesteś assignee, na siatce miesiąca.
-            Klik = otwarcie karty zadania.
-          </p>
-        </div>
-
-        <CalendarMonthGrid events={events} />
+    <AppShell>
+      <div className="mb-8 flex flex-col gap-2">
+        <span className="eyebrow">Twój kalendarz</span>
+        <h1 className="font-display text-[2.2rem] font-bold leading-[1.1] tracking-[-0.03em]">
+          Co masz <span className="text-brand-gradient">na osi</span>.
+        </h1>
+        <p className="max-w-[60ch] text-[0.95rem] leading-[1.55] text-muted-foreground">
+          Wszystkie zadania, w których jesteś assignee, na siatce miesiąca.
+          Klik = otwarcie karty zadania.
+        </p>
       </div>
-    </main>
+
+      <CalendarMonthGrid events={events} />
+    </AppShell>
   );
 }

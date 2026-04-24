@@ -4,6 +4,7 @@ import { requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { can } from "@/lib/permissions";
 import { WikiEditor } from "@/components/wiki/wiki-editor";
 import type { RichTextDoc } from "@/components/task/rich-text-editor";
+import { AppShell } from "@/components/layout/app-shell";
 
 // Auto-creates a default WikiPage for workspaces that predate F8 so every
 // user gets a landing doc on first visit instead of a 404.
@@ -57,8 +58,8 @@ export default async function WorkspaceWikiPage({
   const canEdit = can(ctx.role, "wiki.edit");
 
   return (
-    <main className="flex-1 px-8 py-12 md:px-14 md:py-16">
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
+    <AppShell>
+      <div className="flex flex-col gap-8">
         <div className="flex flex-col gap-2">
           <span className="eyebrow">Wiki · {workspace.name}</span>
           <p className="max-w-[56ch] text-[0.9rem] leading-[1.55] text-muted-foreground">
@@ -76,6 +77,6 @@ export default async function WorkspaceWikiPage({
           canEdit={canEdit}
         />
       </div>
-    </main>
+    </AppShell>
   );
 }

@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { CreateWorkspaceDialog } from "@/components/workspaces/create-workspace-dialog";
 import { WorkspacesLayoutToggle } from "@/components/workspaces/workspaces-layout-toggle";
 import { boardPl, workspacePl } from "@/lib/pluralize";
+import { AppShell } from "@/components/layout/app-shell";
 
 export default async function WorkspacesPage() {
   const session = await auth();
@@ -33,10 +34,9 @@ export default async function WorkspacesPage() {
   }));
 
   return (
-    <main className="flex-1 px-8 py-12 md:px-14 md:py-16">
-      <div className="mx-auto max-w-6xl">
-        <div className="mb-10 flex flex-col gap-3">
-          <span className="eyebrow">Twoje przestrzenie</span>
+    <AppShell>
+      <div className="mb-10 flex flex-col gap-3">
+        <span className="eyebrow">Twoje przestrzenie</span>
           <h1 className="font-display text-[2.4rem] font-bold leading-[1.05] tracking-[-0.03em]">
             Cześć, {user.name?.split(" ")[0] ?? "kolego"}.
           </h1>
@@ -126,7 +126,6 @@ export default async function WorkspacesPage() {
             </div>
           }
         />
-      </div>
-    </main>
+    </AppShell>
   );
 }

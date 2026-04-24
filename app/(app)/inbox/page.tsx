@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { AtSign, Check } from "lucide-react";
 import { markAllNotificationsReadAction, markNotificationReadAction } from "./actions";
 import { unreadPl } from "@/lib/pluralize";
+import { AppShell } from "@/components/layout/app-shell";
 
 interface MentionPayload {
   commentId?: string;
@@ -35,8 +36,8 @@ export default async function InboxPage() {
   const read = notifications.filter((n) => n.readAt);
 
   return (
-    <main className="flex-1 px-8 py-12 md:px-14 md:py-16">
-      <div className="mx-auto flex max-w-3xl flex-col gap-10">
+    <AppShell>
+      <div className="flex flex-col gap-10">
         <div className="flex items-end justify-between gap-4">
           <div className="flex flex-col gap-2">
             <span className="eyebrow">Powiadomienia</span>
@@ -72,7 +73,7 @@ export default async function InboxPage() {
           </div>
         )}
       </div>
-    </main>
+    </AppShell>
   );
 }
 
