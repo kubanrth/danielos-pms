@@ -43,7 +43,7 @@ export function BackgroundCustomizer({
 }: {
   workspaceId: string;
   boardId: string;
-  viewType: "TABLE" | "KANBAN" | "ROADMAP";
+  viewType: "TABLE" | "KANBAN" | "ROADMAP" | "GANTT" | "WHITEBOARD";
   initial: BackgroundConfig | null;
 }) {
   const [open, setOpen] = useState(false);

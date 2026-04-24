@@ -7,10 +7,13 @@ import {
   ReactFlowProvider,
   Background,
   Controls,
+  MarkerType,
   MiniMap,
   addEdge,
+  getNodesBounds,
   useEdgesState,
   useNodesState,
+  useReactFlow,
   type Connection,
   type Edge,
   type Node,
@@ -24,20 +27,32 @@ import {
 import {
   Circle as CircleIcon,
   Diamond as DiamondIcon,
+  Download,
+  Frame as FrameIcon,
+  LayoutTemplate,
   Link2,
+  Minus as MinusIcon,
+  MoveRight as ArrowIcon,
   Save,
   Square as SquareIcon,
+  StickyNote,
   Trash2,
   Unlink2,
   X,
 } from "lucide-react";
+import { toPng } from "html-to-image";
 import { saveCanvasSnapshotAction } from "@/app/(app)/w/[workspaceId]/c/actions";
 import {
   createAndLinkTaskFromNodeAction,
   linkTaskToNodeAction,
   unlinkTaskFromNodeAction,
 } from "@/app/(app)/w/[workspaceId]/c/node-task-actions";
-import { ShapeNode, type NodeTaskChip, type ShapeNodeData } from "@/components/canvas/shape-node";
+import {
+  ShapeNode,
+  type NodeTaskChip,
+  type ShapeKind,
+  type ShapeNodeData,
+} from "@/components/canvas/shape-node";
 import { useRouter } from "next/navigation";
 import {
   createCanvasYDoc,
@@ -47,13 +62,15 @@ import {
   setNodeValue,
   LOCAL_ORIGIN,
   SEED_ORIGIN,
+  type CanvasEdgeEnd,
   type CanvasYRefs,
 } from "@/lib/yjs/canvas-doc";
 import { createCanvasRealtimeProvider } from "@/lib/yjs/canvas-realtime-provider";
+import { applyCanvasTemplate, TEMPLATES, type TemplateKey } from "@/components/canvas/templates";
 
 export interface EditorInitialNode {
   id: string;
-  shape: "RECTANGLE" | "DIAMOND" | "CIRCLE";
+  shape: ShapeKind;
   label: string | null;
   x: number;
   y: number;
@@ -74,9 +91,12 @@ export interface EditorInitialEdge {
   toNodeId: string;
   label: string | null;
   style: "solid" | "dashed";
+  endStyle?: CanvasEdgeEnd;
 }
 
+type RFEdgeData = { style: "solid" | "dashed"; endStyle: CanvasEdgeEnd };
 type RFNode = Node<ShapeNodeData>;
+type RFEdge = Edge<RFEdgeData>;
 
 const PALETTE = [
   "#FFFFFF",
@@ -89,6 +109,16 @@ const PALETTE = [
   "#FEE2E2",
 ];
 
+// Default size per shape. Sticky notes are small & square; frames are big
+// containers (effectively canvas regions).
+const SHAPE_DEFAULTS: Record<ShapeKind, { width: number; height: number; color: string }> = {
+  RECTANGLE: { width: 160, height: 80, color: "#FFFFFF" },
+  DIAMOND: { width: 160, height: 80, color: "#FFFFFF" },
+  CIRCLE: { width: 120, height: 120, color: "#FFFFFF" },
+  STICKY: { width: 150, height: 150, color: "#FEF3C7" },
+  FRAME: { width: 520, height: 320, color: "#F1F5F9" },
+};
+
 function cuidish(): string {
   // Small client-side id with enough entropy for a short editor session.
   // The server re-accepts the same id on save so we keep RF ↔ DB identity.
@@ -98,6 +128,17 @@ function cuidish(): string {
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
   return `n_${Date.now().toString(36)}${rand}`;
+}
+
+// Map our internal end-style token to React Flow's MarkerType + custom
+// SVG markers for variants React Flow doesn't ship natively (diamond,
+// circle). React Flow's default markers only cover `Arrow` and
+// `ArrowClosed`, so we register a <defs> block below via SVG.
+function markerForEnd(end: CanvasEdgeEnd): Edge["markerEnd"] {
+  if (end === "arrow") return { type: MarkerType.ArrowClosed, width: 16, height: 16 };
+  if (end === "diamond") return "url(#canvas-marker-diamond)";
+  if (end === "circle") return "url(#canvas-marker-circle)";
+  return undefined; // "none"
 }
 
 function toRFNode(n: EditorInitialNode, workspaceId: string): RFNode {
@@ -116,17 +157,22 @@ function toRFNode(n: EditorInitialNode, workspaceId: string): RFNode {
     },
     width: n.width,
     height: n.height,
+    // FRAME sits behind other nodes so it acts as a backdrop you can drop
+    // shapes over. React Flow honours negative `zIndex` on a per-node basis.
+    zIndex: n.shape === "FRAME" ? -10 : 0,
   };
 }
 
-function toRFEdge(e: EditorInitialEdge): Edge {
+function toRFEdge(e: EditorInitialEdge): RFEdge {
+  const endStyle: CanvasEdgeEnd = e.endStyle ?? "arrow";
   return {
     id: e.id,
     source: e.fromNodeId,
     target: e.toNodeId,
     label: e.label ?? undefined,
     style: e.style === "dashed" ? { strokeDasharray: "6 4" } : undefined,
-    data: { style: e.style },
+    markerEnd: markerForEnd(endStyle),
+    data: { style: e.style, endStyle },
   };
 }
 
@@ -167,44 +213,50 @@ function CanvasEditorInner({
   defaultBoardId: string | null;
 }) {
   const router = useRouter();
+  const reactFlow = useReactFlow();
   const nodeTypes: NodeTypes = useMemo(() => ({ shape: ShapeNode }), []);
+  const flowWrapperRef = useRef<HTMLDivElement>(null);
 
   const [nodes, setNodes, rfOnNodesChange] = useNodesState<RFNode>(
     initialNodes.map((n) => toRFNode(n, workspaceId)),
   );
-  const [edges, setEdges, rfOnEdgesChange] = useEdgesState(initialEdges.map(toRFEdge));
+  const [edges, setEdges, rfOnEdgesChange] = useEdgesState<RFEdge>(
+    initialEdges.map(toRFEdge),
+  );
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const [isConnected, setIsConnected] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(false);
 
   // Y.Doc is the shared source of truth between concurrent editors; the
-  // React Flow hooks above are an interactive view on top. Local actions
-  // mutate the Y.Doc (tagged LOCAL_ORIGIN) — the Supabase Realtime
-  // provider forwards those updates to peers. Remote updates arrive
-  // tagged REMOTE_ORIGIN and are re-derived into RF state by the
-  // observer below.
+  // React Flow hooks above are an interactive view on top.
   const yRefsRef = useRef<CanvasYRefs | null>(null);
   if (yRefsRef.current === null) {
     const refs = createCanvasYDoc();
-    seedCanvasDoc(refs, initialNodes, initialEdges);
+    seedCanvasDoc(
+      refs,
+      initialNodes,
+      initialEdges.map((e) => ({
+        id: e.id,
+        fromNodeId: e.fromNodeId,
+        toNodeId: e.toNodeId,
+        label: e.label,
+        style: e.style,
+        endStyle: e.endStyle ?? "arrow",
+      })),
+    );
     yRefsRef.current = refs;
   }
   const yRefs = yRefsRef.current;
 
   useEffect(() => {
     const refs = yRefs;
-    // Observer re-derives RF state on any non-local change. We explicitly
-    // skip SEED_ORIGIN (mount bootstrap) and LOCAL_ORIGIN (our own writes
-    // are already mirrored into RF imperatively). Remote updates fall
-    // through with `origin === REMOTE_ORIGIN` or undefined (safe default).
     const handler = (_events: unknown, transaction: { origin?: unknown }) => {
       if (transaction.origin === LOCAL_ORIGIN) return;
       if (transaction.origin === SEED_ORIGIN) return;
       const snapshot = readCanvasSnapshot(refs);
 
-      // Preserve client-local linkedTasks per node id — they're a per-
-      // viewer projection, not CRDT-shared state.
       setNodes((prev) => {
         const prevLinks = new Map(prev.map((n) => [n.id, n.data.linkedTasks ?? []]));
         return snapshot.nodes.map((n) => ({
@@ -222,6 +274,7 @@ function CanvasEditorInner({
           },
           width: n.width,
           height: n.height,
+          zIndex: n.shape === "FRAME" ? -10 : 0,
         }));
       });
       setEdges(() =>
@@ -231,7 +284,8 @@ function CanvasEditorInner({
           target: e.toNodeId,
           label: e.label ?? undefined,
           style: e.style === "dashed" ? { strokeDasharray: "6 4" } : undefined,
-          data: { style: e.style },
+          markerEnd: markerForEnd(e.endStyle),
+          data: { style: e.style, endStyle: e.endStyle },
         })),
       );
     };
@@ -239,8 +293,6 @@ function CanvasEditorInner({
     refs.edges.observeDeep(handler);
 
     const provider = createCanvasRealtimeProvider(refs, canvasId);
-    // Syncing a state flag to an external subscription is exactly the
-    // "update React state from external system" pattern useEffect is for.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsConnected(true);
     return () => {
@@ -249,14 +301,9 @@ function CanvasEditorInner({
       provider.disconnect();
       setIsConnected(false);
     };
-    // yRefs identity is stable across renders (ref); canvasId/workspaceId are
-    // fixed for the lifetime of this component instance.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasId, workspaceId]);
 
-  // Write-through helpers. Every local mutation should (a) update RF
-  // state for instant feedback, (b) commit the final state to Y.Doc
-  // tagged LOCAL_ORIGIN so the provider broadcasts it.
   const commitNodeToY = useCallback(
     (node: RFNode) => {
       yRefs.ydoc.transact(() => {
@@ -275,16 +322,16 @@ function CanvasEditorInner({
     [yRefs],
   );
   const commitEdgeToY = useCallback(
-    (edge: Edge) => {
-      const style =
-        ((edge.data as { style?: "solid" | "dashed" } | undefined)?.style ?? "solid");
+    (edge: RFEdge) => {
+      const d = edge.data;
       yRefs.ydoc.transact(() => {
         setEdgeValue(yRefs.edges, {
           id: edge.id,
           fromNodeId: edge.source,
           toNodeId: edge.target,
           label: typeof edge.label === "string" ? edge.label : null,
-          style,
+          style: d?.style ?? "solid",
+          endStyle: d?.endStyle ?? "arrow",
         });
       }, LOCAL_ORIGIN);
     },
@@ -294,7 +341,6 @@ function CanvasEditorInner({
     (nodeId: string) => {
       yRefs.ydoc.transact(() => {
         yRefs.nodes.delete(nodeId);
-        // Prune edges touching this node — RF already dropped them.
         yRefs.edges.forEach((value, id) => {
           const from = value.get("fromNodeId");
           const to = value.get("toNodeId");
@@ -316,49 +362,42 @@ function CanvasEditorInner({
   const onConnect: OnConnect = useCallback(
     (params: Connection) => {
       const id = `e_${cuidish()}`;
-      setEdges((eds) =>
-        addEdge(
-          { ...params, id, data: { style: "solid" } },
-          eds,
-        ),
-      );
-      // Mirror to Y.Doc so peers see the new edge.
-      if (params.source && params.target) {
-        commitEdgeToY({
-          id,
-          source: params.source,
-          target: params.target,
-          data: { style: "solid" },
-        } as Edge);
-      }
+      const newEdge: RFEdge = {
+        ...params,
+        id,
+        source: params.source ?? "",
+        target: params.target ?? "",
+        data: { style: "solid", endStyle: "arrow" },
+        markerEnd: markerForEnd("arrow"),
+      };
+      setEdges((eds) => addEdge(newEdge, eds));
+      if (params.source && params.target) commitEdgeToY(newEdge);
     },
     [setEdges, commitEdgeToY],
   );
 
   const addShape = useCallback(
-    (shape: "RECTANGLE" | "DIAMOND" | "CIRCLE") => {
-      // Drop new shapes near the current viewport center-ish. No useReactFlow
-      // math because it's Good Enough for first-pass UX.
+    (shape: ShapeKind) => {
+      const defaults = SHAPE_DEFAULTS[shape];
       const id = cuidish();
       const x = 120 + Math.random() * 180;
       const y = 120 + Math.random() * 140;
-      const width = shape === "CIRCLE" ? 120 : 160;
-      const height = shape === "CIRCLE" ? 120 : 80;
       const rfNode: RFNode = {
         id,
         type: "shape",
         position: { x, y },
         data: {
           shape,
-          label: null,
-          colorHex: "#FFFFFF",
-          width,
-          height,
+          label: shape === "FRAME" ? "Sekcja" : null,
+          colorHex: defaults.color,
+          width: defaults.width,
+          height: defaults.height,
           linkedTasks: [],
           workspaceId,
         },
-        width,
-        height,
+        width: defaults.width,
+        height: defaults.height,
+        zIndex: shape === "FRAME" ? -10 : 0,
       };
       setNodes((ns) => [...ns, rfNode]);
       commitNodeToY(rfNode);
@@ -409,10 +448,30 @@ function CanvasEditorInner({
     [setNodes, commitNodeToY],
   );
 
-  // Intercept RF's node changes so we (a) still hand them to RF's state
-  // reducer for interactive feedback, and (b) commit discrete events
-  // (drag end, delete) to Y.Doc. Intermediate drag positions stay local
-  // so we don't spam 60 broadcasts per second.
+  // Change the end marker of all selected edges in one commit.
+  const setEdgeEndStyle = useCallback(
+    (endStyle: CanvasEdgeEnd) => {
+      const touched: RFEdge[] = [];
+      setEdges((es) =>
+        es.map((e) => {
+          if (!e.selected) return e;
+          const next: RFEdge = {
+            ...e,
+            data: {
+              style: e.data?.style ?? "solid",
+              endStyle,
+            },
+            markerEnd: markerForEnd(endStyle),
+          };
+          touched.push(next);
+          return next;
+        }),
+      );
+      for (const e of touched) commitEdgeToY(e);
+    },
+    [setEdges, commitEdgeToY],
+  );
+
   const onNodesChange: OnNodesChange<RFNode> = useCallback(
     (changes: NodeChange<RFNode>[]) => {
       rfOnNodesChange(changes);
@@ -430,8 +489,8 @@ function CanvasEditorInner({
     [rfOnNodesChange, nodes, commitNodeToY, deleteNodeFromY],
   );
 
-  const onEdgesChange: OnEdgesChange = useCallback(
-    (changes: EdgeChange[]) => {
+  const onEdgesChange: OnEdgesChange<RFEdge> = useCallback(
+    (changes: EdgeChange<RFEdge>[]) => {
       rfOnEdgesChange(changes);
       for (const change of changes) {
         if (change.type === "remove") {
@@ -463,7 +522,8 @@ function CanvasEditorInner({
           fromNodeId: e.source,
           toNodeId: e.target,
           label: typeof e.label === "string" ? e.label : null,
-          style: ((e.data as { style?: "solid" | "dashed" } | undefined)?.style ?? "solid"),
+          style: e.data?.style ?? "solid",
+          endStyle: e.data?.endStyle ?? "arrow",
         })),
       });
       if (res.ok) {
@@ -476,12 +536,128 @@ function CanvasEditorInner({
     });
   }, [canvasId, nodes, edges]);
 
+  // Apply a template: batches a set of pre-arranged nodes + edges onto
+  // the canvas, offset from current bounds so we don't overlap existing
+  // content. Single transaction = one undo step + one broadcast.
+  const applyTemplate = useCallback(
+    (key: TemplateKey) => {
+      const offset = nodes.length > 0 ? getNodesBounds(nodes) : null;
+      const dx = offset ? offset.x + offset.width + 80 : 120;
+      const dy = offset ? offset.y : 120;
+
+      const newRfNodes: RFNode[] = [];
+      const newRfEdges: RFEdge[] = [];
+      applyCanvasTemplate(key, (n, e) => {
+        for (const spec of n) {
+          const id = cuidish();
+          const node: RFNode = {
+            id,
+            type: "shape",
+            position: { x: dx + spec.x, y: dy + spec.y },
+            data: {
+              shape: spec.shape,
+              label: spec.label,
+              colorHex: spec.colorHex,
+              width: spec.width,
+              height: spec.height,
+              linkedTasks: [],
+              workspaceId,
+            },
+            width: spec.width,
+            height: spec.height,
+            zIndex: spec.shape === "FRAME" ? -10 : 0,
+          };
+          newRfNodes.push(node);
+          spec.__assignedId = id;
+        }
+        for (const spec of e) {
+          const from = n[spec.fromIdx].__assignedId;
+          const to = n[spec.toIdx].__assignedId;
+          if (!from || !to) continue;
+          const id = `e_${cuidish()}`;
+          newRfEdges.push({
+            id,
+            source: from,
+            target: to,
+            label: spec.label,
+            markerEnd: markerForEnd(spec.endStyle),
+            data: { style: spec.style, endStyle: spec.endStyle },
+          });
+        }
+      });
+
+      setNodes((ns) => [...ns, ...newRfNodes]);
+      setEdges((es) => [...es, ...newRfEdges]);
+      yRefs.ydoc.transact(() => {
+        for (const n of newRfNodes) {
+          setNodeValue(yRefs.nodes, {
+            id: n.id,
+            shape: n.data.shape,
+            label: n.data.label ?? null,
+            x: n.position.x,
+            y: n.position.y,
+            width: n.data.width,
+            height: n.data.height,
+            colorHex: n.data.colorHex,
+          });
+        }
+        for (const e of newRfEdges) {
+          setEdgeValue(yRefs.edges, {
+            id: e.id,
+            fromNodeId: e.source,
+            toNodeId: e.target,
+            label: typeof e.label === "string" ? e.label : null,
+            style: e.data?.style ?? "solid",
+            endStyle: e.data?.endStyle ?? "arrow",
+          });
+        }
+      }, LOCAL_ORIGIN);
+
+      // Fit new content into view.
+      setTimeout(() => reactFlow.fitView({ padding: 0.2, duration: 400 }), 50);
+    },
+    [nodes, setNodes, setEdges, yRefs, workspaceId, reactFlow],
+  );
+
+  // Render the current viewport as PNG and trigger download. We grab the
+  // `.react-flow__viewport` element because it contains nodes + edges in
+  // their transformed coordinate space — html-to-image captures exactly
+  // what the user sees.
+  const exportPng = useCallback(async () => {
+    const root = flowWrapperRef.current;
+    if (!root) return;
+    const pane = root.querySelector<HTMLElement>(".react-flow__viewport");
+    if (!pane) return;
+    const bounds = getNodesBounds(nodes);
+    const pad = 64;
+    try {
+      const dataUrl = await toPng(pane, {
+        backgroundColor: "#ffffff",
+        width: Math.max(bounds.width + pad * 2, 800),
+        height: Math.max(bounds.height + pad * 2, 600),
+        pixelRatio: 2,
+        style: {
+          transform: `translate(${-bounds.x + pad}px, ${-bounds.y + pad}px)`,
+          width: `${bounds.width + pad * 2}px`,
+          height: `${bounds.height + pad * 2}px`,
+        },
+      });
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = `whiteboard-${canvasId.slice(-8)}.png`;
+      a.click();
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Export nie powiódł się.");
+      setSaveState("error");
+    }
+  }, [nodes, canvasId]);
+
   const selectedCount = nodes.filter((n) => n.selected).length + edges.filter((e) => e.selected).length;
   const selectedNodes = nodes.filter((n) => n.selected);
+  const selectedEdges = edges.filter((e) => e.selected);
   const singleSelectedNode = selectedNodes.length === 1 ? selectedNodes[0] : null;
+  const hasEdgeSelection = selectedEdges.length > 0;
 
-  // Mutate a single node's data client-side (used after link/unlink to
-  // reflect chips without a page reload).
   const patchNodeData = useCallback(
     (nodeId: string, patch: (chips: NodeTaskChip[]) => NodeTaskChip[]) => {
       setNodes((ns) =>
@@ -559,12 +735,39 @@ function CanvasEditorInner({
       ...chips,
       { taskId: res.taskId, title: title.trim() },
     ]);
-    // Pop the new task's detail modal so the user can fill in the rest.
     router.push(`/w/${workspaceId}/t/${res.taskId}`);
   }, [singleSelectedNode, defaultBoardId, patchNodeData, router, workspaceId]);
 
   return (
-    <div className="relative h-full w-full">
+    <div className="relative h-full w-full" ref={flowWrapperRef}>
+      {/* Custom markers for connector endings React Flow doesn't ship. */}
+      <svg className="absolute h-0 w-0" aria-hidden>
+        <defs>
+          <marker
+            id="canvas-marker-diamond"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="10"
+            markerHeight="10"
+            orient="auto-start-reverse"
+          >
+            <path d="M0 5 L5 0 L10 5 L5 10 Z" fill="currentColor" />
+          </marker>
+          <marker
+            id="canvas-marker-circle"
+            viewBox="0 0 10 10"
+            refX="7"
+            refY="5"
+            markerWidth="8"
+            markerHeight="8"
+            orient="auto"
+          >
+            <circle cx="5" cy="5" r="4" fill="currentColor" />
+          </marker>
+        </defs>
+      </svg>
+
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -573,7 +776,6 @@ function CanvasEditorInner({
         onConnect={canEdit ? onConnect : undefined}
         nodeTypes={nodeTypes}
         onNodeDoubleClick={canEdit ? (_e, n) => {
-          // Focus first, then rename — window.prompt blocks so this is OK.
           setNodes((ns) => ns.map((x) => ({ ...x, selected: x.id === n.id })));
           setTimeout(() => renameSelected(), 0);
         } : undefined}
@@ -600,6 +802,12 @@ function CanvasEditorInner({
             <ToolButton label="Koło" onClick={() => addShape("CIRCLE")}>
               <CircleIcon size={14} />
             </ToolButton>
+            <ToolButton label="Sticky note" onClick={() => addShape("STICKY")}>
+              <StickyNote size={14} />
+            </ToolButton>
+            <ToolButton label="Ramka" onClick={() => addShape("FRAME")}>
+              <FrameIcon size={14} />
+            </ToolButton>
             <span className="mx-1 h-5 w-px bg-border" aria-hidden />
             <div className="flex items-center gap-1 px-1">
               {PALETTE.map((c) => (
@@ -607,7 +815,7 @@ function CanvasEditorInner({
                   key={c}
                   type="button"
                   onClick={() => recolorSelected(c)}
-                  disabled={selectedCount === 0}
+                  disabled={selectedNodes.length === 0}
                   className="h-5 w-5 rounded-full border border-border transition-transform hover:scale-110 disabled:cursor-not-allowed disabled:opacity-40"
                   style={{ background: c }}
                   aria-label={`Kolor ${c}`}
@@ -615,6 +823,52 @@ function CanvasEditorInner({
                 />
               ))}
             </div>
+
+            {hasEdgeSelection && (
+              <>
+                <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+                <ToolButton
+                  label="Końcówka: strzałka"
+                  onClick={() => setEdgeEndStyle("arrow")}
+                >
+                  <ArrowIcon size={14} />
+                </ToolButton>
+                <ToolButton
+                  label="Końcówka: brak"
+                  onClick={() => setEdgeEndStyle("none")}
+                >
+                  <MinusIcon size={14} />
+                </ToolButton>
+                <ToolButton
+                  label="Końcówka: romb"
+                  onClick={() => setEdgeEndStyle("diamond")}
+                >
+                  <DiamondIcon size={12} />
+                </ToolButton>
+                <ToolButton
+                  label="Końcówka: koło"
+                  onClick={() => setEdgeEndStyle("circle")}
+                >
+                  <CircleIcon size={12} />
+                </ToolButton>
+              </>
+            )}
+
+            <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+
+            <TemplatesDropdown
+              open={templateOpen}
+              setOpen={setTemplateOpen}
+              onPick={(k) => {
+                applyTemplate(k);
+                setTemplateOpen(false);
+              }}
+            />
+
+            <ToolButton label="Eksport PNG" onClick={exportPng}>
+              <Download size={14} />
+            </ToolButton>
+
             <span className="mx-1 h-5 w-px bg-border" aria-hidden />
             <ToolButton label="Usuń" onClick={deleteSelected} disabled={selectedCount === 0}>
               <Trash2 size={14} />
@@ -642,8 +896,6 @@ function CanvasEditorInner({
         </div>
       )}
 
-      {/* Collab presence indicator — small dot bottom-right so users see
-          whether their changes are reaching peers. */}
       <div className="pointer-events-none absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full border border-border bg-card/95 px-2 py-1 shadow-sm backdrop-blur">
         <span
           className={`inline-block h-1.5 w-1.5 rounded-full ${
@@ -656,7 +908,6 @@ function CanvasEditorInner({
         </span>
       </div>
 
-      {/* Side panel — only when exactly one node is selected. */}
       {canEdit && singleSelectedNode && (
         <TaskLinksPanel
           nodeLabel={singleSelectedNode.data.label}
@@ -669,6 +920,48 @@ function CanvasEditorInner({
           onCreate={handleCreateAndLink}
           error={linkError}
         />
+      )}
+    </div>
+  );
+}
+
+function TemplatesDropdown({
+  open,
+  setOpen,
+  onPick,
+}: {
+  open: boolean;
+  setOpen: (v: boolean) => void;
+  onPick: (k: TemplateKey) => void;
+}) {
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-label="Szablony"
+        title="Szablony"
+        className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+      >
+        <LayoutTemplate size={14} />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-[calc(100%+4px)] z-20 w-44 overflow-hidden rounded-md border border-border bg-popover p-1 shadow-[0_8px_20px_-8px_rgba(10,10,40,0.25)]">
+          {TEMPLATES.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => onPick(t.key)}
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[0.82rem] transition-colors hover:bg-accent"
+            >
+              <span className="text-primary" aria-hidden>
+                {t.glyph}
+              </span>
+              <span className="flex-1 truncate">{t.label}</span>
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );

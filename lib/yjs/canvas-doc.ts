@@ -10,8 +10,10 @@
 
 import * as Y from "yjs";
 
-export const SHAPES = ["RECTANGLE", "DIAMOND", "CIRCLE"] as const;
+export const SHAPES = ["RECTANGLE", "DIAMOND", "CIRCLE", "STICKY", "FRAME"] as const;
 export type CanvasShape = (typeof SHAPES)[number];
+export const EDGE_ENDS = ["arrow", "none", "diamond", "circle"] as const;
+export type CanvasEdgeEnd = (typeof EDGE_ENDS)[number];
 
 export interface CanvasNodeValue {
   id: string;
@@ -30,6 +32,7 @@ export interface CanvasEdgeValue {
   toNodeId: string;
   label: string | null;
   style: "solid" | "dashed";
+  endStyle: CanvasEdgeEnd;
 }
 
 export type InitialNode = CanvasNodeValue;
@@ -83,6 +86,7 @@ function toEdgeYMap(edge: CanvasEdgeValue): Y.Map<unknown> {
   m.set("toNodeId", edge.toNodeId);
   m.set("label", edge.label);
   m.set("style", edge.style);
+  m.set("endStyle", edge.endStyle);
   return m;
 }
 
@@ -116,6 +120,7 @@ export function setEdgeValue(
     if (existing.get("toNodeId") !== edge.toNodeId) existing.set("toNodeId", edge.toNodeId);
     if (existing.get("label") !== edge.label) existing.set("label", edge.label);
     if (existing.get("style") !== edge.style) existing.set("style", edge.style);
+    if (existing.get("endStyle") !== edge.endStyle) existing.set("endStyle", edge.endStyle);
   } else {
     edgesMap.set(edge.id, toEdgeYMap(edge));
   }
@@ -131,7 +136,7 @@ export function readCanvasSnapshot(refs: CanvasYRefs): {
   const nodes: CanvasNodeValue[] = [];
   refs.nodes.forEach((value, id) => {
     const shape = value.get("shape");
-    if (shape !== "RECTANGLE" && shape !== "DIAMOND" && shape !== "CIRCLE") return;
+    if (!isCanvasShape(shape)) return;
     nodes.push({
       id,
       shape,
@@ -155,9 +160,25 @@ export function readCanvasSnapshot(refs: CanvasYRefs): {
       toNodeId: to,
       label: asNullString(value.get("label")),
       style: style === "dashed" ? "dashed" : "solid",
+      endStyle: asEdgeEnd(value.get("endStyle")),
     });
   });
   return { nodes, edges };
+}
+
+function isCanvasShape(v: unknown): v is CanvasShape {
+  return (
+    v === "RECTANGLE" ||
+    v === "DIAMOND" ||
+    v === "CIRCLE" ||
+    v === "STICKY" ||
+    v === "FRAME"
+  );
+}
+
+function asEdgeEnd(v: unknown): CanvasEdgeEnd {
+  if (v === "none" || v === "diamond" || v === "circle") return v;
+  return "arrow";
 }
 
 function asNumber(v: unknown, fallback: number): number {

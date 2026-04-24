@@ -7,7 +7,7 @@ import { StatusColumnManager } from "@/components/table/status-column-manager";
 import { CreateTaskButton } from "@/components/task/create-task-button";
 import { BackgroundCustomizer } from "@/components/view/background-customizer";
 import { BoardShell } from "@/components/view/board-shell";
-import { BoardHeader } from "@/components/view/board-header";
+import { BoardHeaderServer } from "@/components/view/board-header-server";
 import { BoardLinksServer } from "@/components/board/board-links-server";
 import { parseEnabledViews } from "@/components/view/view-switcher";
 import { backgroundToCss, type BackgroundConfig } from "@/lib/schemas/background";
@@ -50,9 +50,16 @@ export default async function BoardTablePage({
   const bgCss = backgroundToCss(background);
   const enabledViews = parseEnabledViews(board.workspace.enabledViews);
 
+  // Table view config: F8b added column order + hidden columns. Legacy
+  // boards don't have these keys yet, in which case we fall back to defaults.
+  const tableConfig = (tableView?.configJson ?? {}) as {
+    columnOrder?: string[];
+    hidden?: string[];
+  };
+
   return (
     <BoardShell bgCss={bgCss}>
-      <BoardHeader
+      <BoardHeaderServer
         workspaceId={workspaceId}
         boardId={board.id}
         board={{ name: board.name, description: board.description }}
@@ -103,6 +110,9 @@ export default async function BoardTablePage({
           })),
         }))}
         canEdit={canEdit}
+        canManagePrefs={canManageBoard}
+        initialColumnOrder={Array.isArray(tableConfig.columnOrder) ? tableConfig.columnOrder : undefined}
+        initialHiddenColumns={Array.isArray(tableConfig.hidden) ? tableConfig.hidden : undefined}
       />
 
       {canManageBoard && (

@@ -5,7 +5,7 @@ import { can } from "@/lib/permissions";
 import { GanttView } from "@/components/roadmap/gantt-view";
 import { CreateTaskButton } from "@/components/task/create-task-button";
 import { BoardShell } from "@/components/view/board-shell";
-import { BoardHeader } from "@/components/view/board-header";
+import { BoardHeaderServer } from "@/components/view/board-header-server";
 import { BoardLinksServer } from "@/components/board/board-links-server";
 import { parseEnabledViews } from "@/components/view/view-switcher";
 
@@ -58,7 +58,7 @@ export default async function BoardGanttPage({
 
   return (
     <BoardShell bgCss={null}>
-      <BoardHeader
+      <BoardHeaderServer
         workspaceId={workspaceId}
         boardId={boardId}
         board={{ name: board.name, description: board.description }}

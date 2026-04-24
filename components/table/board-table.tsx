@@ -8,12 +8,15 @@ import {
   getCoreRowModel,
   getSortedRowModel,
   useReactTable,
+  type ColumnOrderState,
   type SortingState,
+  type VisibilityState,
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { patchTaskAction } from "@/app/(app)/w/[workspaceId]/t/actions";
 import { useWorkspaceRealtime } from "@/hooks/use-workspace-realtime";
 import { taskPl } from "@/lib/pluralize";
+import { ColumnSettings, type ColumnDef } from "@/components/table/column-settings";
 
 export interface BoardTableTask {
   id: string;
@@ -45,20 +48,65 @@ function toLocalInput(iso: string | null): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// Canonical column ids used by both the table and the settings popover.
+// Kept here so there's one source of truth — re-order these to change the
+// factory-default layout for brand-new boards.
+const DEFAULT_COLUMN_ORDER: string[] = [
+  "statusColumnId",
+  "title",
+  "assignees",
+  "tags",
+  "startAt",
+  "stopAt",
+];
+
+const COLUMN_DEFS: ColumnDef[] = [
+  { id: "statusColumnId", label: "Status", required: true },
+  { id: "title", label: "Tytuł", required: true },
+  { id: "assignees", label: "Osoby" },
+  { id: "tags", label: "Tagi" },
+  { id: "startAt", label: "Start" },
+  { id: "stopAt", label: "Koniec" },
+];
+
 export function BoardTable({
   workspaceId,
   boardId,
   statusColumns,
   tasks,
   canEdit,
+  canManagePrefs,
+  initialColumnOrder,
+  initialHiddenColumns,
 }: {
   workspaceId: string;
   boardId: string;
   statusColumns: BoardTableColumn[];
   tasks: BoardTableTask[];
   canEdit: boolean;
+  canManagePrefs: boolean;
+  initialColumnOrder?: string[];
+  initialHiddenColumns?: string[];
 }) {
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [columnOrder, setColumnOrder] = useState<ColumnOrderState>(() => {
+    // Server-persisted order wins; unknown / legacy ids at the tail.
+    if (initialColumnOrder && initialColumnOrder.length > 0) {
+      const seen = new Set(initialColumnOrder);
+      return [
+        ...initialColumnOrder.filter((id) => DEFAULT_COLUMN_ORDER.includes(id)),
+        ...DEFAULT_COLUMN_ORDER.filter((id) => !seen.has(id)),
+      ];
+    }
+    return [...DEFAULT_COLUMN_ORDER];
+  });
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(() => {
+    const vis: VisibilityState = {};
+    for (const id of DEFAULT_COLUMN_ORDER) {
+      vis[id] = !(initialHiddenColumns ?? []).includes(id);
+    }
+    return vis;
+  });
   useWorkspaceRealtime(workspaceId);
 
   const columns = useMemo(
@@ -176,13 +224,39 @@ export function BoardTable({
   const table = useReactTable({
     data: tasks,
     columns,
-    state: { sorting },
+    state: { sorting, columnOrder, columnVisibility },
     onSortingChange: setSorting,
+    onColumnOrderChange: setColumnOrder,
+    onColumnVisibilityChange: setColumnVisibility,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });
 
+  const hiddenIds = Object.entries(columnVisibility)
+    .filter(([, visible]) => !visible)
+    .map(([id]) => id);
+
   return (
+    <div className="flex flex-col gap-3">
+      {canManagePrefs && (
+        <div className="flex justify-end">
+          <ColumnSettings
+            workspaceId={workspaceId}
+            boardId={boardId}
+            columns={COLUMN_DEFS}
+            columnOrder={columnOrder}
+            hidden={hiddenIds}
+            onLocalChange={(next) => {
+              setColumnOrder(next.order);
+              const vis: VisibilityState = {};
+              for (const id of DEFAULT_COLUMN_ORDER) {
+                vis[id] = !next.hidden.includes(id);
+              }
+              setColumnVisibility(vis);
+            }}
+          />
+        </div>
+      )}
     <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(10,10,40,0.04)]">
       <div className="overflow-x-auto">
         <table className="w-full text-[0.88rem]">
@@ -251,6 +325,7 @@ export function BoardTable({
         <span>{tasks.length} {taskPl(tasks.length)}</span>
         <span>workspace /{workspaceId.slice(-6)} · board /{boardId.slice(-6)}</span>
       </div>
+    </div>
     </div>
   );
 }

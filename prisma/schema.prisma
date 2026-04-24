@@ -608,6 +608,9 @@ enum NodeShape {
   DIAMOND
   CIRCLE
   ICON
+  // F8b: Whimsical-lite additions.
+  STICKY
+  FRAME
 }
 
 model ProcessNode {
@@ -640,6 +643,10 @@ model ProcessEdge {
   toNodeId   String
   label      String?
   style      String   @default("solid")
+  // F8b: end marker of the connector. One of: "arrow" (default), "none",
+  // "diamond", "circle". String column so we can add more variants without
+  // a migration.
+  endStyle   String   @default("arrow")
   createdAt  DateTime @default(now())
 
   canvas   ProcessCanvas @relation(fields: [canvasId], references: [id], onDelete: Cascade)

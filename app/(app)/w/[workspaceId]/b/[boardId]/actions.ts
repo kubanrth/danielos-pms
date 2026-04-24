@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { db } from "@/lib/db";
 import { Prisma } from "@/lib/generated/prisma/client";
 import {
@@ -221,4 +222,162 @@ export async function reorderStatusColumnsAction(formData: FormData) {
     ),
   );
   revalidatePath(`/w/${workspaceId}/b/${parsed.data.boardId}/table`);
+}
+
+// F8b: create a named BoardView so the user can have multiple views of
+// the same type (e.g. two Kanbans with different filters).
+const createViewSchema = z.object({
+  workspaceId: z.string().min(1),
+  boardId: z.string().min(1),
+  type: z.enum(["TABLE", "KANBAN", "ROADMAP", "GANTT", "WHITEBOARD"]),
+  name: z.string().trim().min(1).max(60),
+});
+
+export type CreateViewState =
+  | { ok: true; viewId: string }
+  | { ok: false; error?: string; fieldErrors?: { name?: string; type?: string } }
+  | null;
+
+export async function createBoardViewAction(
+  _prev: CreateViewState,
+  formData: FormData,
+): Promise<CreateViewState> {
+  const parsed = createViewSchema.safeParse({
+    workspaceId: formData.get("workspaceId"),
+    boardId: formData.get("boardId"),
+    type: formData.get("type"),
+    name: formData.get("name"),
+  });
+  if (!parsed.success) {
+    const fe: { name?: string; type?: string } = {};
+    for (const issue of parsed.error.issues) {
+      const k = issue.path[0];
+      if (k === "name" || k === "type") fe[k] = issue.message;
+    }
+    return { ok: false, fieldErrors: fe };
+  }
+
+  const ctx = await requireWorkspaceAction(parsed.data.workspaceId, "board.update");
+
+  const view = await db.boardView.create({
+    data: {
+      boardId: parsed.data.boardId,
+      type: parsed.data.type,
+      name: parsed.data.name,
+    },
+  });
+
+  await writeAudit({
+    workspaceId: parsed.data.workspaceId,
+    objectType: "Board",
+    objectId: parsed.data.boardId,
+    actorId: ctx.userId,
+    action: "boardView.created",
+    diff: { type: parsed.data.type, name: parsed.data.name },
+  });
+
+  revalidatePath(`/w/${parsed.data.workspaceId}/b/${parsed.data.boardId}/table`);
+  return { ok: true, viewId: view.id };
+}
+
+const deleteViewSchema = z.object({ viewId: z.string().min(1) });
+
+export async function deleteBoardViewAction(formData: FormData) {
+  const parsed = deleteViewSchema.safeParse({ viewId: formData.get("viewId") });
+  if (!parsed.success) return;
+
+  // Safety: never delete the default per-type view (name = null).
+  const view = await db.boardView.findUnique({
+    where: { id: parsed.data.viewId },
+    include: { board: { select: { workspaceId: true, id: true } } },
+  });
+  if (!view || !view.name) return;
+
+  const ctx = await requireWorkspaceAction(view.board.workspaceId, "board.update");
+  await db.boardView.delete({ where: { id: parsed.data.viewId } });
+
+  await writeAudit({
+    workspaceId: view.board.workspaceId,
+    objectType: "Board",
+    objectId: view.board.id,
+    actorId: ctx.userId,
+    action: "boardView.deleted",
+    diff: { type: view.type, name: view.name },
+  });
+  revalidatePath(`/w/${view.board.workspaceId}/b/${view.board.id}/table`);
+}
+
+// F8b: per-board table column preferences. Stored on the default TABLE
+// BoardView.configJson as `{ columnOrder: string[], hidden: string[] }`.
+// Per-board (not per-user) because support-ability > ergonomics — one
+// shared layout means screenshots match what admins see.
+const tablePrefsSchema = z.object({
+  workspaceId: z.string().min(1),
+  boardId: z.string().min(1),
+  // Stringified JSON `{ columnOrder, hidden }`.
+  config: z.string().max(4000),
+});
+
+export async function saveTableColumnPrefsAction(formData: FormData) {
+  const parsed = tablePrefsSchema.safeParse({
+    workspaceId: formData.get("workspaceId"),
+    boardId: formData.get("boardId"),
+    config: formData.get("config"),
+  });
+  if (!parsed.success) return;
+
+  let config: unknown;
+  try {
+    config = JSON.parse(parsed.data.config);
+  } catch {
+    return;
+  }
+  const shape = z
+    .object({
+      columnOrder: z.array(z.string()).optional(),
+      hidden: z.array(z.string()).optional(),
+    })
+    .safeParse(config);
+  if (!shape.success) return;
+
+  const ctx = await requireWorkspaceAction(parsed.data.workspaceId, "board.update");
+
+  const existing = await db.boardView.findFirst({
+    where: { boardId: parsed.data.boardId, type: "TABLE", name: null },
+    select: { id: true, configJson: true },
+  });
+
+  const mergedConfig: Prisma.InputJsonValue = {
+    ...(typeof existing?.configJson === "object" && existing.configJson
+      ? (existing.configJson as Record<string, unknown>)
+      : {}),
+    columnOrder: shape.data.columnOrder ?? [],
+    hidden: shape.data.hidden ?? [],
+  };
+
+  if (existing) {
+    await db.boardView.update({
+      where: { id: existing.id },
+      data: { configJson: mergedConfig },
+    });
+  } else {
+    await db.boardView.create({
+      data: {
+        boardId: parsed.data.boardId,
+        type: "TABLE",
+        configJson: mergedConfig,
+      },
+    });
+  }
+
+  await writeAudit({
+    workspaceId: parsed.data.workspaceId,
+    objectType: "Board",
+    objectId: parsed.data.boardId,
+    actorId: ctx.userId,
+    action: "board.tablePrefsUpdated",
+    diff: { order: shape.data.columnOrder, hidden: shape.data.hidden },
+  });
+
+  revalidatePath(`/w/${parsed.data.workspaceId}/b/${parsed.data.boardId}/table`);
 }

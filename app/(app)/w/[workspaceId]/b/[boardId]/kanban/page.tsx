@@ -6,7 +6,7 @@ import { KanbanBoard } from "@/components/kanban/kanban-board";
 import { CreateTaskButton } from "@/components/task/create-task-button";
 import { BackgroundCustomizer } from "@/components/view/background-customizer";
 import { BoardShell } from "@/components/view/board-shell";
-import { BoardHeader } from "@/components/view/board-header";
+import { BoardHeaderServer } from "@/components/view/board-header-server";
 import { BoardLinksServer } from "@/components/board/board-links-server";
 import { parseEnabledViews } from "@/components/view/view-switcher";
 import { CollapsibleColumnManager } from "@/components/table/collapsible-column-manager";
@@ -50,7 +50,7 @@ export default async function BoardKanbanPage({
 
   return (
     <BoardShell bgCss={bgCss}>
-      <BoardHeader
+      <BoardHeaderServer
         workspaceId={workspaceId}
         boardId={board.id}
         board={{ name: board.name, description: board.description }}

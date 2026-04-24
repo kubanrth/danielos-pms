@@ -4,7 +4,7 @@ import { requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { can } from "@/lib/permissions";
 import { CanvasEditorLazy } from "@/components/canvas/canvas-editor-lazy";
 import { BoardShell } from "@/components/view/board-shell";
-import { BoardHeader } from "@/components/view/board-header";
+import { BoardHeaderServer } from "@/components/view/board-header-server";
 import { BoardLinksServer } from "@/components/board/board-links-server";
 import { parseEnabledViews } from "@/components/view/view-switcher";
 
@@ -94,7 +94,7 @@ export default async function BoardWhiteboardPage({
 
   return (
     <BoardShell bgCss={null}>
-      <BoardHeader
+      <BoardHeaderServer
         workspaceId={workspaceId}
         boardId={board.id}
         board={{ name: board.name, description: board.description }}

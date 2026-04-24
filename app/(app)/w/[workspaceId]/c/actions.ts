@@ -211,6 +211,7 @@ export async function saveCanvasSnapshotAction(
               toNodeId: e.toNodeId,
               label: e.label ?? null,
               style: e.style,
+              endStyle: e.endStyle,
             })),
           }),
         ]

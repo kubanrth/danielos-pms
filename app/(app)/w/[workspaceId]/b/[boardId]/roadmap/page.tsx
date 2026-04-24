@@ -5,7 +5,7 @@ import { can } from "@/lib/permissions";
 import { RoadmapView } from "@/components/roadmap/roadmap-view";
 import { BackgroundCustomizer } from "@/components/view/background-customizer";
 import { BoardShell } from "@/components/view/board-shell";
-import { BoardHeader } from "@/components/view/board-header";
+import { BoardHeaderServer } from "@/components/view/board-header-server";
 import { BoardLinksServer } from "@/components/board/board-links-server";
 import { parseEnabledViews } from "@/components/view/view-switcher";
 import { backgroundToCss, type BackgroundConfig } from "@/lib/schemas/background";
@@ -61,7 +61,7 @@ export default async function RoadmapPage({
 
   return (
     <BoardShell bgCss={bgCss}>
-      <BoardHeader
+      <BoardHeaderServer
         workspaceId={workspaceId}
         boardId={boardId}
         board={{ name: board.name, description: board.description }}

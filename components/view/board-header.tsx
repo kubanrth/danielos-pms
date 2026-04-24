@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
-import { ViewSwitcher, type ViewName } from "@/components/view/view-switcher";
+import {
+  ViewSwitcher,
+  type CustomViewDescriptor,
+  type ViewName,
+} from "@/components/view/view-switcher";
 
 // Unified board header: title + optional description + ViewSwitcher + right-
 // side actions slot. Typography and spacing are fixed so all 5 views look
@@ -9,18 +13,24 @@ export function BoardHeader({
   boardId,
   board,
   active,
+  activeViewId,
   enabledViews,
+  customViews,
+  canManageViews,
+  createViewButton,
   actions,
   extra,
 }: {
   workspaceId: string;
   boardId: string;
   board: { name: string; description?: string | null };
-  active: ViewName;
+  active?: ViewName;
+  activeViewId?: string;
   enabledViews?: ViewName[];
-  // Right-aligned toolbar (BackgroundCustomizer, CreateTaskButton, etc.)
+  customViews?: CustomViewDescriptor[];
+  canManageViews?: boolean;
+  createViewButton?: ReactNode;
   actions?: ReactNode;
-  // Optional sub-row under title/description (e.g. BoardLinks).
   extra?: ReactNode;
 }) {
   return (
@@ -35,12 +45,18 @@ export function BoardHeader({
           </p>
         )}
         {extra}
-        <ViewSwitcher
-          workspaceId={workspaceId}
-          boardId={boardId}
-          active={active}
-          enabled={enabledViews}
-        />
+        <div className="flex flex-wrap items-center">
+          <ViewSwitcher
+            workspaceId={workspaceId}
+            boardId={boardId}
+            active={active}
+            activeViewId={activeViewId}
+            enabled={enabledViews}
+            customViews={customViews}
+            canManage={canManageViews}
+          />
+          {createViewButton}
+        </div>
       </div>
       {actions && <div className="flex items-center gap-2">{actions}</div>}
     </div>

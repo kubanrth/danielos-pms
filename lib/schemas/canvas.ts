@@ -1,7 +1,19 @@
 import { z } from "zod";
 
-export const NODE_SHAPES = ["RECTANGLE", "DIAMOND", "CIRCLE"] as const;
+export const NODE_SHAPES = [
+  "RECTANGLE",
+  "DIAMOND",
+  "CIRCLE",
+  // F8b: Whimsical-lite additions.
+  "STICKY",
+  "FRAME",
+] as const;
 export type NodeShape = (typeof NODE_SHAPES)[number];
+
+// F8b: connector end markers. Keep in sync with CanvasEdgeEnd in
+// lib/yjs/canvas-doc.ts and the ProcessEdge.endStyle string column.
+export const EDGE_ENDS = ["arrow", "none", "diamond", "circle"] as const;
+export type EdgeEnd = (typeof EDGE_ENDS)[number];
 
 export const HEX_RE = /^#[0-9A-Fa-f]{6}$/;
 
@@ -40,6 +52,7 @@ const edgeSnapshotSchema = z.object({
   toNodeId: z.string().min(1),
   label: z.string().max(200).nullable().optional(),
   style: z.enum(["solid", "dashed"]).default("solid"),
+  endStyle: z.enum(EDGE_ENDS).default("arrow"),
 });
 
 export const saveCanvasSnapshotSchema = z.object({
