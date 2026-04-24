@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { startTransition } from "react";
 import {
   Bell,
   BookOpen,
@@ -20,7 +21,9 @@ import {
   Settings,
   ShieldCheck,
   StickyNote,
+  Trash2,
 } from "lucide-react";
+import { deleteBoardAction } from "@/app/(app)/w/[workspaceId]/b/actions";
 import type { Role } from "@/lib/generated/prisma/enums";
 import { signOutAction } from "@/app/(app)/actions";
 import { CreateBoardDialog } from "@/components/workspaces/create-board-dialog";
@@ -267,13 +270,44 @@ export function Sidebar({
                       </span>
                     )}
                     {ws.boards.map((b) => (
-                      <Link
+                      <div
                         key={b.id}
-                        href={`/w/${ws.id}/b/${b.id}/table`}
-                        className="truncate rounded-sm px-2 py-1 text-[0.82rem] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+                        className="group flex items-center gap-1 rounded-sm"
                       >
-                        {b.name}
-                      </Link>
+                        <Link
+                          href={`/w/${ws.id}/b/${b.id}/table`}
+                          className="min-w-0 flex-1 truncate rounded-sm px-2 py-1 text-[0.82rem] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+                        >
+                          {b.name}
+                        </Link>
+                        {canManage(ws.role) && (
+                          <form
+                            action={(fd) => {
+                              // Window confirm stops accidental destroys —
+                              // sidebar hover zone is small + edge-click heavy.
+                              if (
+                                !window.confirm(
+                                  `Usunąć tablicę „${b.name}"? Zadania pozostaną w bazie, ale znikną z widoku.`,
+                                )
+                              )
+                                return;
+                              startTransition(() => deleteBoardAction(fd));
+                            }}
+                            className="m-0 shrink-0"
+                          >
+                            <input type="hidden" name="workspaceId" value={ws.id} />
+                            <input type="hidden" name="boardId" value={b.id} />
+                            <button
+                              type="submit"
+                              aria-label={`Usuń tablicę ${b.name}`}
+                              title="Usuń tablicę"
+                              className="grid h-5 w-5 place-items-center rounded-sm text-muted-foreground/70 opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+                            >
+                              <Trash2 size={10} />
+                            </button>
+                          </form>
+                        )}
+                      </div>
                     ))}
                     <Link
                       href={`/w/${ws.id}/wiki`}

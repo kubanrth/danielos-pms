@@ -9,6 +9,58 @@ import { requireWorkspaceAction } from "@/lib/workspace-guard";
 import { writeAudit } from "@/lib/audit";
 import { parseEnabledViews, viewTypeToName } from "@/lib/board-views";
 
+// --- Soft delete ----------------------------------------------------------
+
+const deleteBoardSchema = z.object({
+  workspaceId: z.string().min(1),
+  boardId: z.string().min(1),
+});
+
+// Soft delete — flipuje deletedAt, cały content tablicy (zadania,
+// kolumny, linki, whiteboard, views, subtasks, poll, reminder-y)
+// znika z UI ale zostaje w DB na wypadek recovery. Ostatnia tablica
+// workspace'u też może być usunięta — user może mieć pusty workspace.
+export async function deleteBoardAction(formData: FormData) {
+  const parsed = deleteBoardSchema.safeParse({
+    workspaceId: formData.get("workspaceId"),
+    boardId: formData.get("boardId"),
+  });
+  if (!parsed.success) return;
+
+  const ctx = await requireWorkspaceAction(parsed.data.workspaceId, "board.delete");
+
+  // Ownership guard: board must belong to the declared workspace.
+  const board = await db.board.findFirst({
+    where: {
+      id: parsed.data.boardId,
+      workspaceId: parsed.data.workspaceId,
+      deletedAt: null,
+    },
+    select: { id: true, name: true },
+  });
+  if (!board) return;
+
+  await db.board.update({
+    where: { id: board.id },
+    data: { deletedAt: new Date() },
+  });
+
+  await writeAudit({
+    workspaceId: parsed.data.workspaceId,
+    objectType: "Board",
+    objectId: board.id,
+    actorId: ctx.userId,
+    action: "board.deleted",
+    diff: { name: board.name },
+  });
+
+  revalidatePath(`/w/${parsed.data.workspaceId}`);
+  revalidatePath("/workspaces");
+  // Redirect to overview — the board page we may have been on no longer
+  // exists from the user's perspective.
+  redirect(`/w/${parsed.data.workspaceId}`);
+}
+
 const createBoardSchema = z.object({
   workspaceId: z.string().min(1),
   name: z.string().trim().min(1, "Nazwa jest wymagana").max(80),
