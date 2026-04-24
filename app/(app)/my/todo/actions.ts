@@ -17,23 +17,21 @@ async function currentUserId(): Promise<string | null> {
 
 const createFolderSchema = z.object({
   name: z.string().trim().min(1).max(80),
-  parentId: z.string().optional().or(z.literal("")),
 });
 
+// F9-11: Client feedback was that folders should only contain lists,
+// not nested sub-folders (MS To Do parity). We ignore any parentId
+// that might have been posted by a legacy form.
 export async function createTodoFolderAction(formData: FormData) {
   const userId = await currentUserId();
   if (!userId) return;
   const parsed = createFolderSchema.safeParse({
     name: formData.get("name"),
-    parentId: formData.get("parentId") || undefined,
   });
   if (!parsed.success) return;
 
   const last = await db.todoFolder.findFirst({
-    where: {
-      userId,
-      parentId: parsed.data.parentId || null,
-    },
+    where: { userId, parentId: null },
     orderBy: { order: "desc" },
     select: { order: true },
   });
@@ -41,7 +39,7 @@ export async function createTodoFolderAction(formData: FormData) {
     data: {
       userId,
       name: parsed.data.name,
-      parentId: parsed.data.parentId || null,
+      parentId: null,
       order: (last?.order ?? 0) + 1,
     },
   });

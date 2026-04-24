@@ -15,7 +15,6 @@ import {
   Star,
   Sun,
   Trash2,
-  X,
 } from "lucide-react";
 import {
   createTodoFolderAction,
@@ -48,17 +47,11 @@ const SMART_VIEWS: { key: SmartView; label: string; icon: typeof Sun; accent: st
   { key: "planned", label: "Zaplanowane", icon: CalendarDays, accent: "text-sky-500" },
 ];
 
-function buildFolderMap(folders: TodoFolderNode[]): Map<string | null, TodoFolderNode[]> {
-  const map = new Map<string | null, TodoFolderNode[]>();
-  for (const f of folders) {
-    const key = f.parentId;
-    const bucket = map.get(key) ?? [];
-    bucket.push(f);
-    map.set(key, bucket);
-  }
-  return map;
-}
-
+// F9-11: fullwidth 2-column layout (sidebar + main) with a slide-in
+// right-side detail panel when a task is selected. Folders only contain
+// lists — nested folders are no longer part of the UX (we ignore
+// parentId in the tree and server-side createTodoFolderAction forces
+// parentId = null on new rows).
 export function TodoWorkspace({
   folders,
   lists,
@@ -76,8 +69,12 @@ export function TodoWorkspace({
   items: TodoItemFull[];
   focusedItemId: string | null;
 }) {
-  const folderMap = useMemo(() => buildFolderMap(folders), [folders]);
-  const listMap = useMemo(() => {
+  // Only render top-level folders — ignore any legacy nested rows.
+  const rootFolders = useMemo(
+    () => folders.filter((f) => f.parentId === null),
+    [folders],
+  );
+  const listsByFolder = useMemo(() => {
     const m = new Map<string | null, TodoListNode[]>();
     for (const l of lists) {
       const k = l.folderId;
@@ -88,15 +85,9 @@ export function TodoWorkspace({
     return m;
   }, [lists]);
 
-  // Detail panel state. `selectedItemId` drives both the right panel
-  // visibility and which item's details we render. We initialize from
-  // the `focusedItemId` URL param so deep-links (e.g. from a reminder
-  // email) open the panel automatically.
   const [selectedItemId, setSelectedItemId] = useState<string | null>(focusedItemId);
   const selectedItem = items.find((i) => i.id === selectedItemId) ?? null;
 
-  // The panel becomes uncontrolled once the user navigates lists — clear
-  // selection when the visible item set no longer contains our choice.
   if (selectedItemId && !items.find((i) => i.id === selectedItemId)) {
     setTimeout(() => setSelectedItemId(null), 0);
   }
@@ -108,9 +99,14 @@ export function TodoWorkspace({
   const completed = items.filter((i) => i.completed);
 
   return (
-    <div className="grid gap-6 md:grid-cols-[260px_minmax(0,1fr)_360px]">
-      <aside className="flex flex-col gap-3 rounded-xl border border-border bg-card p-3">
-        {/* Smart lists — pinned at top, same order as MS To Do */}
+    <div className="flex h-[calc(100dvh-0px)] overflow-hidden">
+      {/* Left sidebar — smart views + flat folders with lists */}
+      <aside className="flex w-[280px] shrink-0 flex-col gap-3 overflow-y-auto border-r border-border bg-card/50 p-3">
+        <div className="px-2 pt-1 pb-2">
+          <span className="eyebrow">Prywatne TO DO</span>
+        </div>
+
+        {/* Smart views */}
         <div className="flex flex-col gap-0.5">
           {SMART_VIEWS.map((v) => {
             const Icon = v.icon;
@@ -120,7 +116,7 @@ export function TodoWorkspace({
                 key={v.key}
                 href={`/my/todo?smart=${v.key}`}
                 data-active={active ? "true" : "false"}
-                className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-[0.88rem] transition-colors hover:bg-accent/60 data-[active=true]:bg-primary/10 data-[active=true]:text-foreground"
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-[0.88rem] transition-colors hover:bg-accent/60 data-[active=true]:bg-primary/10 data-[active=true]:text-foreground"
               >
                 <Icon size={14} className={v.accent} />
                 <span className="flex-1">{v.label}</span>
@@ -131,149 +127,127 @@ export function TodoWorkspace({
 
         <div className="my-1 border-t border-border" />
 
-        {/* User's folder/list tree */}
-        <Tree
-          folderMap={folderMap}
-          listMap={listMap}
-          parentId={null}
-          activeListId={activeListId}
-          depth={0}
-        />
-        <NewFolderForm parentId={null} />
-        <NewListForm folderId={null} />
+        {/* Root-level lists (no folder) */}
+        {(listsByFolder.get(null) ?? []).map((l) => (
+          <ListLink key={l.id} list={l} activeListId={activeListId} />
+        ))}
+
+        {/* Flat folders — each folder expands to show its lists */}
+        {rootFolders.map((f) => (
+          <FolderBlock
+            key={f.id}
+            folder={f}
+            lists={listsByFolder.get(f.id) ?? []}
+            activeListId={activeListId}
+          />
+        ))}
+
+        {/* New folder / new list inputs pinned at bottom of sidebar */}
+        <div className="mt-auto flex flex-col gap-1.5 pt-2">
+          <NewListForm folderId={null} placeholder="+ nowa lista" />
+          <NewFolderForm placeholder="+ nowy folder" />
+        </div>
       </aside>
 
-      <section className="flex flex-col gap-4">
-        <header className="flex items-baseline justify-between">
+      {/* Main content — selected list or smart view */}
+      <section className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="flex items-center justify-between border-b border-border bg-background px-8 py-4">
           <div className="flex items-center gap-2">
             {activeSmart && (
-              <activeSmart.icon size={20} className={activeSmart.accent} aria-hidden />
+              <activeSmart.icon size={22} className={activeSmart.accent} aria-hidden />
             )}
-            <h2 className="font-display text-[1.4rem] font-semibold leading-tight tracking-[-0.02em]">
+            <h1 className="font-display text-[1.8rem] font-bold leading-tight tracking-[-0.02em]">
               {pageTitle}
-            </h2>
+            </h1>
+            <span className="ml-2 font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground">
+              {completed.length} z {items.length}
+            </span>
           </div>
-          <span className="font-mono text-[0.64rem] uppercase tracking-[0.14em] text-muted-foreground">
-            {completed.length} z {items.length}
-          </span>
         </header>
 
-        {items.length === 0 ? (
-          <EmptyState
-            smart={smart}
-            hasList={!!activeListId}
-          />
-        ) : (
-          <>
-            <ItemsList
-              items={incomplete}
-              selectedItemId={selectedItemId}
-              onSelect={setSelectedItemId}
-              showListChip={!activeListId}
-            />
-            {completed.length > 0 && (
-              <CompletedSection
-                items={completed}
+        {/* Quick-add: MS To Do places it RIGHT under the header and
+             always-visible. We show it only for regular lists — smart
+             views have no canonical target. */}
+        {activeListId && (
+          <div className="px-8 pt-4">
+            <QuickAddItem listId={activeListId} />
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto px-8 py-4">
+          {items.length === 0 ? (
+            <EmptyState smart={smart} hasList={!!activeListId} />
+          ) : (
+            <div className="flex flex-col gap-4">
+              <ItemsList
+                items={incomplete}
                 selectedItemId={selectedItemId}
                 onSelect={setSelectedItemId}
                 showListChip={!activeListId}
               />
-            )}
-          </>
-        )}
-
-        {/* Quick-add — only shows on regular list views. Smart views don't
-             have a canonical target list, so we hide it there. */}
-        {activeListId && (
-          <QuickAddItem listId={activeListId} />
-        )}
+              {completed.length > 0 && (
+                <CompletedSection
+                  items={completed}
+                  selectedItemId={selectedItemId}
+                  onSelect={setSelectedItemId}
+                  showListChip={!activeListId}
+                />
+              )}
+            </div>
+          )}
+        </div>
       </section>
 
-      {selectedItem ? (
-        <TodoDetailPanel
-          key={selectedItem.id}
-          item={selectedItem}
-          onClose={() => setSelectedItemId(null)}
-        />
-      ) : (
-        <div className="hidden md:block" aria-hidden />
+      {/* Right slide-in detail panel — only rendered when a task is
+           selected, so the main list gets full width otherwise. */}
+      {selectedItem && (
+        <div className="w-[380px] shrink-0 border-l border-border bg-card/50 overflow-y-auto">
+          <TodoDetailPanel
+            key={selectedItem.id}
+            item={selectedItem}
+            onClose={() => setSelectedItemId(null)}
+          />
+        </div>
       )}
     </div>
   );
 }
 
-// --- Tree (folders + lists) ---
+// --- Sidebar building blocks ---
 
-function Tree({
-  folderMap,
-  listMap,
-  parentId,
-  activeListId,
-  depth,
-}: {
-  folderMap: Map<string | null, TodoFolderNode[]>;
-  listMap: Map<string | null, TodoListNode[]>;
-  parentId: string | null;
-  activeListId: string | null;
-  depth: number;
-}) {
-  const folders = folderMap.get(parentId) ?? [];
-  const lists = listMap.get(parentId) ?? [];
-  return (
-    <div className="flex flex-col gap-0.5">
-      {folders.map((f) => (
-        <FolderNode
-          key={f.id}
-          folder={f}
-          folderMap={folderMap}
-          listMap={listMap}
-          activeListId={activeListId}
-          depth={depth}
-        />
-      ))}
-      {lists.map((l) => (
-        <ListLink key={l.id} list={l} activeListId={activeListId} depth={depth} />
-      ))}
-    </div>
-  );
-}
-
-function FolderNode({
+function FolderBlock({
   folder,
-  folderMap,
-  listMap,
+  lists,
   activeListId,
-  depth,
 }: {
   folder: TodoFolderNode;
-  folderMap: Map<string | null, TodoFolderNode[]>;
-  listMap: Map<string | null, TodoListNode[]>;
+  lists: TodoListNode[];
   activeListId: string | null;
-  depth: number;
 }) {
-  const [open, setOpen] = useState(depth === 0);
-  const [showForms, setShowForms] = useState(false);
+  // Open by default if the active list belongs to this folder.
+  const [open, setOpen] = useState(
+    !activeListId || lists.some((l) => l.id === activeListId),
+  );
+  const [showAdd, setShowAdd] = useState(false);
 
   return (
     <div className="flex flex-col">
-      <div
-        className="group flex items-center gap-1 rounded-sm px-1 py-1 text-[0.86rem] hover:bg-accent/60"
-        style={{ paddingLeft: `${depth * 12 + 4}px` }}
-      >
+      <div className="group flex items-center gap-1 rounded-md px-1 py-1 text-[0.86rem] hover:bg-accent/40">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-label={open ? "Zwiń" : "Rozwiń"}
-          className="grid h-5 w-5 shrink-0 place-items-center rounded-sm text-muted-foreground transition-transform hover:text-foreground"
+          className="grid h-5 w-5 shrink-0 place-items-center rounded-sm text-muted-foreground"
         >
           {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         </button>
         <Folder size={13} className="shrink-0 text-primary/70" />
-        <span className="flex-1 truncate">{folder.name}</span>
+        <span className="flex-1 truncate font-medium">{folder.name}</span>
         <button
           type="button"
-          onClick={() => setShowForms((v) => !v)}
-          aria-label="Dodaj"
+          onClick={() => setShowAdd((v) => !v)}
+          aria-label="Dodaj listę do folderu"
+          title="Nowa lista w folderze"
           className="grid h-5 w-5 shrink-0 place-items-center rounded-sm text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
         >
           <Plus size={11} />
@@ -294,24 +268,14 @@ function FolderNode({
       </div>
 
       {open && (
-        <>
-          <Tree
-            folderMap={folderMap}
-            listMap={listMap}
-            parentId={folder.id}
-            activeListId={activeListId}
-            depth={depth + 1}
-          />
-          {showForms && (
-            <div
-              className="flex flex-col gap-1 rounded-sm bg-muted/50 p-1.5"
-              style={{ marginLeft: `${(depth + 1) * 12}px` }}
-            >
-              <NewFolderForm parentId={folder.id} />
-              <NewListForm folderId={folder.id} />
-            </div>
+        <div className="flex flex-col gap-0.5 pl-5">
+          {lists.map((l) => (
+            <ListLink key={l.id} list={l} activeListId={activeListId} />
+          ))}
+          {showAdd && (
+            <NewListForm folderId={folder.id} placeholder="+ nowa lista" />
           )}
-        </>
+        </div>
       )}
     </div>
   );
@@ -320,22 +284,17 @@ function FolderNode({
 function ListLink({
   list,
   activeListId,
-  depth,
 }: {
   list: TodoListNode;
   activeListId: string | null;
-  depth: number;
 }) {
   const active = list.id === activeListId;
   return (
-    <div
-      className="group flex items-center gap-1 rounded-sm"
-      style={{ paddingLeft: `${depth * 12 + 4}px` }}
-    >
+    <div className="group flex items-center gap-1 rounded-md">
       <Link
         href={`/my/todo?listId=${list.id}`}
         data-active={active ? "true" : "false"}
-        className="flex min-w-0 flex-1 items-center gap-1.5 rounded-sm px-2 py-1 text-[0.86rem] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground data-[active=true]:bg-primary/10 data-[active=true]:text-foreground"
+        className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 py-1 text-[0.86rem] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground data-[active=true]:bg-primary/10 data-[active=true]:text-foreground"
       >
         <ListIcon size={12} className="shrink-0" />
         <span className="truncate">{list.name}</span>
@@ -357,7 +316,7 @@ function ListLink({
   );
 }
 
-function NewFolderForm({ parentId }: { parentId: string | null }) {
+function NewFolderForm({ placeholder }: { placeholder: string }) {
   const [name, setName] = useState("");
   return (
     <form
@@ -369,21 +328,26 @@ function NewFolderForm({ parentId }: { parentId: string | null }) {
       }
       className="flex items-center gap-1"
     >
-      {parentId && <input type="hidden" name="parentId" value={parentId} />}
       <input
         name="name"
         value={name}
         onChange={(e) => setName(e.target.value)}
         required
         maxLength={80}
-        placeholder="+ nowy folder"
-        className="h-7 flex-1 rounded-sm border border-transparent bg-background px-2 text-[0.82rem] outline-none placeholder:text-muted-foreground/60 focus:border-primary/40"
+        placeholder={placeholder}
+        className="h-8 flex-1 rounded-md border border-transparent bg-background px-2 text-[0.82rem] outline-none placeholder:text-muted-foreground/60 focus:border-primary/40"
       />
     </form>
   );
 }
 
-function NewListForm({ folderId }: { folderId: string | null }) {
+function NewListForm({
+  folderId,
+  placeholder,
+}: {
+  folderId: string | null;
+  placeholder: string;
+}) {
   const [name, setName] = useState("");
   return (
     <form
@@ -402,14 +366,14 @@ function NewListForm({ folderId }: { folderId: string | null }) {
         onChange={(e) => setName(e.target.value)}
         required
         maxLength={80}
-        placeholder="+ nowa lista"
-        className="h-7 flex-1 rounded-sm border border-transparent bg-background px-2 text-[0.82rem] outline-none placeholder:text-muted-foreground/60 focus:border-primary/40"
+        placeholder={placeholder}
+        className="h-8 flex-1 rounded-md border border-transparent bg-background px-2 text-[0.82rem] outline-none placeholder:text-muted-foreground/60 focus:border-primary/40"
       />
     </form>
   );
 }
 
-// --- Items list + item row ---
+// --- Main area ---
 
 function ItemsList({
   items,
@@ -492,7 +456,7 @@ function ItemRow({
   return (
     <div
       data-selected={selected ? "true" : "false"}
-      className="group flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-accent/40 data-[selected=true]:bg-primary/5"
+      className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/40 data-[selected=true]:bg-primary/5"
     >
       <form
         action={(fd) => startTransition(() => toggleTodoItemAction(fd))}
@@ -605,10 +569,10 @@ function QuickAddItem({ listId }: { listId: string }) {
           setContent("");
         })
       }
-      className="flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-3"
+      className="flex items-center gap-3 rounded-xl border border-border bg-card px-5 py-3 shadow-[0_1px_2px_rgba(10,10,40,0.04)]"
     >
       <input type="hidden" name="listId" value={listId} />
-      <Plus size={14} className="text-muted-foreground" />
+      <Plus size={15} className="text-primary/70" />
       <input
         name="content"
         value={content}
@@ -616,7 +580,7 @@ function QuickAddItem({ listId }: { listId: string }) {
         required
         maxLength={300}
         placeholder="Dodaj zadanie…"
-        className="flex-1 bg-transparent py-1 text-[0.92rem] outline-none placeholder:text-muted-foreground/60"
+        className="flex-1 bg-transparent py-1 text-[0.95rem] outline-none placeholder:text-muted-foreground/60"
       />
     </form>
   );
@@ -631,21 +595,20 @@ function EmptyState({
 }) {
   if (smart === "my-day") {
     return (
-      <div className="flex min-h-[220px] flex-col items-center justify-center rounded-xl border border-dashed border-border p-10 text-center">
+      <div className="mt-20 flex flex-col items-center justify-center rounded-xl border border-dashed border-border p-10 text-center">
         <Sun size={26} className="text-amber-500" />
         <p className="mt-3 font-display text-[1.05rem] font-semibold">
           Mój dzień jest czysty.
         </p>
         <p className="mt-1 text-[0.88rem] text-muted-foreground">
-          Dodawaj zadania z innych list do „Mój dzień" (ikona słoneczka obok zadania),
-          żeby skupić się dziś tylko na nich.
+          Dodawaj zadania z innych list do „Mój dzień" (ikona słoneczka obok zadania).
         </p>
       </div>
     );
   }
   if (smart === "important") {
     return (
-      <div className="flex min-h-[220px] flex-col items-center justify-center rounded-xl border border-dashed border-border p-10 text-center">
+      <div className="mt-20 flex flex-col items-center justify-center rounded-xl border border-dashed border-border p-10 text-center">
         <Star size={26} className="text-rose-500" />
         <p className="mt-3 font-display text-[1.05rem] font-semibold">Brak ważnych zadań.</p>
         <p className="mt-1 text-[0.88rem] text-muted-foreground">
@@ -656,24 +619,26 @@ function EmptyState({
   }
   if (smart === "planned") {
     return (
-      <div className="flex min-h-[220px] flex-col items-center justify-center rounded-xl border border-dashed border-border p-10 text-center">
+      <div className="mt-20 flex flex-col items-center justify-center rounded-xl border border-dashed border-border p-10 text-center">
         <CalendarDays size={26} className="text-sky-500" />
         <p className="mt-3 font-display text-[1.05rem] font-semibold">
           Nic nie jest zaplanowane.
         </p>
         <p className="mt-1 text-[0.88rem] text-muted-foreground">
-          Ustaw termin w szczegółach zadania (prawy panel), żeby pokazało się tutaj.
+          Ustaw termin w szczegółach zadania (prawy panel).
         </p>
       </div>
     );
   }
   return (
-    <div className="flex min-h-[220px] flex-col items-center justify-center rounded-xl border border-dashed border-border p-10 text-center">
+    <div className="mt-20 flex flex-col items-center justify-center rounded-xl border border-dashed border-border p-10 text-center">
       <p className="font-display text-[1.05rem] font-semibold">
-        {hasList ? "Lista jest pusta." : "Zacznij od utworzenia listy."}
+        {hasList ? "Lista jest pusta." : "Wybierz listę po lewej."}
       </p>
       <p className="mt-1 text-[0.88rem] text-muted-foreground">
-        {hasList ? "Dodaj pierwsze zadanie poniżej." : "Foldery ułatwią porządkowanie."}
+        {hasList
+          ? "Dodaj pierwsze zadanie w pasku u góry."
+          : "Utwórz nową listę lub folder w dolnej części panelu."}
       </p>
     </div>
   );

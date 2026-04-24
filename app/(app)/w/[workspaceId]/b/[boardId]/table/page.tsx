@@ -20,6 +20,12 @@ export default async function BoardTablePage({
   const { workspaceId, boardId } = await params;
   const ctx = await requireWorkspaceMembership(workspaceId);
 
+  const memberships = await db.workspaceMembership.findMany({
+    where: { workspaceId },
+    include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+    orderBy: { joinedAt: "asc" },
+  });
+
   const board = await db.board.findFirst({
     where: { id: boardId, workspaceId, deletedAt: null },
     include: {
@@ -123,6 +129,7 @@ export default async function BoardTablePage({
           name: c.name,
           type: c.type,
         }))}
+        members={memberships.map((m) => m.user)}
       />
 
       {canManageBoard && (

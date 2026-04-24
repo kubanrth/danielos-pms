@@ -1,10 +1,11 @@
 import { db } from "@/lib/db";
 import { requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { can } from "@/lib/permissions";
-import { BoardLinks } from "@/components/board/board-links";
+import { LinkFolders, type LinkFolderData } from "@/components/board/link-folders";
 
-// Server wrapper for BoardLinks. Every board page drops this into the
-// BoardHeader `extra` slot — keeps board pages slim and the query local.
+// Server wrapper that fetches every link folder on the board + its
+// columns/rows/cells, then renders the LinkFolders client component.
+// Every board page drops this into the BoardHeader `extra` slot.
 export async function BoardLinksServer({
   workspaceId,
   boardId,
@@ -13,22 +14,36 @@ export async function BoardLinksServer({
   boardId: string;
 }) {
   const ctx = await requireWorkspaceMembership(workspaceId);
-  const links = await db.boardLink.findMany({
+  const folders = await db.linkFolder.findMany({
     where: { boardId },
     orderBy: { order: "asc" },
+    include: {
+      columns: { orderBy: { order: "asc" } },
+      rows: {
+        orderBy: { order: "asc" },
+        include: { cells: true },
+      },
+    },
   });
 
+  const data: LinkFolderData[] = folders.map((f) => ({
+    id: f.id,
+    name: f.name,
+    columns: f.columns.map((c) => ({ id: c.id, name: c.name })),
+    rows: f.rows.map((r) => ({
+      id: r.id,
+      cells: Object.fromEntries(
+        r.cells.map((cell) => [cell.columnId, cell.valueText ?? ""]),
+      ),
+    })),
+  }));
+
   return (
-    <BoardLinks
+    <LinkFolders
       workspaceId={workspaceId}
       boardId={boardId}
+      folders={data}
       canManage={can(ctx.role, "boardLink.manage")}
-      links={links.map((l) => ({
-        id: l.id,
-        url: l.url,
-        label: l.label,
-        kind: l.kind,
-      }))}
     />
   );
 }

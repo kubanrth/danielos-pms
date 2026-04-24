@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { TodoWorkspace } from "@/components/my/todo/todo-workspace";
-import { AppShell } from "@/components/layout/app-shell";
 
 // Microsoft-To-Do-like sidebar has three "smart" views that don't map to
 // stored TodoList rows — they're dynamic filters on the user's entire
@@ -99,19 +98,11 @@ export default async function MyTodoPage({
   // can open the detail panel immediately without an extra fetch.
   const focusedItemId = params.itemId ?? null;
 
+  // F9-11: Fullwidth layout — no AppShell wrapper, no max-width cap.
+  // Klient chciał "całą szerokość ekranu jak MS To Do". Title collapses
+  // into the sidebar header; main area uses all horizontal space.
   return (
-    <AppShell>
-      <div className="mb-8 flex flex-col gap-2">
-        <span className="eyebrow">Prywatne</span>
-        <h1 className="font-display text-[2.2rem] font-bold leading-[1.1] tracking-[-0.03em]">
-          Twoje <span className="text-brand-gradient">TO DO</span>.
-        </h1>
-        <p className="max-w-[60ch] text-[0.95rem] leading-[1.55] text-muted-foreground">
-          Prywatny moduł. Nikt poza Tobą tego nie widzi. Kliknij zadanie
-          żeby otworzyć szczegóły, gwiazdkę — żeby oznaczyć jako ważne.
-        </p>
-      </div>
-
+    <main className="flex-1 min-h-0">
       <TodoWorkspace
         folders={folders.map((f) => ({
           id: f.id,
@@ -145,6 +136,6 @@ export default async function MyTodoPage({
         }))}
         focusedItemId={focusedItemId}
       />
-    </AppShell>
+    </main>
   );
 }

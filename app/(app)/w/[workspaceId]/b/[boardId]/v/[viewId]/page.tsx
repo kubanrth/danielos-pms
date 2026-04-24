@@ -132,6 +132,12 @@ async function TableRenderer({
   canManageBoard: boolean;
   configJson: unknown;
 }) {
+  const memberships = await db.workspaceMembership.findMany({
+    where: { workspaceId },
+    include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+    orderBy: { joinedAt: "asc" },
+  });
+
   const board = await db.board.findFirst({
     where: { id: boardId },
     include: {
@@ -193,6 +199,7 @@ async function TableRenderer({
         name: c.name,
         type: c.type,
       }))}
+      members={memberships.map((m) => m.user)}
     />
   );
 }

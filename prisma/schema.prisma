@@ -214,6 +214,7 @@ model Board {
   tasks         Task[]
   milestones    Milestone[]
   links         BoardLink[]
+  linkFolders   LinkFolder[]
   canvas        ProcessCanvas?
 
   @@index([workspaceId])
@@ -247,6 +248,8 @@ enum BoardLinkKind {
   OTHER
 }
 
+// F8: original flat-link-chips model. Still used by boards that haven't
+// migrated to the folder-table UX yet; new rows go to LinkFolder below.
 model BoardLink {
   id        String        @id @default(cuid())
   boardId   String
@@ -259,6 +262,64 @@ model BoardLink {
   board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
 
   @@index([boardId, order])
+}
+
+// F9-12: "Folder linków" — a named container with a user-defined table
+// (columns + rows). Klient chce organized spreadsheets of links, not
+// flat chips. Columns are stored as separate rows (LinkFolderColumn)
+// and each row's cells are keyed by columnId (LinkFolderCellValue).
+model LinkFolder {
+  id        String   @id @default(cuid())
+  boardId   String
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  board   Board                @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  columns LinkFolderColumn[]
+  rows    LinkFolderRow[]
+
+  @@index([boardId, order])
+}
+
+model LinkFolderColumn {
+  id        String   @id @default(cuid())
+  folderId  String
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  folder LinkFolder             @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  cells  LinkFolderCellValue[]
+
+  @@index([folderId, order])
+}
+
+model LinkFolderRow {
+  id        String   @id @default(cuid())
+  folderId  String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  folder LinkFolder             @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  cells  LinkFolderCellValue[]
+
+  @@index([folderId, order])
+}
+
+model LinkFolderCellValue {
+  rowId     String
+  columnId  String
+  valueText String?
+  updatedAt DateTime @updatedAt
+
+  row    LinkFolderRow    @relation(fields: [rowId],    references: [id], onDelete: Cascade)
+  column LinkFolderColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
+
+  @@id([rowId, columnId])
+  @@index([columnId])
 }
 
 // F9-07: custom user-defined columns in the Tabela view. One row per

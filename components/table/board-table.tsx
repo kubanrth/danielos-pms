@@ -18,6 +18,10 @@ import { setTaskCustomValueAction } from "@/app/(app)/w/[workspaceId]/b/[boardId
 import { useWorkspaceRealtime } from "@/hooks/use-workspace-realtime";
 import { taskPl } from "@/lib/pluralize";
 import { ColumnSettings, type ColumnDef } from "@/components/table/column-settings";
+import {
+  useAssignHotkey,
+  type AssignMember,
+} from "@/components/task/assign-hotkey";
 
 export interface BoardTableTask {
   id: string;
@@ -88,6 +92,7 @@ export function BoardTable({
   initialColumnOrder,
   initialHiddenColumns,
   customColumns,
+  members,
 }: {
   workspaceId: string;
   boardId: string;
@@ -98,7 +103,10 @@ export function BoardTable({
   initialColumnOrder?: string[];
   initialHiddenColumns?: string[];
   customColumns: CustomTableColumn[];
+  // F9-13: needed for the `M` assign hotkey.
+  members: AssignMember[];
 }) {
+  const assign = useAssignHotkey({ members, workspaceId });
   const [sorting, setSorting] = useState<SortingState>([]);
   const customIds = useMemo(
     () => customColumns.map((c) => `custom:${c.id}`),
@@ -366,6 +374,10 @@ export function BoardTable({
                 <tr
                   key={row.id}
                   className="border-b border-border last:border-b-0 transition-colors hover:bg-accent/40"
+                  {...assign.rowProps(
+                    row.original.id,
+                    row.original.assignees.map((a) => a.id),
+                  )}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td key={cell.id} className="px-4 py-2.5 align-middle">
@@ -380,9 +392,12 @@ export function BoardTable({
       </div>
       <div className="flex items-center justify-between border-t border-border px-4 py-2 font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground">
         <span>{tasks.length} {taskPl(tasks.length)}</span>
-        <span>workspace /{workspaceId.slice(-6)} · board /{boardId.slice(-6)}</span>
+        <span>
+          hint · najedź na zadanie i wciśnij <kbd className="rounded-sm border border-border bg-muted px-1 py-0.5 text-[0.58rem]">M</kbd> aby przypisać osobę
+        </span>
       </div>
     </div>
+    {assign.menu}
     </div>
   );
 }
