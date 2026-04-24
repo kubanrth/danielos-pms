@@ -5,6 +5,7 @@ import { requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { can } from "@/lib/permissions";
 import { NewCanvasForm } from "@/components/canvas/new-canvas-form";
 import { DeleteCanvasButton } from "@/components/canvas/delete-canvas-button";
+import { plPlural } from "@/lib/pluralize";
 
 export default async function CanvasesPage({
   params,
@@ -38,7 +39,7 @@ export default async function CanvasesPage({
         <div className="flex flex-col gap-2">
           <span className="eyebrow">Whiteboard</span>
           <h1 className="font-display text-[2.2rem] font-bold leading-[1.1] tracking-[-0.03em]">
-            Procesy. {canvases.length} {canvases.length === 1 ? "kanwa" : "kanw"}.
+            Procesy. {canvases.length} {plPlural(canvases.length, "kanwa", "kanwy", "kanw")}.
           </h1>
           <p className="max-w-[60ch] text-[0.95rem] leading-[1.55] text-muted-foreground">
             Diagramy procesów, flowcharty, mapy myśli. Każda kanwa trzyma węzły i krawędzie

@@ -37,6 +37,9 @@ export const updateTaskSchema = z.object({
   statusColumnId: z.string().min(1).optional().or(z.literal("")),
   startAt: z.string().optional().or(z.literal("")),
   stopAt: z.string().optional().or(z.literal("")),
+  // Resolved offset to the absolute reminder timestamp; empty = clear.
+  // Values: "none" | "1h" | "1d" | "3d" | ISO datetime (custom).
+  reminderOffset: z.string().optional().or(z.literal("")),
 });
 
 export const toggleAssigneeSchema = z.object({

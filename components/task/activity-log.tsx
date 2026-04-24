@@ -11,6 +11,7 @@ import {
   MessageSquareX,
   type LucideIcon,
 } from "lucide-react";
+import { plPlural } from "@/lib/pluralize";
 
 export interface ActivityEntry {
   id: string;
@@ -126,7 +127,7 @@ function summarize(action: string, diff: Record<string, unknown> | null): string
     case "comment.created": {
       const mentions = (diff?.mentions as string[] | undefined) ?? [];
       return mentions.length > 0
-        ? `dodał(a) komentarz i oznaczył(a) ${mentions.length} ${mentions.length === 1 ? "osobę" : "osoby"}.`
+        ? `dodał(a) komentarz i oznaczył(a) ${mentions.length} ${plPlural(mentions.length, "osobę", "osoby", "osób")}.`
         : "dodał(a) komentarz.";
     }
     case "comment.updated": {

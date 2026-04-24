@@ -18,6 +18,7 @@ export type LimiterName =
   | "auth.login"
   | "comment.create"
   | "task.create"
+  | "task.sendEmail"
   | "workspace.invite";
 
 interface LimiterSpec {
@@ -34,6 +35,7 @@ const SPECS: Record<LimiterName, LimiterSpec> = {
   "auth.login": { tokens: 5, window: "15 m", friendly: "5 prób na 15 minut" },
   "comment.create": { tokens: 30, window: "1 m", friendly: "30 komentarzy/min" },
   "task.create": { tokens: 30, window: "1 m", friendly: "30 zadań/min" },
+  "task.sendEmail": { tokens: 10, window: "1 h", friendly: "10 wysyłek/godz" },
   "workspace.invite": {
     tokens: 20,
     window: "1 h",

@@ -4,7 +4,10 @@ import { requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { can } from "@/lib/permissions";
 import { GanttView } from "@/components/roadmap/gantt-view";
 import { CreateTaskButton } from "@/components/task/create-task-button";
-import { ViewSwitcher } from "@/components/view/view-switcher";
+import { BoardShell } from "@/components/view/board-shell";
+import { BoardHeader } from "@/components/view/board-header";
+import { BoardLinksServer } from "@/components/board/board-links-server";
+import { parseEnabledViews } from "@/components/view/view-switcher";
 
 export default async function BoardGanttPage({
   params,
@@ -17,6 +20,7 @@ export default async function BoardGanttPage({
   const board = await db.board.findFirst({
     where: { id: boardId, workspaceId, deletedAt: null },
     include: {
+      workspace: { select: { enabledViews: true } },
       tasks: {
         where: { deletedAt: null },
         orderBy: [{ startAt: "asc" }, { rowOrder: "asc" }],
@@ -35,6 +39,7 @@ export default async function BoardGanttPage({
   if (!board) notFound();
 
   const canCreate = can(ctx.role, "task.create");
+  const enabledViews = parseEnabledViews(board.workspace.enabledViews);
 
   const scheduled = board.tasks
     .filter((t) => t.startAt && t.stopAt)
@@ -52,24 +57,26 @@ export default async function BoardGanttPage({
     .map((t) => ({ id: t.id, title: t.title }));
 
   return (
-    <div className="relative -mx-8 -my-10 min-h-[calc(100dvh-14rem)] px-8 py-10 md:-mx-14 md:px-14">
-      <div className="mx-auto flex max-w-[1400px] flex-col gap-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex flex-col gap-2">
-            <h2 className="font-display text-[1.5rem] font-bold leading-[1.15] tracking-[-0.02em]">
-              {board.name}
-            </h2>
-            <ViewSwitcher workspaceId={workspaceId} boardId={boardId} active="gantt" />
-          </div>
-          {canCreate && <CreateTaskButton workspaceId={workspaceId} boardId={boardId} />}
-        </div>
+    <BoardShell bgCss={null}>
+      <BoardHeader
+        workspaceId={workspaceId}
+        boardId={boardId}
+        board={{ name: board.name, description: board.description }}
+        active="gantt"
+        enabledViews={enabledViews}
+        extra={<BoardLinksServer workspaceId={workspaceId} boardId={boardId} />}
+        actions={
+          canCreate ? (
+            <CreateTaskButton workspaceId={workspaceId} boardId={boardId} />
+          ) : null
+        }
+      />
 
-        <GanttView
-          workspaceId={workspaceId}
-          scheduled={scheduled}
-          unscheduled={unscheduled}
-        />
-      </div>
-    </div>
+      <GanttView
+        workspaceId={workspaceId}
+        scheduled={scheduled}
+        unscheduled={unscheduled}
+      />
+    </BoardShell>
   );
 }

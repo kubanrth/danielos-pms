@@ -6,6 +6,19 @@ import { createSignedDownloadUrl, isImageMime } from "@/lib/storage";
 import type { TaskDetailProps } from "@/components/task/task-detail";
 import type { RichTextDoc } from "@/components/task/rich-text-editor";
 
+// Map an absolute reminderAt back to the preset offset the select shows.
+// Snaps within ±5 minutes tolerance to allow for clock skew on writes.
+function inferReminderOffset(stopAt: Date | null, reminderAt: Date | null): string | null {
+  if (!stopAt || !reminderAt) return null;
+  const diffMs = stopAt.getTime() - reminderAt.getTime();
+  const hours = diffMs / (60 * 60 * 1000);
+  const PRESETS: [number, string][] = [[1, "1h"], [4, "4h"], [24, "1d"], [72, "3d"]];
+  for (const [h, label] of PRESETS) {
+    if (Math.abs(hours - h) < 0.1) return label;
+  }
+  return null;
+}
+
 // Task.descriptionJson was historically stored as `{ plain: "text" }` (F1f).
 // Now it holds ProseMirror doc JSON (F4a). Convert legacy entries on read so
 // the editor renders them as a paragraph; otherwise pass through a valid doc;
@@ -48,6 +61,13 @@ export async function fetchTaskDetail(
       },
       assignees: { select: { userId: true } },
       tags: { select: { tagId: true } },
+      subtasks: { orderBy: { order: "asc" } },
+      poll: {
+        include: {
+          options: { orderBy: { order: "asc" } },
+          votes: true,
+        },
+      },
     },
   });
   if (!task) notFound();
@@ -123,6 +143,8 @@ export async function fetchTaskDetail(
       milestoneId: task.milestoneId,
       startAt: task.startAt ? task.startAt.toISOString() : null,
       stopAt: task.stopAt ? task.stopAt.toISOString() : null,
+      reminderAt: task.reminderAt ? task.reminderAt.toISOString() : null,
+      reminderOffset: inferReminderOffset(task.stopAt, task.reminderAt),
     },
     milestones: task.board.milestones.map((m) => ({
       id: m.id,
@@ -162,5 +184,28 @@ export async function fetchTaskDetail(
     attachments: attachmentPayload,
     canUpload: can(ctx.role, "task.upload"),
     canModerateAttachments: ctx.role === "ADMIN",
+    subtasks: task.subtasks.map((s) => ({
+      id: s.id,
+      title: s.title,
+      completed: s.completed,
+    })),
+    canManageSubtasks: can(ctx.role, "subtask.manage"),
+    poll: task.poll
+      ? {
+          id: task.poll.id,
+          question: task.poll.question,
+          authorId: task.poll.authorId,
+          closedAt: task.poll.closedAt ? task.poll.closedAt.toISOString() : null,
+          options: task.poll.options.map((o) => {
+            const count = task.poll!.votes.filter((v) => v.optionId === o.id).length;
+            return { id: o.id, label: o.label, voteCount: count };
+          }),
+          totalVotes: task.poll.votes.length,
+          myVoteOptionId:
+            task.poll.votes.find((v) => v.userId === ctx.userId)?.optionId ?? null,
+        }
+      : null,
+    canManagePoll: can(ctx.role, "poll.manage"),
+    canVote: can(ctx.role, "poll.vote"),
   };
 }

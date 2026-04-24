@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState, startTransition } from "react";
+import { Table2, KanbanSquare, GitBranch, BarChart3, Pencil } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +13,16 @@ import {
   createWorkspaceAction,
   type WorkspaceFormState,
 } from "@/app/(app)/workspaces/actions";
+
+// The 5 ViewType variants the user can toggle. Defaults below match
+// historical behaviour (all on) so existing muscle memory still works.
+const VIEW_PRESETS = [
+  { value: "TABLE", label: "Tabela", icon: Table2, defaultOn: true },
+  { value: "KANBAN", label: "Kanban", icon: KanbanSquare, defaultOn: true },
+  { value: "ROADMAP", label: "Roadmapa", icon: GitBranch, defaultOn: true },
+  { value: "GANTT", label: "Gantt", icon: BarChart3, defaultOn: true },
+  { value: "WHITEBOARD", label: "Whiteboard", icon: Pencil, defaultOn: true },
+] as const;
 
 export function CreateWorkspaceDialog() {
   const [open, setOpen] = useState(false);
@@ -41,15 +52,15 @@ export function CreateWorkspaceDialog() {
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="rounded-xl border-border bg-card sm:max-w-[520px]">
+        <DialogContent className="rounded-xl border-border bg-card sm:max-w-[560px]">
           <DialogHeader>
             <span className="eyebrow">Nowa przestrzeń robocza</span>
             <DialogTitle className="font-display text-[1.65rem] font-bold leading-[1.15] tracking-[-0.02em] text-foreground">
               Jak nazwiemy tę <span className="text-brand-gradient">przestrzeń?</span>
             </DialogTitle>
             <DialogDescription className="text-[0.92rem] leading-[1.55] text-muted-foreground">
-              Po utworzeniu trafisz do niej automatycznie. Zaczniesz z domyślną tablicą,
-              do której możesz zaprosić innych.
+              Po utworzeniu trafisz do niej automatycznie. Zaczniesz z domyślną
+              tablicą, do której możesz zaprosić innych.
             </DialogDescription>
           </DialogHeader>
 
@@ -77,6 +88,8 @@ export function CreateWorkspaceDialog() {
               error={!state?.ok ? state?.fieldErrors?.description : undefined}
             />
 
+            <ViewsPicker />
+
             {!state?.ok && state?.error && (
               <p className="font-mono text-[0.72rem] uppercase tracking-[0.14em] text-destructive">
                 {state.error}
@@ -103,6 +116,64 @@ export function CreateWorkspaceDialog() {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+// Uncontrolled multi-checkbox. Rendered as tile buttons so the picker
+// feels like a choice, not a form. Empty selection falls back to all
+// five server-side (see parseSelectedViews).
+function ViewsPicker() {
+  const [selected, setSelected] = useState<Set<string>>(
+    () => new Set(VIEW_PRESETS.filter((p) => p.defaultOn).map((p) => p.value)),
+  );
+
+  const toggle = (v: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(v)) next.delete(v);
+      else next.add(v);
+      return next;
+    });
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="eyebrow">Widoki w tej przestrzeni</span>
+      <p className="font-mono text-[0.7rem] uppercase tracking-[0.12em] text-muted-foreground/80">
+        wybierz, które widoki mają być aktywne dla każdej tablicy
+      </p>
+      <div className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {VIEW_PRESETS.map((p) => {
+          const on = selected.has(p.value);
+          const Icon = p.icon;
+          return (
+            <label
+              key={p.value}
+              data-on={on ? "true" : "false"}
+              className="group flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 font-mono text-[0.72rem] uppercase tracking-[0.12em] text-muted-foreground transition-all data-[on=true]:border-primary/60 data-[on=true]:bg-primary/10 data-[on=true]:text-foreground hover:border-primary/40"
+            >
+              <input
+                type="checkbox"
+                name="enabledViews"
+                value={p.value}
+                checked={on}
+                onChange={() => toggle(p.value)}
+                className="sr-only"
+              />
+              <Icon
+                size={14}
+                className="text-muted-foreground group-data-[on=true]:text-primary"
+              />
+              <span className="flex-1">{p.label}</span>
+              <span
+                aria-hidden
+                className="h-3.5 w-3.5 rounded-sm border border-border bg-background transition-colors group-data-[on=true]:border-primary group-data-[on=true]:bg-primary"
+              />
+            </label>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

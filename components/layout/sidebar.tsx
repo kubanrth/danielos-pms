@@ -4,6 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
+  BookOpen,
+  CalendarDays,
+  CheckSquare,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -18,6 +21,7 @@ import {
 } from "lucide-react";
 import type { Role } from "@/lib/generated/prisma/enums";
 import { signOutAction } from "@/app/(app)/actions";
+import { CreateBoardDialog } from "@/components/workspaces/create-board-dialog";
 
 export interface SidebarUser {
   id: string;
@@ -152,6 +156,20 @@ export function Sidebar({
           collapsed={collapsed}
         />
         <NavItem
+          href="/my/todo"
+          icon={<CheckSquare size={15} />}
+          label="TO DO"
+          pathname={pathname}
+          collapsed={collapsed}
+        />
+        <NavItem
+          href="/my/calendar"
+          icon={<CalendarDays size={15} />}
+          label="Kalendarz"
+          pathname={pathname}
+          collapsed={collapsed}
+        />
+        <NavItem
           href="/workspaces"
           icon={<Layers size={15} />}
           label="Wszystkie przestrzenie"
@@ -202,6 +220,9 @@ export function Sidebar({
                       </span>
                     )}
                   </Link>
+                  {!collapsed && canManage(ws.role) && (
+                    <CreateBoardDialog workspaceId={ws.id} />
+                  )}
                   {!collapsed && (
                     <button
                       type="button"
@@ -234,6 +255,12 @@ export function Sidebar({
                         {b.name}
                       </Link>
                     ))}
+                    <Link
+                      href={`/w/${ws.id}/wiki`}
+                      className="inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-[0.78rem] font-mono uppercase tracking-[0.12em] text-muted-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-foreground"
+                    >
+                      <BookOpen size={11} /> Wiki
+                    </Link>
                     {canManage(ws.role) && (
                       <Link
                         href={`/w/${ws.id}/settings`}
@@ -315,7 +342,9 @@ function NavItem({
       <span className="relative shrink-0 text-muted-foreground group-hover:text-foreground group-data-[active=true]:text-foreground">
         {icon}
         {collapsed && badge !== undefined && badge > 0 && (
-          <span className="absolute -right-1.5 -top-1.5 grid h-3.5 min-w-[14px] place-items-center rounded-full bg-primary px-1 font-mono text-[0.55rem] font-bold text-primary-foreground">
+          // Fixed width: badge never changes size when count jumps
+          // 1 → 9 → 9+, so the icon row doesn't reflow.
+          <span className="absolute -right-2 -top-1.5 grid h-4 w-4 place-items-center rounded-full bg-primary font-mono text-[0.55rem] font-bold text-primary-foreground">
             {badge > 9 ? "9+" : badge}
           </span>
         )}
@@ -324,7 +353,7 @@ function NavItem({
         <span className="min-w-0 flex-1 truncate tracking-tight">{label}</span>
       )}
       {!collapsed && badge !== undefined && badge > 0 && (
-        <span className="grid h-5 min-w-[20px] shrink-0 place-items-center rounded-full bg-primary px-1.5 font-mono text-[0.62rem] font-bold text-primary-foreground">
+        <span className="grid h-5 w-6 shrink-0 place-items-center rounded-full bg-primary font-mono text-[0.62rem] font-bold text-primary-foreground">
           {badge > 99 ? "99+" : badge}
         </span>
       )}

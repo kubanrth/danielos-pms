@@ -6,7 +6,10 @@ import { BoardTable } from "@/components/table/board-table";
 import { StatusColumnManager } from "@/components/table/status-column-manager";
 import { CreateTaskButton } from "@/components/task/create-task-button";
 import { BackgroundCustomizer } from "@/components/view/background-customizer";
-import { ViewSwitcher } from "@/components/view/view-switcher";
+import { BoardShell } from "@/components/view/board-shell";
+import { BoardHeader } from "@/components/view/board-header";
+import { BoardLinksServer } from "@/components/board/board-links-server";
+import { parseEnabledViews } from "@/components/view/view-switcher";
 import { backgroundToCss, type BackgroundConfig } from "@/lib/schemas/background";
 
 export default async function BoardTablePage({
@@ -20,6 +23,7 @@ export default async function BoardTablePage({
   const board = await db.board.findFirst({
     where: { id: boardId, workspaceId, deletedAt: null },
     include: {
+      workspace: { select: { enabledViews: true } },
       statusColumns: { orderBy: { order: "asc" } },
       views: { where: { type: "TABLE" } },
       tasks: {
@@ -44,39 +48,33 @@ export default async function BoardTablePage({
   const tableView = board.views[0];
   const background = (tableView?.background ?? null) as BackgroundConfig | null;
   const bgCss = backgroundToCss(background);
+  const enabledViews = parseEnabledViews(board.workspace.enabledViews);
 
   return (
-    <div
-      className="relative -mx-8 -my-10 min-h-[calc(100dvh-14rem)] px-8 py-10 md:-mx-14 md:px-14"
-      style={bgCss ? { background: bgCss } : undefined}
-    >
-      <div className="mx-auto flex max-w-7xl flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex flex-col gap-2">
-          <h2 className="font-display text-[1.5rem] font-bold leading-[1.15] tracking-[-0.02em]">
-            {board.name}
-          </h2>
-          {board.description && (
-            <p className="text-[0.9rem] leading-[1.55] text-muted-foreground">
-              {board.description}
-            </p>
-          )}
-          <ViewSwitcher workspaceId={workspaceId} boardId={board.id} active="table" />
-        </div>
-        <div className="flex items-center gap-2">
-          {canCustomize && (
-            <BackgroundCustomizer
-              workspaceId={workspaceId}
-              boardId={board.id}
-              viewType="TABLE"
-              initial={background}
-            />
-          )}
-          {canCreate && (
-            <CreateTaskButton workspaceId={workspaceId} boardId={board.id} />
-          )}
-        </div>
-      </div>
+    <BoardShell bgCss={bgCss}>
+      <BoardHeader
+        workspaceId={workspaceId}
+        boardId={board.id}
+        board={{ name: board.name, description: board.description }}
+        active="table"
+        enabledViews={enabledViews}
+        extra={<BoardLinksServer workspaceId={workspaceId} boardId={board.id} />}
+        actions={
+          <>
+            {canCustomize && (
+              <BackgroundCustomizer
+                workspaceId={workspaceId}
+                boardId={board.id}
+                viewType="TABLE"
+                initial={background}
+              />
+            )}
+            {canCreate && (
+              <CreateTaskButton workspaceId={workspaceId} boardId={board.id} />
+            )}
+          </>
+        }
+      />
 
       <BoardTable
         workspaceId={workspaceId}
@@ -118,7 +116,6 @@ export default async function BoardTablePage({
           }))}
         />
       )}
-      </div>
-    </div>
+    </BoardShell>
   );
 }

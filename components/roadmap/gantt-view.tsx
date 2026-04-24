@@ -8,6 +8,7 @@ import {
   formatDateRange,
   pctFor,
 } from "@/components/roadmap/timeline-utils";
+import { taskPl } from "@/lib/pluralize";
 
 export interface GanttTaskItem {
   id: string;
@@ -66,7 +67,7 @@ export function GanttView({
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between">
         <span className="font-mono text-[0.7rem] uppercase tracking-[0.14em] text-muted-foreground">
-          {timelineItems.length} {timelineItems.length === 1 ? "zadanie" : "zadań"} z datami
+          {timelineItems.length} {taskPl(timelineItems.length)} z datami
         </span>
       </div>
 

@@ -23,7 +23,16 @@ export type Action =
   | "canvas.edit"
   | "canvas.delete"
   | "tag.manage"
-  | "background.customize";
+  | "background.customize"
+  | "subtask.manage"
+  | "poll.manage"
+  | "poll.vote"
+  | "task.sendEmail"
+  | "boardLink.manage"
+  | "reminder.manage"
+  | "wiki.read"
+  | "wiki.edit"
+  | "integrations.manage";
 
 const MATRIX: Record<Role, Set<Action>> = {
   ADMIN: new Set<Action>([
@@ -42,6 +51,7 @@ const MATRIX: Record<Role, Set<Action>> = {
     "task.assignUsers",
     "task.comment",
     "task.upload",
+    "task.sendEmail",
     "milestone.create",
     "milestone.update",
     "milestone.delete",
@@ -50,6 +60,14 @@ const MATRIX: Record<Role, Set<Action>> = {
     "canvas.delete",
     "tag.manage",
     "background.customize",
+    "subtask.manage",
+    "poll.manage",
+    "poll.vote",
+    "boardLink.manage",
+    "reminder.manage",
+    "wiki.read",
+    "wiki.edit",
+    "integrations.manage",
   ]),
   MEMBER: new Set<Action>([
     "board.create",
@@ -61,6 +79,7 @@ const MATRIX: Record<Role, Set<Action>> = {
     "task.assignUsers",
     "task.comment",
     "task.upload",
+    "task.sendEmail",
     "milestone.create",
     "milestone.update",
     "milestone.delete",
@@ -68,8 +87,15 @@ const MATRIX: Record<Role, Set<Action>> = {
     "canvas.edit",
     "tag.manage",
     "background.customize",
+    "subtask.manage",
+    "poll.manage",
+    "poll.vote",
+    "boardLink.manage",
+    "reminder.manage",
+    "wiki.read",
+    "wiki.edit",
   ]),
-  VIEWER: new Set<Action>(["board.view", "task.comment"]),
+  VIEWER: new Set<Action>(["board.view", "task.comment", "poll.vote", "wiki.read"]),
 };
 
 export function can(role: Role, action: Action): boolean {

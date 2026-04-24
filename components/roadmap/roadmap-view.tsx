@@ -15,6 +15,7 @@ import {
   formatDateRange,
   pctFor,
 } from "@/components/roadmap/timeline-utils";
+import { plPlural, taskPl } from "@/lib/pluralize";
 
 export interface MilestoneItem {
   id: string;
@@ -82,7 +83,7 @@ export function RoadmapView({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="font-mono text-[0.7rem] uppercase tracking-[0.14em] text-muted-foreground">
-            {milestones.length} {milestones.length === 1 ? "milestone" : "milestones"}
+            {milestones.length} {plPlural(milestones.length, "milestone", "milestone’y", "milestone’ów")}
           </span>
           {/* Mode toggle — pill group. Keeps the list view regardless. */}
           <div className="inline-flex items-center gap-0.5 rounded-full border border-border bg-card p-0.5 shadow-sm">
@@ -183,7 +184,7 @@ export function RoadmapView({
                     </span>
                     <span className="font-mono text-[0.64rem] uppercase tracking-[0.12em] text-muted-foreground">
                       {formatDateRange(m.startAt, m.stopAt)} · {m.taskCount}{" "}
-                      {m.taskCount === 1 ? "zadanie" : "zadań"}
+                      {taskPl(m.taskCount)}
                     </span>
                   </div>
                   {m.assignee && (
@@ -496,7 +497,7 @@ function MarkersTrack({
               onClick={() => canUpdate && onEdit(m)}
               disabled={!canUpdate}
               aria-label={`${m.title}, ${formatDateRange(m.startAt, m.stopAt)}`}
-              title={`${m.title} · ${formatDateRange(m.startAt, m.stopAt)} · ${m.taskCount} ${m.taskCount === 1 ? "zadanie" : "zadań"}`}
+              title={`${m.title} · ${formatDateRange(m.startAt, m.stopAt)} · ${m.taskCount} ${taskPl(m.taskCount)}`}
               className="absolute left-1/2 grid h-8 w-8 -translate-x-1/2 place-items-center rounded-full text-white shadow-[0_2px_6px_rgba(0,0,0,0.2)] transition-transform duration-150 hover:scale-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-default"
               style={{
                 top: circleTop,

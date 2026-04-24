@@ -5,6 +5,7 @@ import {
   softDeleteUserAction,
   toggleUserBanAction,
 } from "@/app/(admin)/admin/actions";
+import { plPlural } from "@/lib/pluralize";
 
 // Small helper so the columns don't balloon with Prisma types.
 async function loadUsers(query: string) {
@@ -48,7 +49,7 @@ export default async function AdminUsersPage({
           <div className="flex flex-col gap-2">
             <span className="eyebrow">Użytkownicy</span>
             <h1 className="font-display text-[2rem] font-bold leading-[1.1] tracking-[-0.03em]">
-              {users.length} {users.length === 1 ? "konto" : "kont"}
+              {users.length} {plPlural(users.length, "konto", "konta", "kont")}
             </h1>
           </div>
           <form action="/admin/users" className="flex items-center gap-2">

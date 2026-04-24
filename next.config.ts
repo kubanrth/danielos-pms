@@ -12,6 +12,17 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname),
   },
+  // Hard no-index for the entire app — complements the <meta> in root
+  // layout and the /robots.ts route. Covers crawlers that ignore HTML
+  // meta but respect headers.
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      },
+    ];
+  },
 };
 
 // Sentry wraps the config after the analyzer so source-map upload runs

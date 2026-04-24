@@ -5,6 +5,7 @@ import { requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { can } from "@/lib/permissions";
 import { CreateTaskButton } from "@/components/task/create-task-button";
 import { ViewSwitcher } from "@/components/view/view-switcher";
+import { taskPl } from "@/lib/pluralize";
 
 export default async function WorkspaceOverviewPage({
   params,
@@ -69,8 +70,7 @@ export default async function WorkspaceOverviewPage({
                 {board.name}
               </Link>
               <span className="ml-3 font-mono text-[0.72rem] font-normal uppercase tracking-[0.14em] text-muted-foreground">
-                {board._count.tasks}{" "}
-                {board._count.tasks === 1 ? "zadanie" : "zadań"}
+                {board._count.tasks} {taskPl(board._count.tasks)}
               </span>
             </h2>
             <ViewSwitcher

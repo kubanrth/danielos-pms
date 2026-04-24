@@ -13,6 +13,7 @@ import {
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { patchTaskAction } from "@/app/(app)/w/[workspaceId]/t/actions";
 import { useWorkspaceRealtime } from "@/hooks/use-workspace-realtime";
+import { taskPl } from "@/lib/pluralize";
 
 export interface BoardTableTask {
   id: string;
@@ -247,7 +248,7 @@ export function BoardTable({
         </table>
       </div>
       <div className="flex items-center justify-between border-t border-border px-4 py-2 font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground">
-        <span>{tasks.length} {tasks.length === 1 ? "zadanie" : "zadań"}</span>
+        <span>{tasks.length} {taskPl(tasks.length)}</span>
         <span>workspace /{workspaceId.slice(-6)} · board /{boardId.slice(-6)}</span>
       </div>
     </div>

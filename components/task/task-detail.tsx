@@ -15,6 +15,10 @@ import { RichTextEditor, type RichTextDoc } from "@/components/task/rich-text-ed
 import { CommentsSection, type CommentItem } from "@/components/task/comments-section";
 import { ActivityLog, type ActivityEntry } from "@/components/task/activity-log";
 import { AttachmentsSection, type AttachmentItem } from "@/components/task/attachments-section";
+import { StatusPill } from "@/components/task/status-pill";
+import { SubtasksSection, type SubtaskItem } from "@/components/task/subtasks-section";
+import { PollSection, type PollData } from "@/components/task/poll-section";
+import { SendEmailDialog } from "@/components/task/send-email-dialog";
 import { assignTaskToMilestoneAction } from "@/app/(app)/w/[workspaceId]/b/[boardId]/milestone-actions";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
 
@@ -40,6 +44,8 @@ export interface TaskDetailProps {
     milestoneId: string | null;
     startAt: string | null;
     stopAt: string | null;
+    reminderAt: string | null;
+    reminderOffset: string | null;
   };
   statusColumns: { id: string; name: string; colorHex: string }[];
   milestones: { id: string; title: string; startAt: string; stopAt: string }[];
@@ -62,6 +68,11 @@ export interface TaskDetailProps {
   attachments: AttachmentItem[];
   canUpload: boolean;
   canModerateAttachments: boolean;
+  subtasks: SubtaskItem[];
+  canManageSubtasks: boolean;
+  poll: PollData | null;
+  canManagePoll: boolean;
+  canVote: boolean;
 }
 
 
@@ -83,6 +94,12 @@ export function TaskDetail({
   attachments,
   canUpload,
   canModerateAttachments,
+  subtasks,
+  canManageSubtasks,
+  poll,
+  canManagePoll,
+  canVote,
+  currentUserId,
 }: TaskDetailProps) {
   const [state, formAction, pending] = useActionState<UpdateTaskState, FormData>(
     updateTaskAction,
@@ -99,18 +116,31 @@ export function TaskDetail({
         <span className="font-mono text-[0.7rem] uppercase tracking-[0.14em] text-muted-foreground">
           zadanie · {task.id.slice(-8)}
         </span>
-        {canDelete && (
-          <form action={deleteTaskAction}>
-            <input type="hidden" name="id" value={task.id} />
-            <input type="hidden" name="workspaceId" value={workspaceId} />
-            <button
-              type="submit"
-              className="inline-flex items-center gap-1.5 font-mono text-[0.7rem] uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-destructive"
-            >
-              <Trash2 size={12} /> usuń zadanie
-            </button>
-          </form>
-        )}
+        <div className="flex items-center gap-4">
+          {canEdit && (
+            <SendEmailDialog
+              taskId={task.id}
+              taskTitle={task.title}
+              attachments={attachments.map((a) => ({
+                id: a.id,
+                filename: a.filename,
+                sizeBytes: a.sizeBytes,
+              }))}
+            />
+          )}
+          {canDelete && (
+            <form action={deleteTaskAction}>
+              <input type="hidden" name="id" value={task.id} />
+              <input type="hidden" name="workspaceId" value={workspaceId} />
+              <button
+                type="submit"
+                className="inline-flex items-center gap-1.5 font-mono text-[0.7rem] uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-destructive"
+              >
+                <Trash2 size={12} /> usuń zadanie
+              </button>
+            </form>
+          )}
+        </div>
       </div>
 
       {/* Main form — title, description, status, dates */}
@@ -140,22 +170,15 @@ export function TaskDetail({
         </label>
 
         <div className="grid gap-6 md:grid-cols-3">
-          <label className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2">
             <span className="eyebrow">Status</span>
-            <select
+            <StatusPill
               name="statusColumnId"
-              defaultValue={task.statusColumnId ?? ""}
+              statuses={statusColumns}
+              defaultValue={task.statusColumnId}
               disabled={!canEdit}
-              className="h-10 appearance-none border-b border-border bg-transparent pb-1 font-mono text-[0.82rem] uppercase tracking-[0.12em] outline-none focus:border-primary"
-            >
-              <option value="">— brak —</option>
-              {statusColumns.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
+            />
+          </div>
           <div className="flex flex-col gap-2">
             <span className="eyebrow">Start</span>
             <DateTimePicker
@@ -176,6 +199,30 @@ export function TaskDetail({
               label="Data końca"
             />
           </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="eyebrow">Przypomnienie</span>
+          <select
+            name="reminderOffset"
+            defaultValue={task.reminderOffset ?? "none"}
+            disabled={!canEdit}
+            className="h-8 appearance-none rounded-full border border-border bg-background px-3 font-mono text-[0.7rem] uppercase tracking-[0.12em] outline-none focus:border-primary disabled:cursor-not-allowed"
+          >
+            <option value="none">— brak —</option>
+            <option value="1h">1 godz. przed końcem</option>
+            <option value="4h">4 godz. przed końcem</option>
+            <option value="1d">1 dzień przed</option>
+            <option value="3d">3 dni przed</option>
+          </select>
+          {task.reminderAt && (
+            <span className="font-mono text-[0.66rem] uppercase tracking-[0.12em] text-muted-foreground">
+              wyśle się {new Date(task.reminderAt).toLocaleString("pl-PL", {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+            </span>
+          )}
         </div>
 
         <div className="flex flex-col gap-2">
@@ -286,6 +333,22 @@ export function TaskDetail({
         attachments={attachments}
         canUpload={canUpload}
         canModerate={canModerateAttachments}
+      />
+
+      {/* Subtasks (checklist) */}
+      <SubtasksSection
+        taskId={task.id}
+        subtasks={subtasks}
+        canManage={canManageSubtasks}
+      />
+
+      {/* Poll / głosowanie */}
+      <PollSection
+        taskId={task.id}
+        poll={poll}
+        canManage={canManagePoll}
+        canVote={canVote}
+        currentUserId={currentUserId}
       />
 
       {/* Comments */}

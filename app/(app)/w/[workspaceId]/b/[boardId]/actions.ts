@@ -166,21 +166,32 @@ export async function updateBackgroundAction(formData: FormData) {
     "background.customize",
   );
 
-  // The default board is seeded with BoardView rows for each view type,
-  // but workspaces created before the view row existed might not — upsert.
-  await db.boardView.upsert({
+  // F8 dropped the @@unique([boardId, type]) index so a board can host
+  // multiple views of the same type (custom views). The "default" view
+  // for each type is the one with name = null, so we target that here.
+  const bg = parsed.data === null ? Prisma.DbNull : (parsed.data as Prisma.InputJsonValue);
+  const existing = await db.boardView.findFirst({
     where: {
-      boardId_type: { boardId: parsedMeta.data.boardId, type: parsedMeta.data.viewType },
-    },
-    update: {
-      background: parsed.data === null ? Prisma.DbNull : (parsed.data as Prisma.InputJsonValue),
-    },
-    create: {
       boardId: parsedMeta.data.boardId,
       type: parsedMeta.data.viewType,
-      background: parsed.data === null ? Prisma.DbNull : (parsed.data as Prisma.InputJsonValue),
+      name: null,
     },
+    select: { id: true },
   });
+  if (existing) {
+    await db.boardView.update({
+      where: { id: existing.id },
+      data: { background: bg },
+    });
+  } else {
+    await db.boardView.create({
+      data: {
+        boardId: parsedMeta.data.boardId,
+        type: parsedMeta.data.viewType,
+        background: bg,
+      },
+    });
+  }
 
   await writeAudit({
     workspaceId: parsedMeta.data.workspaceId,

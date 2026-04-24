@@ -16,22 +16,22 @@ datasource db {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model User {
-  id              String    @id @default(cuid())
-  email           String    @unique
-  emailVerified   DateTime?
-  name            String?
-  avatarUrl       String?
-  passwordHash    String?
-  timezone        String    @default("Europe/Warsaw")
-  locale          String    @default("pl")
-  isSuperAdmin    Boolean   @default(false)
-  isBanned        Boolean   @default(false)
-  lastSeenAt      DateTime?
-  totpSecret      String?
-  totpEnabledAt   DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  deletedAt       DateTime?
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  avatarUrl     String?
+  passwordHash  String?
+  timezone      String    @default("Europe/Warsaw")
+  locale        String    @default("pl")
+  isSuperAdmin  Boolean   @default(false)
+  isBanned      Boolean   @default(false)
+  lastSeenAt    DateTime?
+  totpSecret    String?
+  totpEnabledAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
 
   accounts           Account[]
   sessions           Session[]
@@ -53,6 +53,12 @@ model User {
   createdCanvases    ProcessCanvas[]       @relation("CanvasCreator")
   createdTags        Tag[]                 @relation("TagCreator")
   totpRecoveryCodes  TotpRecoveryCode[]
+  todoFolders        TodoFolder[]
+  todoLists          TodoList[]
+  todoItems          TodoItem[]
+  pollVotes          TaskPollVote[]
+  authoredPolls      TaskPoll[]            @relation("PollAuthor")
+  editedWikiPages    WikiPage[]            @relation("WikiEditor")
 
   @@index([isBanned])
   @@index([lastSeenAt])
@@ -122,19 +128,25 @@ model Workspace {
   avatarUrl        String?
   ownerId          String
   storageUsedBytes BigInt    @default(0)
+  // F8: per-workspace set of enabled board views (see ViewType).
+  // Stored as JSON array of enum names so we can filter ViewSwitcher
+  // without joining BoardView. Default = all five.
+  enabledViews     Json      @default("[\"TABLE\",\"KANBAN\",\"ROADMAP\",\"GANTT\",\"WHITEBOARD\"]")
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   deletedAt        DateTime?
 
-  owner       User                  @relation("WorkspaceOwner", fields: [ownerId], references: [id])
-  memberships WorkspaceMembership[]
-  invitations Invitation[]
-  boards      Board[]
-  canvases    ProcessCanvas[]
-  tags        Tag[]
-  tasks       Task[]
-  milestones  Milestone[]
-  auditLogs   AuditLog[]
+  owner                User                  @relation("WorkspaceOwner", fields: [ownerId], references: [id])
+  memberships          WorkspaceMembership[]
+  invitations          Invitation[]
+  boards               Board[]
+  canvases             ProcessCanvas[]
+  tags                 Tag[]
+  tasks                Task[]
+  milestones           Milestone[]
+  auditLogs            AuditLog[]
+  wikiPage             WikiPage?
+  firefliesIntegration FirefliesIntegration?
 
   @@index([ownerId])
   @@index([deletedAt])
@@ -180,6 +192,8 @@ enum ViewType {
   TABLE
   KANBAN
   ROADMAP
+  GANTT
+  WHITEBOARD
 }
 
 model Board {
@@ -198,15 +212,22 @@ model Board {
   statusColumns StatusColumn[]
   tasks         Task[]
   milestones    Milestone[]
+  links         BoardLink[]
+  canvas        ProcessCanvas?
 
   @@index([workspaceId])
   @@index([deletedAt])
 }
 
+// F8: removed @@unique([boardId, type]) — a board may now have multiple
+// views of the same type (e.g. two Kanbans with different filters).
+// `name` is optional for the default per-type view (falls back to the
+// localized type label in UI); required for user-created extra views.
 model BoardView {
   id         String   @id @default(cuid())
   boardId    String
   type       ViewType
+  name       String?
   configJson Json     @default("{}")
   background Json?
   createdAt  DateTime @default(now())
@@ -214,7 +235,29 @@ model BoardView {
 
   board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
 
-  @@unique([boardId, type])
+  @@index([boardId, type])
+}
+
+enum BoardLinkKind {
+  DRIVE
+  SHEETS
+  DOCS
+  SLIDES
+  OTHER
+}
+
+model BoardLink {
+  id        String        @id @default(cuid())
+  boardId   String
+  kind      BoardLinkKind
+  url       String
+  label     String?
+  order     Int           @default(0)
+  createdAt DateTime      @default(now())
+
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  @@index([boardId, order])
 }
 
 model StatusColumn {
@@ -246,6 +289,11 @@ model Task {
   descriptionJson Json?
   startAt         DateTime?
   stopAt          DateTime?
+  // F8: user-configured reminder offset resolved to absolute timestamp
+  // at save-time. Cron job `/api/cron/send-reminders` sweeps rows where
+  // reminderAt <= now() AND reminderSentAt IS NULL.
+  reminderAt      DateTime?
+  reminderSentAt  DateTime?
   rowOrder        Float     @default(0)
   version         Int       @default(1)
   createdAt       DateTime  @default(now())
@@ -262,11 +310,75 @@ model Task {
   comments     Comment[]
   attachments  Attachment[]
   nodeLinks    ProcessNodeTaskLink[]
+  subtasks     Subtask[]
+  poll         TaskPoll?
 
   @@index([boardId, statusColumnId, rowOrder])
   @@index([boardId, updatedAt(sort: Desc)])
   @@index([workspaceId, deletedAt])
   @@index([milestoneId])
+  @@index([reminderAt, reminderSentAt])
+}
+
+// F8: simple in-task checklist. Separate from Task because we reorder
+// often and don't want to bump `Task.version` for every tick.
+model Subtask {
+  id        String   @id @default(cuid())
+  taskId    String
+  title     String
+  completed Boolean  @default(false)
+  order     Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, order])
+}
+
+// F8: one poll per task. Author defines question + 2-5 options;
+// members cast exactly one vote per poll (enforced by @@id on Vote).
+model TaskPoll {
+  id        String    @id @default(cuid())
+  taskId    String    @unique
+  question  String
+  authorId  String
+  createdAt DateTime  @default(now())
+  closedAt  DateTime?
+
+  task    Task             @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author  User             @relation("PollAuthor", fields: [authorId], references: [id])
+  options TaskPollOption[]
+  votes   TaskPollVote[]
+
+  @@index([taskId])
+}
+
+model TaskPollOption {
+  id     String @id @default(cuid())
+  pollId String
+  label  String
+  order  Int    @default(0)
+
+  poll  TaskPoll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes TaskPollVote[]
+
+  @@index([pollId, order])
+}
+
+model TaskPollVote {
+  pollId    String
+  userId    String
+  optionId  String
+  createdAt DateTime @default(now())
+
+  poll   TaskPoll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  option TaskPollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([pollId, userId])
+  @@index([optionId])
+  @@index([userId])
 }
 
 model TaskAssignee {
@@ -470,6 +582,10 @@ model AdminAuditLog {
 model ProcessCanvas {
   id          String    @id @default(cuid())
   workspaceId String
+  // F8: whiteboards migrated to board-level. `boardId` is nullable
+  // only for legacy workspace-level canvases created before F8; new
+  // canvases always set it. One canvas per board (enforced by @@unique).
+  boardId     String?   @unique
   name        String
   creatorId   String
   yjsState    Bytes?
@@ -479,6 +595,7 @@ model ProcessCanvas {
   deletedAt   DateTime?
 
   workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  board     Board?        @relation(fields: [boardId], references: [id], onDelete: Cascade)
   creator   User          @relation("CanvasCreator", fields: [creatorId], references: [id])
   nodes     ProcessNode[]
   edges     ProcessEdge[]
@@ -541,6 +658,98 @@ model ProcessNodeTaskLink {
 
   @@id([nodeId, taskId])
   @@index([taskId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// F8: Personal TODO module (private per-user, not linked to any board)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Self-referential tree — parentId NULL = root. Cascade on parent delete
+// means deleting a folder removes its subtree (lists moved to trash/root
+// by application layer if we want soft behaviour later).
+model TodoFolder {
+  id        String   @id @default(cuid())
+  userId    String
+  parentId  String?
+  name      String
+  order     Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent   TodoFolder?  @relation("TodoFolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children TodoFolder[] @relation("TodoFolderTree")
+  lists    TodoList[]
+
+  @@index([userId, parentId, order])
+}
+
+model TodoList {
+  id        String   @id @default(cuid())
+  userId    String
+  folderId  String?
+  name      String
+  order     Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder TodoFolder? @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  items  TodoItem[]
+
+  @@index([userId, folderId, order])
+}
+
+model TodoItem {
+  id        String    @id @default(cuid())
+  listId    String
+  userId    String
+  content   String
+  completed Boolean   @default(false)
+  dueDate   DateTime?
+  order     Float     @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  list TodoList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([listId, order])
+  @@index([userId, dueDate])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// F8: Wiki (one "O projekcie" page per workspace, Tiptap JSON content)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model WikiPage {
+  id          String   @id @default(cuid())
+  workspaceId String   @unique
+  title       String   @default("O projekcie")
+  contentJson Json?
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  updatedBy User?     @relation("WikiEditor", fields: [updatedById], references: [id])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// F8: FireFlies integration — per-workspace webhook + API key
+// ─────────────────────────────────────────────────────────────────────────────
+
+model FirefliesIntegration {
+  id             String   @id @default(cuid())
+  workspaceId    String   @unique
+  apiKey         String
+  webhookSecret  String
+  defaultBoardId String?
+  enabled        Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -41,6 +41,22 @@ function parseDate(v: FormDataEntryValue | null): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+// Resolve the user-chosen reminder offset into an absolute timestamp.
+// Returns null when reminder is cleared OR when there is no stopAt to
+// anchor the offset to — we never schedule a reminder without a deadline.
+function resolveReminder(offset: string | undefined, stopAt: Date | null): Date | null {
+  if (!offset || offset === "none" || offset === "") return null;
+  if (!stopAt) return null;
+  const hours: Record<string, number> = { "1h": 1, "4h": 4, "1d": 24, "3d": 72 };
+  const hOff = hours[offset];
+  if (hOff !== undefined) {
+    return new Date(stopAt.getTime() - hOff * 60 * 60 * 1000);
+  }
+  // Custom ISO datetime.
+  const custom = new Date(offset);
+  return Number.isNaN(custom.getTime()) ? null : custom;
+}
+
 export async function createTaskAction(
   _prev: CreateTaskState,
   formData: FormData,
@@ -135,6 +151,9 @@ export async function updateTaskAction(
 
   const ctx = await requireWorkspaceAction(existing.workspaceId, "task.update");
 
+  const stopAt = parseDate(formData.get("stopAt"));
+  const reminderAt = resolveReminder(parsed.data.reminderOffset, stopAt);
+
   const updated = await db.task.update({
     where: { id: parsed.data.id },
     data: {
@@ -144,7 +163,17 @@ export async function updateTaskAction(
         : Prisma.DbNull,
       statusColumnId: parsed.data.statusColumnId || null,
       startAt: parseDate(formData.get("startAt")),
-      stopAt: parseDate(formData.get("stopAt")),
+      stopAt,
+      reminderAt,
+      // Changing reminderAt re-arms the cron — clear previous "sent" flag so
+      // the new reminder will fire. Leaving it set blocks re-sends when the
+      // user tweaks other fields.
+      reminderSentAt:
+        reminderAt &&
+        existing.reminderAt &&
+        reminderAt.getTime() !== existing.reminderAt.getTime()
+          ? null
+          : undefined,
       version: { increment: 1 },
     },
   });

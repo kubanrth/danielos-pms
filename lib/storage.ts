@@ -86,6 +86,18 @@ export async function createSignedDownloadUrl(
   return data.signedUrl;
 }
 
+// Download a storage object straight into a Buffer — used when we need
+// the bytes server-side (email attachments, PDF export, etc.). Avoids
+// round-tripping through a signed URL.
+export async function downloadAttachmentBuffer(key: string): Promise<Buffer> {
+  const { data, error } = await supabaseAdmin()
+    .storage.from(ATTACHMENTS_BUCKET)
+    .download(key);
+  if (error || !data) throw error ?? new Error("downloadAttachment failed");
+  const arr = await data.arrayBuffer();
+  return Buffer.from(arr);
+}
+
 export async function deleteAttachmentObject(key: string): Promise<void> {
   const { error } = await supabaseAdmin()
     .storage.from(ATTACHMENTS_BUCKET)

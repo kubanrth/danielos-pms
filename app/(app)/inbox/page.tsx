@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { AtSign, Check } from "lucide-react";
 import { markAllNotificationsReadAction, markNotificationReadAction } from "./actions";
+import { unreadPl } from "@/lib/pluralize";
 
 interface MentionPayload {
   commentId?: string;
@@ -42,7 +43,7 @@ export default async function InboxPage() {
             <h1 className="font-display text-[2.2rem] font-bold leading-[1.1] tracking-[-0.03em]">
               Inbox.{" "}
               <span className="text-brand-gradient">{unread.length}</span>{" "}
-              {unread.length === 1 ? "nowe" : "nowych"}.
+              {unreadPl(unread.length)}.
             </h1>
           </div>
           {unread.length > 0 && (

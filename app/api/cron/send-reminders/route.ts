@@ -1,0 +1,92 @@
+import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { sendEmail } from "@/lib/email";
+
+// Vercel Cron hits this endpoint every 15 minutes (see vercel.json).
+// We gate by Bearer token to prevent public abuse.
+async function runSweep(now: Date) {
+  const due = await db.task.findMany({
+    where: {
+      reminderAt: { lte: now, not: null },
+      reminderSentAt: null,
+      stopAt: { gt: now },
+      deletedAt: null,
+    },
+    take: 200,
+    include: {
+      workspace: { select: { id: true, name: true } },
+      assignees: {
+        include: { user: { select: { id: true, email: true, name: true } } },
+      },
+    },
+  });
+
+  const appBase = process.env.APP_BASE_URL || "";
+  let sent = 0;
+  const failures: string[] = [];
+
+  for (const task of due) {
+    for (const a of task.assignees) {
+      const taskUrl = appBase
+        ? `${appBase}/w/${task.workspaceId}/t/${task.id}`
+        : `/w/${task.workspaceId}/t/${task.id}`;
+      const dueText =
+        task.stopAt?.toLocaleString("pl-PL", {
+          dateStyle: "medium",
+          timeStyle: "short",
+        }) ?? "";
+      const html = `<!doctype html><html lang="pl"><body style="font-family:ui-sans-serif,system-ui,sans-serif;color:#0F172A;padding:24px">
+        <div style="max-width:540px;margin:0 auto;background:#fff;border:1px solid #E2E8F0;border-radius:12px;overflow:hidden">
+          <div style="padding:20px 24px">
+            <div style="font-family:ui-monospace,monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#7B68EE">Przypomnienie</div>
+            <h1 style="margin:6px 0 12px;font-size:20px;line-height:1.25">${escape(task.title)}</h1>
+            <p style="margin:0 0 6px;color:#475569;line-height:1.55">Zadanie z przestrzeni <strong>${escape(task.workspace.name)}</strong> ma termin ${escape(dueText)}.</p>
+            <a href="${taskUrl}" style="display:inline-block;margin-top:14px;padding:10px 18px;background:linear-gradient(135deg,#7B68EE,#BA68C8);color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Otwórz zadanie</a>
+          </div>
+        </div>
+      </body></html>`;
+
+      const r = await sendEmail({
+        to: a.user.email,
+        subject: `⏰ Termin: ${task.title}`,
+        html,
+      });
+      if (r.sent) sent++;
+      else failures.push(`${a.user.email}: ${r.error ?? r.skipped ?? "unknown"}`);
+    }
+    await db.task.update({
+      where: { id: task.id },
+      data: { reminderSentAt: now },
+    });
+  }
+
+  return { tasksProcessed: due.length, emailsSent: sent, failures };
+}
+
+function escape(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function authorized(req: Request): boolean {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return false;
+  const auth = req.headers.get("authorization") ?? "";
+  return auth === `Bearer ${secret}`;
+}
+
+export async function GET(req: Request) {
+  if (!authorized(req)) return new NextResponse("Unauthorized", { status: 401 });
+  try {
+    const result = await runSweep(new Date());
+    return NextResponse.json({ ok: true, ...result });
+  } catch (e) {
+    return NextResponse.json(
+      { ok: false, error: e instanceof Error ? e.message : String(e) },
+      { status: 500 },
+    );
+  }
+}

@@ -32,6 +32,27 @@ async function uniqueSlug(base: string): Promise<string> {
   return `${root}-${Date.now()}`;
 }
 
+const ALL_VIEW_TYPES: ViewType[] = [
+  ViewType.TABLE,
+  ViewType.KANBAN,
+  ViewType.ROADMAP,
+  ViewType.GANTT,
+  ViewType.WHITEBOARD,
+];
+
+// Parse the `enabledViews[]` multi-checkbox from FormData into a safe list
+// of ViewType enum values. Falls back to all five when the user hits
+// submit without any boxes ticked — "no views at all" isn't a useful state.
+function parseSelectedViews(fd: FormData): ViewType[] {
+  const raw = fd.getAll("enabledViews").map(String);
+  const set = new Set<ViewType>();
+  for (const v of raw) {
+    const up = v.toUpperCase();
+    if ((ALL_VIEW_TYPES as string[]).includes(up)) set.add(up as ViewType);
+  }
+  return set.size > 0 ? Array.from(set) : ALL_VIEW_TYPES;
+}
+
 export async function createWorkspaceAction(
   _prev: WorkspaceFormState,
   formData: FormData,
@@ -54,6 +75,11 @@ export async function createWorkspaceAction(
   }
 
   const slug = await uniqueSlug(slugify(parsed.data.name));
+  const enabledViews = parseSelectedViews(formData);
+  // ViewType.WHITEBOARD doesn't need a BoardView row (canvas is per-board
+  // ProcessCanvas, auto-created on first visit). The other four get seed
+  // BoardView rows so background customization has a row to update.
+  const seedBoardViews = enabledViews.filter((t) => t !== ViewType.WHITEBOARD);
 
   const workspace = await db.workspace.create({
     data: {
@@ -61,10 +87,10 @@ export async function createWorkspaceAction(
       description: parsed.data.description || null,
       slug,
       ownerId: session.user.id,
+      enabledViews,
       memberships: {
         create: { userId: session.user.id, role: Role.ADMIN },
       },
-      // Seed one default board with 4 columns + 3 views.
       boards: {
         create: {
           name: "Pierwsza tablica",
@@ -79,12 +105,37 @@ export async function createWorkspaceAction(
             ],
           },
           views: {
-            create: [
-              { type: ViewType.TABLE },
-              { type: ViewType.KANBAN },
-              { type: ViewType.ROADMAP },
+            create: seedBoardViews.map((type) => ({ type })),
+          },
+        },
+      },
+      // Auto-created Wiki page so every workspace ships with the "O projekcie"
+      // landing doc and nobody has to know the feature exists to use it.
+      wikiPage: {
+        create: {
+          title: "O projekcie",
+          contentJson: {
+            type: "doc",
+            content: [
+              {
+                type: "heading",
+                attrs: { level: 1 },
+                content: [{ type: "text", text: parsed.data.name }],
+              },
+              {
+                type: "paragraph",
+                content: [
+                  {
+                    type: "text",
+                    text:
+                      parsed.data.description ||
+                      "Opisz tutaj cel projektu, kluczowych ludzi, kamienie milowe i wszystko, co powinno być pod ręką.",
+                  },
+                ],
+              },
             ],
           },
+          updatedById: session.user.id,
         },
       },
     },
@@ -96,7 +147,7 @@ export async function createWorkspaceAction(
     objectId: workspace.id,
     actorId: session.user.id,
     action: "workspace.created",
-    diff: { name: workspace.name, slug: workspace.slug },
+    diff: { name: workspace.name, slug: workspace.slug, enabledViews },
   });
 
   revalidatePath("/workspaces");
