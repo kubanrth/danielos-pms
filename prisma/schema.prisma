@@ -56,6 +56,10 @@ model User {
   todoFolders        TodoFolder[]
   todoLists          TodoList[]
   todoItems          TodoItem[]
+  noteFolders        NoteFolder[]
+  notes              Note[]
+  createdReminders   PersonalReminder[] @relation("ReminderCreator")
+  receivedReminders  PersonalReminder[] @relation("ReminderRecipient")
   pollVotes          TaskPollVote[]
   authoredPolls      TaskPoll[]            @relation("PollAuthor")
   editedWikiPages    WikiPage[]            @relation("WikiEditor")
@@ -856,6 +860,70 @@ model TodoStep {
   item TodoItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
   @@index([itemId, order])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// F9-15: Notatnik — prywatny per-user moduł jak Apple Notes. Folder
+// zawiera listę notatek; notatka ma tytuł + długi tekst (plain dla
+// MVP; można przełączyć na Tiptap w przyszłości).
+// ─────────────────────────────────────────────────────────────────────────────
+
+model NoteFolder {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  order     Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notes Note[]
+
+  @@index([userId, order])
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  userId    String
+  folderId  String?
+  title     String   @default("Nowa notatka")
+  content   String   @default("")
+  pinned    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder NoteFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
+  @@index([userId, updatedAt(sort: Desc)])
+  @@index([folderId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// F9-16: Przypomnienia — lightweight reminders separate from Task/TodoItem
+// reminders. Creator decides who gets the pop-up. Recipient can dismiss
+// (hide own copy), but only the creator can permanently delete it.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model PersonalReminder {
+  id          String    @id @default(cuid())
+  creatorId   String
+  recipientId String
+  title       String
+  body        String?
+  dueAt       DateTime
+  // Set when the recipient dismissed the bubble (X on popup). Creator
+  // can't see the dismissed-by-recipient state; dismissal only hides the
+  // popup for the recipient, doesn't delete the row.
+  dismissedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  creator   User @relation("ReminderCreator",   fields: [creatorId],   references: [id], onDelete: Cascade)
+  recipient User @relation("ReminderRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, dismissedAt, dueAt])
+  @@index([creatorId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

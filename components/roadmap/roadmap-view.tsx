@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, LineChart, Circle } from "lucide-react";
+import { useParams } from "next/navigation";
+import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, LineChart, Workflow } from "lucide-react";
 import {
   assignTaskToMilestoneAction,
   deleteMilestoneAction,
@@ -96,8 +97,8 @@ export function RoadmapView({
             <ModeButton
               active={mode === "markers"}
               onClick={() => setMode("markers")}
-              icon={<Circle size={12} />}
-              label="Kropki"
+              icon={<Workflow size={12} />}
+              label="Wizualizacja"
             />
           </div>
         </div>
@@ -390,16 +391,13 @@ function TimelineTrack({
   );
 }
 
-// Markers: each milestone is a circle at the midpoint of its date range,
-// sitting on the axis. Underneath: title + small pill with task count.
-// Circles never overlap horizontally perfectly (same start+stop would
-// collapse) — if two share a midpoint, we nudge them left/right using
-// the same greedy row algorithm collapsed to two rows (upper/lower).
+// F9-14: "Wizualizacja" — flow-chart layout bez osi czasu. Milestones
+// idą chronologicznie w rzędzie z połączeniami strzałkowymi między
+// nimi. Pod każdą kropką: tytuł milestone + button "Sprawdź zadania"
+// prowadzący do listy zadań tego milestone'u (/t/[taskId] dla każdego
+// przypisanego zadania — tu expand inline).
 function MarkersTrack({
-  range,
   milestones,
-  todayInRange,
-  now,
   canUpdate,
   onEdit,
 }: {
@@ -410,124 +408,153 @@ function MarkersTrack({
   canUpdate: boolean;
   onEdit: (m: MilestoneItem) => void;
 }) {
-  const MARKER_HEIGHT = 120;
-  // Pack markers into up-to-2 rows to avoid dot-on-dot collisions.
-  const rows = useMemo(() => {
-    const m2 = [...milestones]
-      .map((m) => ({
-        id: m.id,
-        mid: (new Date(m.startAt).getTime() + new Date(m.stopAt).getTime()) / 2,
-      }))
-      .sort((a, b) => a.mid - b.mid);
-    const MIN_GAP = (range.rangeStop - range.rangeStart) * 0.04; // 4% of axis
-    const lastMidPerRow: number[] = [];
-    const out = new Map<string, number>();
-    for (const m of m2) {
-      let placed = false;
-      for (let i = 0; i < lastMidPerRow.length; i++) {
-        if (m.mid - lastMidPerRow[i] >= MIN_GAP) {
-          lastMidPerRow[i] = m.mid;
-          out.set(m.id, i);
-          placed = true;
-          break;
-        }
-      }
-      if (!placed) {
-        // cap at 2 rows; overflow collapses into row 1 (visually overlaps
-        // slightly, still clickable)
-        const row = Math.min(lastMidPerRow.length, 1);
-        out.set(m.id, row);
-        if (lastMidPerRow.length < 2) lastMidPerRow.push(m.mid);
-        else lastMidPerRow[1] = m.mid;
-      }
-    }
-    return out;
-  }, [milestones, range]);
+  // Sort chronologicznie — klient chciał "coś następuje po czymś".
+  const sorted = useMemo(
+    () =>
+      [...milestones].sort(
+        (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
+      ),
+    [milestones],
+  );
+
+  if (sorted.length === 0) {
+    return (
+      <div className="flex h-[120px] items-center justify-center">
+        <p className="font-display text-[0.92rem] text-muted-foreground">
+          Brak milestones. Dodaj pierwszy, żeby zobaczyć wizualizację.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div
-      className="relative w-full"
-      style={{ height: MARKER_HEIGHT, paddingTop: 20 }}
-    >
-      {/* Month gridlines — same as timeline */}
-      {range.ticks.map((t) => (
-        <div
-          key={t.ts}
-          className="pointer-events-none absolute top-0 bottom-0 w-px bg-border/60"
-          style={{ left: `${pctFor(t.ts, range)}%` }}
-          aria-hidden
-        />
-      ))}
-
-      {/* Horizontal baseline */}
-      <div className="pointer-events-none absolute left-0 right-0 top-[40px] h-px bg-border" aria-hidden />
-
-      {todayInRange && (
-        <>
-          <div
-            className="pointer-events-none absolute top-0 bottom-0 w-[2px] bg-primary/60"
-            style={{ left: `${pctFor(now, range)}%` }}
-            aria-hidden
-          />
-          <span
-            className="pointer-events-none absolute -top-2 -translate-x-1/2 rounded-full bg-primary px-1.5 font-mono text-[0.56rem] font-semibold uppercase tracking-[0.14em] text-primary-foreground"
-            style={{ left: `${pctFor(now, range)}%` }}
-          >
-            Dziś
-          </span>
-        </>
-      )}
-
-      {milestones.map((m) => {
-        const mid = (new Date(m.startAt).getTime() + new Date(m.stopAt).getTime()) / 2;
-        const left = pctFor(mid, range);
-        const color = colorFor(m.id);
-        const row = rows.get(m.id) ?? 0; // 0 = above line, 1 = below
-        const circleTop = row === 0 ? 20 : 50;
-        const labelTop = row === 0 ? 64 : 94;
-        const title = m.title.length > 18 ? m.title.slice(0, 17) + "…" : m.title;
-        return (
-          <div
-            key={m.id}
-            className="absolute -translate-x-1/2"
-            style={{ left: `${left}%`, top: 0, width: 120 }}
-          >
-            <button
-              type="button"
-              onClick={() => canUpdate && onEdit(m)}
-              disabled={!canUpdate}
-              aria-label={`${m.title}, ${formatDateRange(m.startAt, m.stopAt)}`}
-              title={`${m.title} · ${formatDateRange(m.startAt, m.stopAt)} · ${m.taskCount} ${taskPl(m.taskCount)}`}
-              className="absolute left-1/2 grid h-8 w-8 -translate-x-1/2 place-items-center rounded-full text-white shadow-[0_2px_6px_rgba(0,0,0,0.2)] transition-transform duration-150 hover:scale-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-default"
-              style={{
-                top: circleTop,
-                background: `linear-gradient(135deg, ${color}, color-mix(in oklch, ${color} 70%, white))`,
-              }}
-            >
-              <span className="font-mono text-[0.64rem] font-bold">{m.taskCount}</span>
-            </button>
-            <div
-              className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center gap-0.5 text-center"
-              style={{ top: labelTop, width: 120 }}
-            >
-              <span className="truncate font-display text-[0.74rem] font-semibold tracking-[-0.01em]">
-                {title}
-              </span>
-              <span className="font-mono text-[0.56rem] uppercase tracking-[0.12em] text-muted-foreground">
-                {formatDateRange(m.startAt, m.stopAt)}
-              </span>
+    <div className="overflow-x-auto py-2">
+      <div className="flex min-w-min items-start gap-0">
+        {sorted.map((m, i) => {
+          const color = colorFor(m.id);
+          const isLast = i === sorted.length - 1;
+          return (
+            <div key={m.id} className="flex items-start">
+              <MilestoneNode
+                milestone={m}
+                color={color}
+                canUpdate={canUpdate}
+                onEdit={onEdit}
+              />
+              {!isLast && <FlowArrow />}
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
-      {milestones.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <p className="font-display text-[0.92rem] text-muted-foreground">
-            Brak milestones. Dodaj pierwszy, żeby zobaczyć kropki.
-          </p>
-        </div>
+function MilestoneNode({
+  milestone,
+  color,
+  canUpdate,
+  onEdit,
+}: {
+  milestone: MilestoneItem;
+  color: string;
+  canUpdate: boolean;
+  onEdit: (m: MilestoneItem) => void;
+}) {
+  const [showTasks, setShowTasks] = useState(false);
+  const params = useParams<{ workspaceId?: string }>();
+  const workspaceId = params?.workspaceId ?? "";
+  return (
+    <div className="flex w-[180px] shrink-0 flex-col items-center gap-2 px-2">
+      {/* Title above */}
+      <div className="flex flex-col items-center gap-0.5 text-center min-h-[44px]">
+        <span className="font-display text-[0.92rem] font-semibold leading-tight tracking-[-0.01em] line-clamp-2">
+          {milestone.title}
+        </span>
+        <span className="font-mono text-[0.56rem] uppercase tracking-[0.12em] text-muted-foreground">
+          {milestone.taskCount} {taskPl(milestone.taskCount)}
+        </span>
+      </div>
+
+      {/* The dot (= button edit jak poprzednio) */}
+      <button
+        type="button"
+        onClick={() => canUpdate && onEdit(milestone)}
+        disabled={!canUpdate}
+        aria-label={`${milestone.title}, edytuj`}
+        title={milestone.title}
+        className="grid h-12 w-12 place-items-center rounded-full text-white shadow-[0_4px_10px_rgba(0,0,0,0.15)] transition-transform duration-150 hover:scale-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-default"
+        style={{
+          background: `linear-gradient(135deg, ${color}, color-mix(in oklch, ${color} 70%, white))`,
+        }}
+      >
+        <span className="font-mono text-[0.82rem] font-bold">{milestone.taskCount}</span>
+      </button>
+
+      {/* "Sprawdź zadania" button below */}
+      {milestone.tasks.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowTasks((v) => !v)}
+          className="inline-flex h-7 items-center gap-1 rounded-full border border-border bg-card px-3 font-mono text-[0.58rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
+        >
+          {showTasks ? "Ukryj zadania" : "Sprawdź zadania"}
+        </button>
       )}
+
+      {showTasks && milestone.tasks.length > 0 && (
+        <ul className="w-full rounded-md border border-border bg-card p-1 text-[0.76rem]">
+          {milestone.tasks.map((t) => (
+            <li key={t.id}>
+              <Link
+                href={`/w/${workspaceId}/t/${t.id}`}
+                className="block truncate rounded-sm px-2 py-1 transition-colors hover:bg-accent"
+                title={t.title}
+              >
+                {t.title}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// Flow arrow between two milestone nodes — simple SVG chevron at node-
+// center-height so cała linia łączy je ładnie.
+function FlowArrow() {
+  return (
+    <div
+      className="flex shrink-0 items-center"
+      aria-hidden
+      style={{ height: 140, paddingTop: 56 /* aligns with dot center */ }}
+    >
+      <svg width="60" height="24" viewBox="0 0 60 24" fill="none">
+        <defs>
+          <marker
+            id="roadmap-arrowhead"
+            viewBox="0 0 10 10"
+            refX="8"
+            refY="5"
+            markerWidth="6"
+            markerHeight="6"
+            orient="auto-start-reverse"
+          >
+            <path d="M0 0 L10 5 L0 10 z" fill="var(--muted-foreground)" />
+          </marker>
+        </defs>
+        <line
+          x1="2"
+          y1="12"
+          x2="54"
+          y2="12"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          className="text-muted-foreground/60"
+          markerEnd="url(#roadmap-arrowhead)"
+        />
+      </svg>
     </div>
   );
 }

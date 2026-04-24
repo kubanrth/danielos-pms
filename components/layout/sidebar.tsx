@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
+  Bell,
   BookOpen,
   CalendarDays,
   CheckSquare,
@@ -18,6 +19,7 @@ import {
   Plus,
   Settings,
   ShieldCheck,
+  StickyNote,
 } from "lucide-react";
 import type { Role } from "@/lib/generated/prisma/enums";
 import { signOutAction } from "@/app/(app)/actions";
@@ -167,6 +169,20 @@ export function Sidebar({
           href="/my/calendar"
           icon={<CalendarDays size={15} />}
           label="Kalendarz"
+          pathname={pathname}
+          collapsed={collapsed}
+        />
+        <NavItem
+          href="/my/notes"
+          icon={<StickyNote size={15} />}
+          label="Notatnik"
+          pathname={pathname}
+          collapsed={collapsed}
+        />
+        <NavItem
+          href="/my/reminders"
+          icon={<Bell size={15} />}
+          label="Przypomnienia"
           pathname={pathname}
           collapsed={collapsed}
         />

@@ -17,22 +17,21 @@ export interface ShapeNodeData {
   width: number;
   height: number;
   linkedTasks?: NodeTaskChip[];
-  // Injected by the editor so the chip knows where to navigate.
   workspaceId?: string;
-  [key: string]: unknown; // React Flow's NodeProps expects index signature on data
+  [key: string]: unknown;
 }
 
-// Single node renderer that branches on `shape`. A diamond is a
-// 45°-rotated square with counter-rotated label — keeps the bounding box
-// the same as a rectangle so edges attach sanely. STICKY adds a slight
-// tilt + layered shadow for a hand-placed feel. FRAME draws a dashed
-// outline rectangle with a small title label that sits behind other
-// nodes so it can group them visually.
+// F9-17: shapes bardziej graficzne. Każdy shape dostaje właściwy
+// wizualny charakter zamiast być „pustym prostokątem":
+//   RECTANGLE → soft gradient background, rounded 12px, double-tone
+//               border (brand accent on top edge)
+//   DIAMOND  → rotated square z inner gradient, thicker border
+//   CIRCLE   → radial gradient + glow shadow → wygląda jak orb
+//   STICKY   → jak dotychczas (żółty post-it, tilt, serif)
+//   FRAME    → dashed container z subtelnym tekstur background
 export const ShapeNode = memo(function ShapeNode({ data, selected }: NodeProps) {
   const d = data as ShapeNodeData;
   const label = d.label ?? "";
-  const borderColor = selected ? "var(--primary)" : "color-mix(in oklch, currentColor 30%, var(--border))";
-  const ring = selected ? "0 0 0 2px color-mix(in oklch, var(--primary) 40%, transparent)" : "none";
 
   if (d.shape === "FRAME") {
     return (
@@ -46,27 +45,23 @@ export const ShapeNode = memo(function ShapeNode({ data, selected }: NodeProps) 
     );
   }
 
-  const baseRadius = d.shape === "CIRCLE" ? "50%" : d.shape === "STICKY" ? "4px" : "10px";
-
-  const base: React.CSSProperties = {
-    width: d.width,
-    height: d.height,
-    background: d.colorHex,
-    border: `1.5px solid ${borderColor}`,
-    boxShadow:
-      d.shape === "STICKY"
-        ? `0 1px 2px rgba(0,0,0,0.06), 0 12px 20px -12px rgba(120, 80, 0, 0.35)${selected ? ", 0 0 0 2px color-mix(in oklch, var(--primary) 40%, transparent)" : ""}`
-        : ring,
-    color: textColorFor(d.colorHex),
-    borderRadius: baseRadius,
-    transform: d.shape === "STICKY" ? "rotate(-1.5deg)" : undefined,
-  };
+  const textColor = textColorFor(d.colorHex);
+  const accent = accentFor(d.colorHex);
+  const selectedRing = selected
+    ? "0 0 0 2px color-mix(in oklch, var(--primary) 40%, transparent)"
+    : "none";
 
   const content = (
     <span
-      className="pointer-events-none select-none px-3 text-center font-display text-[0.92rem] font-semibold tracking-[-0.01em] leading-tight"
+      className="pointer-events-none select-none px-3 text-center font-display text-[0.94rem] font-semibold tracking-[-0.01em] leading-tight"
       data-label=""
-      style={d.shape === "STICKY" ? { fontFamily: "ui-serif, Georgia, 'Times New Roman', serif" } : undefined}
+      style={{
+        color: textColor,
+        fontFamily:
+          d.shape === "STICKY"
+            ? "ui-serif, Georgia, 'Times New Roman', serif"
+            : undefined,
+      }}
     >
       {label || <span className="opacity-50">dwuklik aby nazwać</span>}
     </span>
@@ -80,15 +75,52 @@ export const ShapeNode = memo(function ShapeNode({ data, selected }: NodeProps) 
       <Handle type="target" position={Position.Left} />
       <Handle type="source" position={Position.Right} />
       <Handle type="source" position={Position.Bottom} />
+
       {d.shape === "DIAMOND" ? (
-        <div style={{ ...base, transform: "rotate(45deg)" }} className="grid place-items-center">
-          <div style={{ transform: "rotate(-45deg)" }}>{content}</div>
-        </div>
-      ) : (
-        <div style={base} className="grid place-items-center">
+        <DiamondShape
+          width={d.width}
+          height={d.height}
+          colorHex={d.colorHex}
+          accent={accent}
+          textColor={textColor}
+          ringShadow={selectedRing}
+        >
           {content}
-        </div>
+        </DiamondShape>
+      ) : d.shape === "CIRCLE" ? (
+        <CircleShape
+          width={d.width}
+          height={d.height}
+          colorHex={d.colorHex}
+          accent={accent}
+          textColor={textColor}
+          ringShadow={selectedRing}
+        >
+          {content}
+        </CircleShape>
+      ) : d.shape === "STICKY" ? (
+        <StickyShape
+          width={d.width}
+          height={d.height}
+          colorHex={d.colorHex}
+          ringShadow={selectedRing}
+          selected={!!selected}
+        >
+          {content}
+        </StickyShape>
+      ) : (
+        <RectangleShape
+          width={d.width}
+          height={d.height}
+          colorHex={d.colorHex}
+          accent={accent}
+          ringShadow={selectedRing}
+          selected={!!selected}
+        >
+          {content}
+        </RectangleShape>
       )}
+
       {chips.length > 0 && d.workspaceId && (
         <div
           className="pointer-events-auto absolute -bottom-3 left-1/2 flex max-w-[calc(100%+40px)] -translate-x-1/2 flex-wrap justify-center gap-1"
@@ -117,6 +149,158 @@ export const ShapeNode = memo(function ShapeNode({ data, selected }: NodeProps) 
   );
 });
 
+// --- Per-shape renderers ---
+
+function RectangleShape({
+  width,
+  height,
+  colorHex,
+  accent,
+  ringShadow,
+  selected,
+  children,
+}: {
+  width: number;
+  height: number;
+  colorHex: string;
+  accent: string;
+  ringShadow: string;
+  selected: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        width,
+        height,
+        // Soft gradient from the user-picked color to a 10%-lighter mix,
+        // gives visual depth without washing out the label.
+        background: `linear-gradient(180deg, color-mix(in oklch, ${colorHex} 94%, white) 0%, ${colorHex} 100%)`,
+        borderRadius: 12,
+        border: `1px solid ${selected ? "var(--primary)" : "color-mix(in oklch, " + colorHex + " 60%, var(--border))"}`,
+        boxShadow: `${ringShadow === "none" ? "" : ringShadow + ", "}0 1px 2px rgba(10,10,40,0.04), 0 8px 20px -10px rgba(10,10,40,0.15)`,
+        position: "relative",
+      }}
+      className="grid place-items-center overflow-hidden"
+    >
+      {/* Thin brand-accent stripe on top edge — ties each node to the
+           workspace's visual language without overwhelming the label. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-[3px]"
+        style={{ background: accent }}
+      />
+      {children}
+    </div>
+  );
+}
+
+function DiamondShape({
+  width,
+  height,
+  colorHex,
+  accent,
+  textColor,
+  ringShadow,
+  children,
+}: {
+  width: number;
+  height: number;
+  colorHex: string;
+  accent: string;
+  textColor: string;
+  ringShadow: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        width,
+        height,
+        transform: "rotate(45deg)",
+        background: `linear-gradient(135deg, color-mix(in oklch, ${colorHex} 90%, white) 0%, ${colorHex} 100%)`,
+        border: `2px solid ${accent}`,
+        borderRadius: 10,
+        boxShadow: `${ringShadow === "none" ? "" : ringShadow + ", "}0 8px 20px -10px rgba(10,10,40,0.2)`,
+        color: textColor,
+      }}
+      className="grid place-items-center"
+    >
+      <div style={{ transform: "rotate(-45deg)" }}>{children}</div>
+    </div>
+  );
+}
+
+function CircleShape({
+  width,
+  height,
+  colorHex,
+  accent,
+  textColor,
+  ringShadow,
+  children,
+}: {
+  width: number;
+  height: number;
+  colorHex: string;
+  accent: string;
+  textColor: string;
+  ringShadow: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        width,
+        height,
+        // Radial gradient → orb look. Edge uses the accent, center the
+        // base color (lightened) so text stays readable.
+        background: `radial-gradient(circle at 32% 30%, color-mix(in oklch, ${colorHex} 85%, white) 0%, ${colorHex} 60%, color-mix(in oklch, ${colorHex} 80%, black) 100%)`,
+        borderRadius: "50%",
+        border: `2px solid ${accent}`,
+        boxShadow: `${ringShadow === "none" ? "" : ringShadow + ", "}0 10px 24px -12px ${accent}40, 0 2px 4px rgba(10,10,40,0.08)`,
+        color: textColor,
+      }}
+      className="grid place-items-center"
+    >
+      {children}
+    </div>
+  );
+}
+
+function StickyShape({
+  width,
+  height,
+  colorHex,
+  ringShadow,
+  selected: _selected,
+  children,
+}: {
+  width: number;
+  height: number;
+  colorHex: string;
+  ringShadow: string;
+  selected: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        width,
+        height,
+        background: colorHex,
+        borderRadius: 4,
+        transform: "rotate(-1.5deg)",
+        boxShadow: `${ringShadow === "none" ? "" : ringShadow + ", "}0 1px 2px rgba(0,0,0,0.06), 0 12px 20px -12px rgba(120, 80, 0, 0.35)`,
+        color: textColorFor(colorHex),
+      }}
+      className="grid place-items-center"
+    >
+      {children}
+    </div>
+  );
+}
+
 function FrameShape({
   width,
   height,
@@ -130,17 +314,21 @@ function FrameShape({
   label: string;
   selected: boolean;
 }) {
-  const accent = selected ? "var(--primary)" : "color-mix(in oklch, currentColor 40%, var(--border))";
-  // Dashed outline + translucent fill. Everything else sits on top — this
-  // is a group indicator, not a "real" shape.
+  const accent = selected
+    ? "var(--primary)"
+    : "color-mix(in oklch, currentColor 40%, var(--border))";
   return (
     <div
       style={{
         width,
         height,
-        background: `color-mix(in oklch, ${colorHex} 30%, transparent)`,
+        // Subtle checker-like gradient gives the frame a "paper" feel
+        // without overlap noise when children land on it.
+        background: `
+          linear-gradient(135deg, color-mix(in oklch, ${colorHex} 60%, transparent) 0%, color-mix(in oklch, ${colorHex} 20%, transparent) 100%)
+        `,
         border: `2px dashed ${accent}`,
-        borderRadius: 12,
+        borderRadius: 14,
         position: "relative",
         boxShadow: selected
           ? "0 0 0 2px color-mix(in oklch, var(--primary) 40%, transparent)"
@@ -164,14 +352,30 @@ function FrameShape({
   );
 }
 
-// Pick a readable text color for the node's background — black for light
-// fills, white for dark ones. Parses #RRGGBB only; unknowns get black.
+// --- Color helpers ---
+
+// Derive a brand-accent color from the node fill — used for borders,
+// top stripes, circle rims. We darken the base by ~25% so it's visible
+// on light-tinted fills but still harmonises with the picker palette.
+function accentFor(hex: string): string {
+  if (!/^#[0-9A-Fa-f]{6}$/.test(hex)) return "var(--primary)";
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const y = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  // For very light fills (almost white) fall back to the brand primary
+  // so the stripe/border isn't invisible.
+  if (y > 0.92) return "#7B68EE";
+  const darken = (n: number) => Math.max(0, Math.round(n * 0.75));
+  const hx = (n: number) => darken(n).toString(16).padStart(2, "0");
+  return `#${hx(r)}${hx(g)}${hx(b)}`;
+}
+
 function textColorFor(hex: string): string {
   if (!/^#[0-9A-Fa-f]{6}$/.test(hex)) return "#0F172A";
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
-  // Rec. 709 luminance
   const y = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
   return y > 0.6 ? "#0F172A" : "#FFFFFF";
 }

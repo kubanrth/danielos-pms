@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { Sidebar } from "@/components/layout/sidebar";
 import type { SidebarWorkspace } from "@/components/layout/sidebar";
 import { parseEnabledViews } from "@/lib/board-views";
+import { ReminderPopups } from "@/components/reminders/reminder-popups";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -11,7 +12,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   // Read fresh User to ensure sidebar avatar/name reflect recent profile changes
   // (JWT session is cached; DB is source of truth).
-  const [user, memberships, unreadNotifs] = await Promise.all([
+  const [user, memberships, unreadNotifs, dueReminders] = await Promise.all([
     db.user.findUnique({
       where: { id: session.user.id },
       select: { id: true, email: true, name: true, avatarUrl: true, isSuperAdmin: true },
@@ -35,6 +36,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     }),
     db.notification.count({
       where: { userId: session.user.id, readAt: null },
+    }),
+    // Active reminder popups — due + not dismissed. Capped so a runaway
+    // creator can't DoS the recipient's top-right corner.
+    db.personalReminder.findMany({
+      where: {
+        recipientId: session.user.id,
+        dueAt: { lte: new Date() },
+        dismissedAt: null,
+      },
+      orderBy: { dueAt: "asc" },
+      take: 5,
+      include: {
+        creator: { select: { id: true, name: true, email: true } },
+      },
     }),
   ]);
   if (!user) redirect("/secure-access-portal");
@@ -65,6 +80,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         unreadNotificationCount={unreadNotifs}
       />
       <div className="flex min-w-0 flex-1 flex-col">{children}</div>
+
+      <ReminderPopups
+        initial={dueReminders.map((r) => ({
+          id: r.id,
+          title: r.title,
+          body: r.body,
+          creatorName: r.creator.name ?? r.creator.email,
+          isSelfAuthored: r.creator.id === session.user.id,
+        }))}
+      />
     </div>
   );
 }
