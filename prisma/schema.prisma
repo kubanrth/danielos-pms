@@ -206,10 +206,11 @@ model Board {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  creator       User           @relation("BoardCreator", fields: [creatorId], references: [id])
+  workspace     Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator       User            @relation("BoardCreator", fields: [creatorId], references: [id])
   views         BoardView[]
   statusColumns StatusColumn[]
+  customColumns TableColumn[]
   tasks         Task[]
   milestones    Milestone[]
   links         BoardLink[]
@@ -260,6 +261,42 @@ model BoardLink {
   @@index([boardId, order])
 }
 
+// F9-07: custom user-defined columns in the Tabela view. One row per
+// user-added column, scoped to a board. Type is a string for now
+// (TEXT) — expanding to NUMBER/DATE/SELECT later is a code-only change
+// (no new column). Values stored in TaskCustomValue keyed by (taskId,
+// columnId).
+model TableColumn {
+  id        String   @id @default(cuid())
+  boardId   String
+  name      String
+  // "TEXT" today. Future values: "NUMBER" | "DATE" | "SELECT" etc.
+  type      String   @default("TEXT")
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  board  Board              @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  values TaskCustomValue[]
+
+  @@index([boardId, order])
+}
+
+model TaskCustomValue {
+  taskId    String
+  columnId  String
+  // Text payload — stringified to keep the schema flat. When the column
+  // type is anything other than TEXT we parse on read.
+  valueText String?
+  updatedAt DateTime @updatedAt
+
+  task   Task        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  column TableColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, columnId])
+  @@index([columnId])
+}
+
 model StatusColumn {
   id        String   @id @default(cuid())
   boardId   String
@@ -305,13 +342,14 @@ model Task {
   statusColumn StatusColumn?         @relation(fields: [statusColumnId], references: [id])
   milestone    Milestone?            @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
   creator      User                  @relation("TaskCreator", fields: [creatorId], references: [id])
-  assignees    TaskAssignee[]
-  tags         TaskTag[]
-  comments     Comment[]
-  attachments  Attachment[]
-  nodeLinks    ProcessNodeTaskLink[]
-  subtasks     Subtask[]
-  poll         TaskPoll?
+  assignees     TaskAssignee[]
+  tags          TaskTag[]
+  comments      Comment[]
+  attachments   Attachment[]
+  nodeLinks     ProcessNodeTaskLink[]
+  subtasks      Subtask[]
+  poll          TaskPoll?
+  customValues  TaskCustomValue[]
 
   @@index([boardId, statusColumnId, rowOrder])
   @@index([boardId, updatedAt(sort: Desc)])

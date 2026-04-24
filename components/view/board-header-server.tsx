@@ -43,9 +43,15 @@ export async function BoardHeaderServer({
     orderBy: { createdAt: "asc" },
   });
   const custom = allViews.filter((v) => v.name !== null);
-  const defaultTypes = allViews
-    .filter((v) => v.name === null)
-    .map((v) => v.type);
+  const defaults = allViews.filter((v) => v.name === null);
+  const defaultTypes = defaults.map((v) => v.type);
+  // Map default ViewName → BoardView id so the ViewSwitcher knows which
+  // row to delete when the user clicks X on a default pill.
+  const defaultViewIds: Partial<Record<ViewName, string>> = {};
+  for (const d of defaults) {
+    const name = viewTypeToName(d.type);
+    if (name) defaultViewIds[name] = d.id;
+  }
 
   const effectiveEnabled = computeBoardEnabledViews(enabledViews, defaultTypes);
 
@@ -66,6 +72,7 @@ export async function BoardHeaderServer({
       enabledViews={effectiveEnabled}
       customViews={customViews}
       canManageViews={canManage}
+      defaultViewIds={defaultViewIds}
       createViewButton={
         canManage ? (
           <CreateViewDialog

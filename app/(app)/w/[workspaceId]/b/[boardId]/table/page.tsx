@@ -25,6 +25,7 @@ export default async function BoardTablePage({
     include: {
       workspace: { select: { enabledViews: true } },
       statusColumns: { orderBy: { order: "asc" } },
+      customColumns: { orderBy: { order: "asc" } },
       views: { where: { type: "TABLE" } },
       tasks: {
         where: { deletedAt: null },
@@ -34,6 +35,7 @@ export default async function BoardTablePage({
             include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
           },
           tags: { include: { tag: true } },
+          customValues: true,
         },
       },
     },
@@ -108,11 +110,19 @@ export default async function BoardTablePage({
             name: tt.tag.name,
             colorHex: tt.tag.colorHex,
           })),
+          customValues: Object.fromEntries(
+            t.customValues.map((v) => [v.columnId, v.valueText ?? ""]),
+          ),
         }))}
         canEdit={canEdit}
         canManagePrefs={canManageBoard}
         initialColumnOrder={Array.isArray(tableConfig.columnOrder) ? tableConfig.columnOrder : undefined}
         initialHiddenColumns={Array.isArray(tableConfig.hidden) ? tableConfig.hidden : undefined}
+        customColumns={board.customColumns.map((c) => ({
+          id: c.id,
+          name: c.name,
+          type: c.type,
+        }))}
       />
 
       {canManageBoard && (

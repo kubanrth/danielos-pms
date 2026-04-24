@@ -136,6 +136,7 @@ async function TableRenderer({
     where: { id: boardId },
     include: {
       statusColumns: { orderBy: { order: "asc" } },
+      customColumns: { orderBy: { order: "asc" } },
       tasks: {
         where: { deletedAt: null },
         orderBy: [{ statusColumn: { order: "asc" } }, { rowOrder: "asc" }],
@@ -144,6 +145,7 @@ async function TableRenderer({
             include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
           },
           tags: { include: { tag: true } },
+          customValues: true,
         },
       },
     },
@@ -178,11 +180,19 @@ async function TableRenderer({
           name: tt.tag.name,
           colorHex: tt.tag.colorHex,
         })),
+        customValues: Object.fromEntries(
+          t.customValues.map((v) => [v.columnId, v.valueText ?? ""]),
+        ),
       }))}
       canEdit={canEdit}
       canManagePrefs={canManageBoard}
       initialColumnOrder={Array.isArray(cfg.columnOrder) ? cfg.columnOrder : undefined}
       initialHiddenColumns={Array.isArray(cfg.hidden) ? cfg.hidden : undefined}
+      customColumns={board.customColumns.map((c) => ({
+        id: c.id,
+        name: c.name,
+        type: c.type,
+      }))}
     />
   );
 }

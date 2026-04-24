@@ -20,6 +20,7 @@ export function BoardHeader({
   createViewButton,
   actions,
   extra,
+  defaultViewIds,
 }: {
   workspaceId: string;
   boardId: string;
@@ -32,6 +33,7 @@ export function BoardHeader({
   createViewButton?: ReactNode;
   actions?: ReactNode;
   extra?: ReactNode;
+  defaultViewIds?: Partial<Record<ViewName, string>>;
 }) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -54,6 +56,7 @@ export function BoardHeader({
             enabled={enabledViews}
             customViews={customViews}
             canManage={canManageViews}
+            defaultViewIds={defaultViewIds}
           />
           {createViewButton}
         </div>

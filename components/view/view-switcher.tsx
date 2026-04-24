@@ -60,6 +60,7 @@ export function ViewSwitcher({
   enabled,
   customViews,
   canManage,
+  defaultViewIds,
 }: {
   workspaceId: string;
   boardId: string;
@@ -72,6 +73,10 @@ export function ViewSwitcher({
   customViews?: CustomViewDescriptor[];
   // Controls whether the delete-X on custom pills renders.
   canManage?: boolean;
+  // F9-08: per-default-view BoardView id, used to delete the default
+  // view from this board (X button on default pill). Undefined entries
+  // mean "legacy board without BoardView row" — hide the X there.
+  defaultViewIds?: Partial<Record<ViewName, string>>;
 }) {
   const allViews: ViewDescriptor[] = [
     {
@@ -122,18 +127,40 @@ export function ViewSwitcher({
     >
       {views.map((v) => {
         const isActive = !activeViewId && v.name === active;
+        const defaultId = defaultViewIds?.[v.name];
+        // Don't let the user delete the view they're looking at — would
+        // land them on a 404. Force a switch first, then delete.
+        const totalPills = views.length + (customViews?.length ?? 0);
+        const canDelete = canManage && !!defaultId && !isActive && totalPills > 1;
         return (
-          <Link
-            key={v.name}
-            href={v.path}
-            role="tab"
-            aria-selected={isActive}
-            data-active={isActive ? "true" : "false"}
-            className={`inline-flex items-center gap-1.5 rounded-md font-sans font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground ${heightClass}`}
-          >
-            {v.icon}
-            <span>{v.label}</span>
-          </Link>
+          <div key={v.name} className="group relative">
+            <Link
+              href={v.path}
+              role="tab"
+              aria-selected={isActive}
+              data-active={isActive ? "true" : "false"}
+              className={`inline-flex items-center gap-1.5 rounded-md font-sans font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground ${heightClass} ${canDelete ? "pr-6" : ""}`}
+            >
+              {v.icon}
+              <span>{v.label}</span>
+            </Link>
+            {canDelete && defaultId && (
+              <form
+                action={(fd) => startTransition(() => deleteBoardViewAction(fd))}
+                className="m-0 absolute right-1 top-1/2 -translate-y-1/2"
+              >
+                <input type="hidden" name="viewId" value={defaultId} />
+                <button
+                  type="submit"
+                  aria-label={`Usuń widok ${v.label}`}
+                  title={`Usuń widok ${v.label} z tablicy`}
+                  className="grid h-4 w-4 place-items-center rounded-sm text-current opacity-0 transition-opacity hover:bg-destructive/20 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100 group-data-[active=true]:text-primary-foreground"
+                >
+                  <X size={10} />
+                </button>
+              </form>
+            )}
+          </div>
         );
       })}
 

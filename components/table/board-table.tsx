@@ -14,6 +14,7 @@ import {
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { patchTaskAction } from "@/app/(app)/w/[workspaceId]/t/actions";
+import { setTaskCustomValueAction } from "@/app/(app)/w/[workspaceId]/b/[boardId]/actions";
 import { useWorkspaceRealtime } from "@/hooks/use-workspace-realtime";
 import { taskPl } from "@/lib/pluralize";
 import { ColumnSettings, type ColumnDef } from "@/components/table/column-settings";
@@ -31,12 +32,20 @@ export interface BoardTableTask {
     avatarUrl: string | null;
   }[];
   tags: { id: string; name: string; colorHex: string }[];
+  // F9-07: user-defined column values, keyed by custom column id.
+  customValues: Record<string, string>;
 }
 
 export interface BoardTableColumn {
   id: string;
   name: string;
   colorHex: string;
+}
+
+export interface CustomTableColumn {
+  id: string;
+  name: string;
+  type: "TEXT" | string;
 }
 
 const col = createColumnHelper<BoardTableTask>();
@@ -78,6 +87,7 @@ export function BoardTable({
   canManagePrefs,
   initialColumnOrder,
   initialHiddenColumns,
+  customColumns,
 }: {
   workspaceId: string;
   boardId: string;
@@ -87,22 +97,35 @@ export function BoardTable({
   canManagePrefs: boolean;
   initialColumnOrder?: string[];
   initialHiddenColumns?: string[];
+  customColumns: CustomTableColumn[];
 }) {
   const [sorting, setSorting] = useState<SortingState>([]);
+  const customIds = useMemo(
+    () => customColumns.map((c) => `custom:${c.id}`),
+    [customColumns],
+  );
   const [columnOrder, setColumnOrder] = useState<ColumnOrderState>(() => {
-    // Server-persisted order wins; unknown / legacy ids at the tail.
+    const knownIds = new Set([...DEFAULT_COLUMN_ORDER, ...customIds]);
+    // Server-persisted order wins for known ids; unknown / legacy ids
+    // stripped. Missing built-ins and brand-new custom columns appended
+    // at the tail.
     if (initialColumnOrder && initialColumnOrder.length > 0) {
-      const seen = new Set(initialColumnOrder);
+      const retained = initialColumnOrder.filter((id) => knownIds.has(id));
+      const retainedSet = new Set(retained);
       return [
-        ...initialColumnOrder.filter((id) => DEFAULT_COLUMN_ORDER.includes(id)),
-        ...DEFAULT_COLUMN_ORDER.filter((id) => !seen.has(id)),
+        ...retained,
+        ...DEFAULT_COLUMN_ORDER.filter((id) => !retainedSet.has(id)),
+        ...customIds.filter((id) => !retainedSet.has(id)),
       ];
     }
-    return [...DEFAULT_COLUMN_ORDER];
+    return [...DEFAULT_COLUMN_ORDER, ...customIds];
   });
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(() => {
     const vis: VisibilityState = {};
     for (const id of DEFAULT_COLUMN_ORDER) {
+      vis[id] = !(initialHiddenColumns ?? []).includes(id);
+    }
+    for (const id of customIds) {
       vis[id] = !(initialHiddenColumns ?? []).includes(id);
     }
     return vis;
@@ -217,8 +240,25 @@ export function BoardTable({
           />
         ),
       }),
+      // F9-07: one TanStack column per user-defined custom column.
+      // `id` uses a `custom:` prefix so column-order + visibility state
+      // stays distinct from the built-in ids.
+      ...customColumns.map((c) =>
+        col.display({
+          id: `custom:${c.id}`,
+          header: c.name,
+          cell: ({ row }) => (
+            <CustomCell
+              taskId={row.original.id}
+              columnId={c.id}
+              initial={row.original.customValues[c.id] ?? ""}
+              disabled={!canEdit}
+            />
+          ),
+        }),
+      ),
     ],
-    [statusColumns, canEdit, workspaceId],
+    [statusColumns, canEdit, workspaceId, customColumns],
   );
 
   const table = useReactTable({
@@ -236,6 +276,18 @@ export function BoardTable({
     .filter(([, visible]) => !visible)
     .map(([id]) => id);
 
+  // Merge built-in + user-defined columns into one list for the settings
+  // popover. Custom column ids get a `custom:` prefix so TanStack state
+  // stays distinct.
+  const settingsColumns: ColumnDef[] = [
+    ...COLUMN_DEFS,
+    ...customColumns.map((c) => ({
+      id: `custom:${c.id}`,
+      label: c.name,
+      custom: true,
+    })),
+  ];
+
   return (
     <div className="flex flex-col gap-3">
       {canManagePrefs && (
@@ -243,17 +295,22 @@ export function BoardTable({
           <ColumnSettings
             workspaceId={workspaceId}
             boardId={boardId}
-            columns={COLUMN_DEFS}
+            columns={settingsColumns}
             columnOrder={columnOrder}
             hidden={hiddenIds}
             onLocalChange={(next) => {
               setColumnOrder(next.order);
+              const allIds = [
+                ...DEFAULT_COLUMN_ORDER,
+                ...customColumns.map((c) => `custom:${c.id}`),
+              ];
               const vis: VisibilityState = {};
-              for (const id of DEFAULT_COLUMN_ORDER) {
+              for (const id of allIds) {
                 vis[id] = !next.hidden.includes(id);
               }
               setColumnVisibility(vis);
             }}
+            canManageCustom={canManagePrefs}
           />
         </div>
       )}
@@ -439,4 +496,50 @@ function DateCell({
 
 function MutedDash() {
   return <span className="font-mono text-[0.7rem] text-muted-foreground/60">—</span>;
+}
+
+// F9-07: editable cell for a custom column. Native input, auto-saves on
+// blur — same pattern as DateCell above. Server dedupes empty strings
+// into row deletes so we don't bloat TaskCustomValue.
+function CustomCell({
+  taskId,
+  columnId,
+  initial,
+  disabled,
+}: {
+  taskId: string;
+  columnId: string;
+  initial: string;
+  disabled: boolean;
+}) {
+  if (disabled) {
+    return initial ? (
+      <span className="truncate text-[0.88rem]">{initial}</span>
+    ) : (
+      <MutedDash />
+    );
+  }
+  return (
+    <form action={setTaskCustomValueAction} className="m-0">
+      <input type="hidden" name="taskId" value={taskId} />
+      <input type="hidden" name="columnId" value={columnId} />
+      <input
+        name="value"
+        type="text"
+        defaultValue={initial}
+        onBlur={(e) => {
+          if (e.currentTarget.value === initial) return;
+          (e.currentTarget.form as HTMLFormElement).requestSubmit();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            (e.currentTarget as HTMLInputElement).blur();
+          }
+        }}
+        placeholder="—"
+        className="w-full bg-transparent text-[0.88rem] outline-none placeholder:text-muted-foreground/40 focus-visible:text-foreground"
+      />
+    </form>
+  );
 }

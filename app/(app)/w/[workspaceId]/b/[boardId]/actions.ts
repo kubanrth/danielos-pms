@@ -286,14 +286,22 @@ export async function deleteBoardViewAction(formData: FormData) {
   const parsed = deleteViewSchema.safeParse({ viewId: formData.get("viewId") });
   if (!parsed.success) return;
 
-  // Safety: never delete the default per-type view (name = null).
   const view = await db.boardView.findUnique({
     where: { id: parsed.data.viewId },
     include: { board: { select: { workspaceId: true, id: true } } },
   });
-  if (!view || !view.name) return;
+  if (!view) return;
 
   const ctx = await requireWorkspaceAction(view.board.workspaceId, "board.update");
+
+  // F9-08: also allow removing default (name=null) views per board —
+  // e.g. an OKR board wants only Tabela. Safety: never let the board
+  // end up with zero views (user would have no way back in).
+  const remaining = await db.boardView.count({
+    where: { boardId: view.board.id, id: { not: view.id } },
+  });
+  if (remaining === 0) return;
+
   await db.boardView.delete({ where: { id: parsed.data.viewId } });
 
   await writeAudit({
@@ -304,7 +312,12 @@ export async function deleteBoardViewAction(formData: FormData) {
     action: "boardView.deleted",
     diff: { type: view.type, name: view.name },
   });
-  revalidatePath(`/w/${view.board.workspaceId}/b/${view.board.id}/table`);
+  // Revalidate every concrete view page — user might have been on the
+  // one we just deleted and needs the updated pill list on reload.
+  const base = `/w/${view.board.workspaceId}/b/${view.board.id}`;
+  for (const p of ["table", "kanban", "roadmap", "gantt", "whiteboard"]) {
+    revalidatePath(`${base}/${p}`);
+  }
 }
 
 // F8b: per-board table column preferences. Stored on the default TABLE
@@ -317,6 +330,161 @@ const tablePrefsSchema = z.object({
   // Stringified JSON `{ columnOrder, hidden }`.
   config: z.string().max(4000),
 });
+
+// F9-07: CRUD for per-board custom columns (the "dodaj kolumnę"
+// dropdown in the Tabela view). All values are text-only in v1; we
+// keep `type` as a string so adding NUMBER/DATE/SELECT later is a
+// code-only change.
+const createTableColumnSchema = z.object({
+  workspaceId: z.string().min(1),
+  boardId: z.string().min(1),
+  name: z.string().trim().min(1).max(80),
+});
+
+export async function createTableColumnAction(formData: FormData) {
+  const parsed = createTableColumnSchema.safeParse({
+    workspaceId: formData.get("workspaceId"),
+    boardId: formData.get("boardId"),
+    name: formData.get("name"),
+  });
+  if (!parsed.success) return;
+
+  const ctx = await requireWorkspaceAction(parsed.data.workspaceId, "board.update");
+
+  const last = await db.tableColumn.findFirst({
+    where: { boardId: parsed.data.boardId },
+    orderBy: { order: "desc" },
+    select: { order: true },
+  });
+  await db.tableColumn.create({
+    data: {
+      boardId: parsed.data.boardId,
+      name: parsed.data.name,
+      type: "TEXT",
+      order: (last?.order ?? 0) + 1,
+    },
+  });
+  await writeAudit({
+    workspaceId: parsed.data.workspaceId,
+    objectType: "Board",
+    objectId: parsed.data.boardId,
+    actorId: ctx.userId,
+    action: "tableColumn.created",
+    diff: { name: parsed.data.name },
+  });
+  revalidatePath(`/w/${parsed.data.workspaceId}/b/${parsed.data.boardId}/table`);
+}
+
+const renameTableColumnSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(1).max(80),
+});
+
+export async function renameTableColumnAction(formData: FormData) {
+  const parsed = renameTableColumnSchema.safeParse({
+    id: formData.get("id"),
+    name: formData.get("name"),
+  });
+  if (!parsed.success) return;
+
+  const col = await db.tableColumn.findUnique({
+    where: { id: parsed.data.id },
+    include: { board: { select: { workspaceId: true, id: true } } },
+  });
+  if (!col) return;
+  const ctx = await requireWorkspaceAction(col.board.workspaceId, "board.update");
+  await db.tableColumn.update({
+    where: { id: parsed.data.id },
+    data: { name: parsed.data.name },
+  });
+  await writeAudit({
+    workspaceId: col.board.workspaceId,
+    objectType: "Board",
+    objectId: col.board.id,
+    actorId: ctx.userId,
+    action: "tableColumn.renamed",
+    diff: { name: parsed.data.name },
+  });
+  revalidatePath(`/w/${col.board.workspaceId}/b/${col.board.id}/table`);
+}
+
+const deleteTableColumnSchema = z.object({ id: z.string().min(1) });
+
+export async function deleteTableColumnAction(formData: FormData) {
+  const parsed = deleteTableColumnSchema.safeParse({ id: formData.get("id") });
+  if (!parsed.success) return;
+
+  const col = await db.tableColumn.findUnique({
+    where: { id: parsed.data.id },
+    include: { board: { select: { workspaceId: true, id: true } } },
+  });
+  if (!col) return;
+  const ctx = await requireWorkspaceAction(col.board.workspaceId, "board.update");
+  await db.tableColumn.delete({ where: { id: parsed.data.id } });
+  await writeAudit({
+    workspaceId: col.board.workspaceId,
+    objectType: "Board",
+    objectId: col.board.id,
+    actorId: ctx.userId,
+    action: "tableColumn.deleted",
+    diff: { name: col.name },
+  });
+  revalidatePath(`/w/${col.board.workspaceId}/b/${col.board.id}/table`);
+}
+
+const setCellSchema = z.object({
+  taskId: z.string().min(1),
+  columnId: z.string().min(1),
+  value: z.string().max(4000).optional().or(z.literal("")),
+});
+
+export async function setTaskCustomValueAction(formData: FormData) {
+  const parsed = setCellSchema.safeParse({
+    taskId: formData.get("taskId"),
+    columnId: formData.get("columnId"),
+    value: formData.get("value") ?? "",
+  });
+  if (!parsed.success) return;
+
+  // Ownership guard: both task + column must belong to the same board
+  // under a workspace the user can update.
+  const [task, col] = await Promise.all([
+    db.task.findUnique({
+      where: { id: parsed.data.taskId },
+      select: { workspaceId: true, boardId: true },
+    }),
+    db.tableColumn.findUnique({
+      where: { id: parsed.data.columnId },
+      select: { boardId: true },
+    }),
+  ]);
+  if (!task || !col || task.boardId !== col.boardId) return;
+
+  await requireWorkspaceAction(task.workspaceId, "task.update");
+
+  const v = parsed.data.value ?? "";
+  if (v.length === 0) {
+    await db.taskCustomValue.deleteMany({
+      where: { taskId: parsed.data.taskId, columnId: parsed.data.columnId },
+    });
+  } else {
+    await db.taskCustomValue.upsert({
+      where: {
+        taskId_columnId: {
+          taskId: parsed.data.taskId,
+          columnId: parsed.data.columnId,
+        },
+      },
+      update: { valueText: v },
+      create: {
+        taskId: parsed.data.taskId,
+        columnId: parsed.data.columnId,
+        valueText: v,
+      },
+    });
+  }
+  revalidatePath(`/w/${task.workspaceId}/b/${task.boardId}/table`);
+}
 
 export async function saveTableColumnPrefsAction(formData: FormData) {
   const parsed = tablePrefsSchema.safeParse({
