@@ -326,17 +326,18 @@ model LinkFolderCellValue {
   @@index([columnId])
 }
 
-// F9-07: custom user-defined columns in the Tabela view. One row per
-// user-added column, scoped to a board. Type is a string for now
-// (TEXT) — expanding to NUMBER/DATE/SELECT later is a code-only change
-// (no new column). Values stored in TaskCustomValue keyed by (taskId,
-// columnId).
+// F9-07 + F10-A: Airtable-style fields. `type` is one of the FieldType
+// values defined in lib/table-fields.ts (TEXT, NUMBER, DATE, SINGLE_SELECT,
+// MULTI_SELECT, URL, EMAIL, PHONE, RATING, USER, CHECKBOX, LONG_TEXT,
+// CREATED_TIME, LAST_MODIFIED_TIME, CREATED_BY, AUTO_NUMBER).
+// `options` carries type-specific config: select option list with colors,
+// number format/precision, rating max/icon, date includeTime, etc.
 model TableColumn {
   id        String   @id @default(cuid())
   boardId   String
   name      String
-  // "TEXT" today. Future values: "NUMBER" | "DATE" | "SELECT" etc.
   type      String   @default("TEXT")
+  options   Json?
   order     Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

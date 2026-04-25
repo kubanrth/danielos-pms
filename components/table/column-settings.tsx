@@ -1,26 +1,44 @@
 "use client";
 
 import { startTransition, useEffect, useRef, useState } from "react";
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
-import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
   Columns,
   Eye,
   EyeOff,
   GripVertical,
-  Pencil,
   Plus,
   RotateCcw,
+  Settings2,
   Trash2,
-  X,
 } from "lucide-react";
 import {
+  configureColumnAction,
   createTableColumnAction,
   deleteTableColumnAction,
-  renameTableColumnAction,
   saveTableColumnPrefsAction,
 } from "@/app/(app)/w/[workspaceId]/b/[boardId]/actions";
+import {
+  FIELD_TYPE_META,
+  type FieldOptions,
+  type FieldType,
+} from "@/lib/table-fields";
+import { FieldOptionsEditor, FieldTypePicker } from "@/components/table/field-config";
 
 export interface ColumnDef {
   id: string;
@@ -30,6 +48,10 @@ export interface ColumnDef {
   required?: boolean;
   // F9-07: custom columns are user-editable (rename + delete).
   custom?: boolean;
+  // F10-A: present only for custom columns, used by the gear-icon
+  // popover so the user can change type/options.
+  fieldType?: FieldType;
+  fieldOptions?: FieldOptions | null;
 }
 
 export function ColumnSettings({
@@ -46,10 +68,7 @@ export function ColumnSettings({
   columns: ColumnDef[];
   columnOrder: string[];
   hidden: string[];
-  // Optimistic update callback — parent re-renders the table as we drag,
-  // so the user sees the change before the server commits.
   onLocalChange: (next: { order: string[]; hidden: string[] }) => void;
-  // Whether the user can add / rename / delete custom columns.
   canManageCustom: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -116,8 +135,6 @@ export function ColumnSettings({
     });
   };
 
-  // Render columns in their saved order; unknown/legacy columns append at
-  // the tail so a schema tweak never drops a column from the UI.
   const orderedColumns = [
     ...columnOrder
       .map((id) => columns.find((c) => c.id === id))
@@ -144,7 +161,7 @@ export function ColumnSettings({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-[calc(100%+6px)] z-30 w-72 rounded-xl border border-border bg-popover p-3 shadow-[0_12px_32px_-12px_rgba(10,10,40,0.25)]">
+        <div className="absolute right-0 top-[calc(100%+6px)] z-30 w-80 rounded-xl border border-border bg-popover p-3 shadow-[0_12px_32px_-12px_rgba(10,10,40,0.25)]">
           <div className="mb-2 flex items-center justify-between">
             <span className="eyebrow">Kolumny tabeli</span>
             <button
@@ -157,7 +174,7 @@ export function ColumnSettings({
             </button>
           </div>
           <p className="mb-3 font-mono text-[0.62rem] uppercase tracking-[0.12em] text-muted-foreground/80">
-            przeciągnij aby zmienić kolejność · klik oka by ukryć
+            przeciągnij aby zmienić kolejność · klik oka by ukryć · ⚙ aby zmienić typ
           </p>
 
           <DndContext
@@ -170,7 +187,9 @@ export function ColumnSettings({
               strategy={verticalListSortingStrategy}
             >
               <ul className="flex flex-col gap-1">
-                {canManageCustom && <AddCustomColumnRow workspaceId={workspaceId} boardId={boardId} />}
+                {canManageCustom && (
+                  <AddCustomColumnRow workspaceId={workspaceId} boardId={boardId} />
+                )}
                 {orderedColumns.map((c) => (
                   <SortableRow
                     key={c.id}
@@ -219,16 +238,23 @@ function SortableRow({
       >
         <GripVertical size={12} />
       </button>
-      {column.custom ? (
-        <CustomColumnLabel column={column} hidden={hidden} />
-      ) : (
-        <span
-          className={`flex-1 truncate transition-colors ${
-            hidden ? "text-muted-foreground/60" : ""
-          }`}
-        >
-          {column.label}
-        </span>
+
+      <span className={`flex-1 truncate transition-colors ${hidden ? "text-muted-foreground/60" : ""}`}>
+        {column.label}
+        {column.custom && column.fieldType && (
+          <span className="ml-1.5 font-mono text-[0.58rem] uppercase tracking-[0.12em] text-muted-foreground/60">
+            {FIELD_TYPE_META[column.fieldType].label}
+          </span>
+        )}
+      </span>
+
+      {column.custom && column.fieldType && (
+        <ConfigureColumnButton
+          columnId={column.id.replace(/^custom:/, "")}
+          name={column.label}
+          fieldType={column.fieldType}
+          fieldOptions={column.fieldOptions ?? {}}
+        />
       )}
 
       {column.custom && (
@@ -266,74 +292,120 @@ function SortableRow({
   );
 }
 
-// Inline rename for custom columns — click Pencil → input → blur/Enter.
-function CustomColumnLabel({
-  column,
-  hidden,
+// Per-column gear popover. Exposes name + type + type-specific options;
+// fires `configureColumnAction` on save. Closing without saving rolls
+// back local state.
+function ConfigureColumnButton({
+  columnId,
+  name,
+  fieldType,
+  fieldOptions,
 }: {
-  column: ColumnDef;
-  hidden: boolean;
+  columnId: string;
+  name: string;
+  fieldType: FieldType;
+  fieldOptions: FieldOptions;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(column.label);
-  const rawId = column.id.replace(/^custom:/, "");
+  const [open, setOpen] = useState(false);
+  const [draftName, setDraftName] = useState(name);
+  const [draftType, setDraftType] = useState<FieldType>(fieldType);
+  const [draftOptions, setDraftOptions] = useState<FieldOptions>(fieldOptions);
+  const popRef = useRef<HTMLDivElement>(null);
 
-  if (!editing) {
-    return (
-      <button
-        type="button"
-        onClick={() => setEditing(true)}
-        title="Zmień nazwę"
-        className={`group flex flex-1 min-w-0 items-center gap-1.5 text-left truncate transition-colors ${
-          hidden ? "text-muted-foreground/60" : ""
-        }`}
-      >
-        <span className="truncate">{column.label}</span>
-        <Pencil size={10} className="opacity-0 shrink-0 transition-opacity group-hover:opacity-100" />
-      </button>
-    );
-  }
+  const openPopover = () => {
+    // Reset drafts to current persisted values on each open so the user
+    // never sees leftover edits from a prior cancelled session.
+    setDraftName(name);
+    setDraftType(fieldType);
+    setDraftOptions(fieldOptions);
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  const save = () => {
+    const fd = new FormData();
+    fd.set("id", columnId);
+    fd.set("name", draftName.trim() || name);
+    fd.set("type", draftType);
+    fd.set("options", JSON.stringify(draftOptions ?? {}));
+    startTransition(async () => {
+      await configureColumnAction(fd);
+      setOpen(false);
+    });
+  };
 
   return (
-    <form
-      action={(fd) =>
-        startTransition(async () => {
-          await renameTableColumnAction(fd);
-          setEditing(false);
-        })
-      }
-      className="flex flex-1 min-w-0 items-center gap-1"
-    >
-      <input type="hidden" name="id" value={rawId} />
-      <input
-        name="name"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        autoFocus
-        required
-        maxLength={80}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") {
-            setValue(column.label);
-            setEditing(false);
-          }
-        }}
-        onBlur={(e) => {
-          if (value.trim() === column.label || value.trim() === "") {
-            setValue(column.label);
-            setEditing(false);
-            return;
-          }
-          (e.currentTarget.form as HTMLFormElement).requestSubmit();
-        }}
-        className="flex-1 min-w-0 rounded-sm border border-primary/40 bg-background px-1.5 py-0.5 text-[0.88rem] outline-none focus:border-primary"
-      />
-    </form>
+    <div className="relative" ref={popRef}>
+      <button
+        type="button"
+        onClick={() => (open ? setOpen(false) : openPopover())}
+        aria-label="Konfiguruj kolumnę"
+        title="Typ + opcje"
+        className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+      >
+        <Settings2 size={12} />
+      </button>
+      {open && (
+        <>
+          <button
+            type="button"
+            aria-label="Zamknij"
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-40 cursor-default"
+          />
+          <div className="absolute right-0 top-[calc(100%+4px)] z-50 w-80 rounded-xl border border-border bg-popover p-3 shadow-[0_18px_40px_-12px_rgba(10,10,40,0.3)]">
+            <p className="eyebrow mb-2">Konfiguracja kolumny</p>
+            <input
+              value={draftName}
+              onChange={(e) => setDraftName(e.target.value)}
+              maxLength={80}
+              className="mb-3 w-full rounded-md border border-border bg-background px-2 py-1.5 text-[0.86rem] outline-none focus:border-primary/60"
+              placeholder="Nazwa kolumny"
+            />
+            <p className="mb-1.5 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted-foreground/80">
+              Typ
+            </p>
+            <FieldTypePicker value={draftType} onChange={setDraftType} />
+            <div className="mt-3 space-y-2">
+              <FieldOptionsEditor
+                type={draftType}
+                value={draftOptions}
+                onChange={setDraftOptions}
+              />
+            </div>
+            <div className="mt-3 flex items-center justify-end gap-2 border-t border-border pt-2">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Anuluj
+              </button>
+              <button
+                type="button"
+                onClick={save}
+                className="inline-flex h-7 items-center rounded-md bg-primary px-3 font-mono text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-primary-foreground transition-opacity hover:opacity-90"
+              >
+                Zapisz
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
-// Header-style "+ add column" input pinned at the top of the settings
-// popover. Submits the action on Enter; empty input is ignored.
+// Two-step add: name → optional type/options before commit. Default
+// type is TEXT, so a power user can hit Enter and skip the type picker.
 function AddCustomColumnRow({
   workspaceId,
   boardId,
@@ -342,29 +414,77 @@ function AddCustomColumnRow({
   boardId: string;
 }) {
   const [name, setName] = useState("");
+  const [type, setType] = useState<FieldType>("TEXT");
+  const [options, setOptions] = useState<FieldOptions>({});
+  const [expanded, setExpanded] = useState(false);
+
+  const submit = () => {
+    if (!name.trim()) return;
+    const fd = new FormData();
+    fd.set("workspaceId", workspaceId);
+    fd.set("boardId", boardId);
+    fd.set("name", name.trim());
+    fd.set("type", type);
+    fd.set("options", JSON.stringify(options ?? {}));
+    startTransition(async () => {
+      await createTableColumnAction(fd);
+      setName("");
+      setType("TEXT");
+      setOptions({});
+      setExpanded(false);
+    });
+  };
+
   return (
     <li>
-      <form
-        action={(fd) =>
-          startTransition(async () => {
-            await createTableColumnAction(fd);
-            setName("");
-          })
-        }
-        className="flex items-center gap-2 rounded-md border border-dashed border-border bg-background px-2 py-1.5"
-      >
-        <input type="hidden" name="workspaceId" value={workspaceId} />
-        <input type="hidden" name="boardId" value={boardId} />
-        <Plus size={12} className="text-muted-foreground" />
-        <input
-          name="name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          maxLength={80}
-          placeholder="Dodaj kolumnę…"
-          className="flex-1 min-w-0 bg-transparent text-[0.82rem] outline-none placeholder:text-muted-foreground/60"
-        />
-      </form>
+      <div className="flex flex-col gap-2 rounded-md border border-dashed border-border bg-background px-2 py-1.5">
+        <div className="flex items-center gap-2">
+          <Plus size={12} className="text-muted-foreground" />
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                submit();
+              }
+            }}
+            maxLength={80}
+            placeholder="Dodaj kolumnę…"
+            className="flex-1 min-w-0 bg-transparent text-[0.82rem] outline-none placeholder:text-muted-foreground/60"
+          />
+          <button
+            type="button"
+            onClick={() => setExpanded((e) => !e)}
+            aria-label="Wybierz typ"
+            title={`Typ: ${FIELD_TYPE_META[type].label}`}
+            className="inline-flex h-6 items-center gap-1 rounded-sm px-1.5 text-[0.62rem] font-mono uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            {FIELD_TYPE_META[type].label}
+          </button>
+        </div>
+        {expanded && (
+          <div className="border-t border-border pt-2">
+            <p className="mb-1.5 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground/80">
+              Typ
+            </p>
+            <FieldTypePicker value={type} onChange={setType} />
+            <div className="mt-2">
+              <FieldOptionsEditor type={type} value={options} onChange={setOptions} />
+            </div>
+            <div className="mt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={submit}
+                disabled={!name.trim()}
+                className="inline-flex h-7 items-center rounded-md bg-primary px-3 font-mono text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                Dodaj
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </li>
   );
 }

@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { can } from "@/lib/permissions";
-import { BoardTable } from "@/components/table/board-table";
+import { BoardTable, type CustomTableColumn } from "@/components/table/board-table";
 import { CollapsibleColumnManager } from "@/components/table/collapsible-column-manager";
 import { CreateTaskButton } from "@/components/task/create-task-button";
 import { BackgroundCustomizer } from "@/components/view/background-customizer";
@@ -127,7 +127,8 @@ export default async function BoardTablePage({
         customColumns={board.customColumns.map((c) => ({
           id: c.id,
           name: c.name,
-          type: c.type,
+          type: c.type as CustomTableColumn["type"],
+          options: c.options,
         }))}
         members={memberships.map((m) => m.user)}
       />

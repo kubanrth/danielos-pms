@@ -14,10 +14,11 @@ import {
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { patchTaskAction } from "@/app/(app)/w/[workspaceId]/t/actions";
-import { setTaskCustomValueAction } from "@/app/(app)/w/[workspaceId]/b/[boardId]/actions";
 import { useWorkspaceRealtime } from "@/hooks/use-workspace-realtime";
 import { taskPl } from "@/lib/pluralize";
 import { ColumnSettings, type ColumnDef } from "@/components/table/column-settings";
+import { FieldCell } from "@/components/table/field-cells";
+import { parseFieldOptions, type FieldOptions, type FieldType } from "@/lib/table-fields";
 import {
   useAssignHotkey,
   type AssignMember,
@@ -49,7 +50,10 @@ export interface BoardTableColumn {
 export interface CustomTableColumn {
   id: string;
   name: string;
-  type: "TEXT" | string;
+  type: FieldType;
+  // F10-A: type-specific config (select options, number format, etc.)
+  // Plain JSON object — parseFieldOptions tolerates anything.
+  options: unknown;
 }
 
 const col = createColumnHelper<BoardTableTask>();
@@ -248,18 +252,21 @@ export function BoardTable({
           />
         ),
       }),
-      // F9-07: one TanStack column per user-defined custom column.
-      // `id` uses a `custom:` prefix so column-order + visibility state
-      // stays distinct from the built-in ids.
+      // F9-07 / F10-A: one TanStack column per user-defined custom
+      // column. `id` uses a `custom:` prefix so column-order + visibility
+      // state stays distinct from the built-in ids. Cell rendering is
+      // dispatched by FieldType (TEXT, NUMBER, SINGLE_SELECT, …).
       ...customColumns.map((c) =>
         col.display({
           id: `custom:${c.id}`,
           header: c.name,
           cell: ({ row }) => (
-            <CustomCell
+            <FieldCell
               taskId={row.original.id}
               columnId={c.id}
-              initial={row.original.customValues[c.id] ?? ""}
+              type={c.type}
+              raw={row.original.customValues[c.id] ?? ""}
+              options={parseFieldOptions(c.options) as FieldOptions}
               disabled={!canEdit}
             />
           ),
@@ -293,6 +300,8 @@ export function BoardTable({
       id: `custom:${c.id}`,
       label: c.name,
       custom: true,
+      fieldType: c.type,
+      fieldOptions: parseFieldOptions(c.options),
     })),
   ];
 
@@ -513,48 +522,3 @@ function MutedDash() {
   return <span className="font-mono text-[0.7rem] text-muted-foreground/60">—</span>;
 }
 
-// F9-07: editable cell for a custom column. Native input, auto-saves on
-// blur — same pattern as DateCell above. Server dedupes empty strings
-// into row deletes so we don't bloat TaskCustomValue.
-function CustomCell({
-  taskId,
-  columnId,
-  initial,
-  disabled,
-}: {
-  taskId: string;
-  columnId: string;
-  initial: string;
-  disabled: boolean;
-}) {
-  if (disabled) {
-    return initial ? (
-      <span className="truncate text-[0.88rem]">{initial}</span>
-    ) : (
-      <MutedDash />
-    );
-  }
-  return (
-    <form action={setTaskCustomValueAction} className="m-0">
-      <input type="hidden" name="taskId" value={taskId} />
-      <input type="hidden" name="columnId" value={columnId} />
-      <input
-        name="value"
-        type="text"
-        defaultValue={initial}
-        onBlur={(e) => {
-          if (e.currentTarget.value === initial) return;
-          (e.currentTarget.form as HTMLFormElement).requestSubmit();
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            (e.currentTarget as HTMLInputElement).blur();
-          }
-        }}
-        placeholder="—"
-        className="w-full bg-transparent text-[0.88rem] outline-none placeholder:text-muted-foreground/40 focus-visible:text-foreground"
-      />
-    </form>
-  );
-}

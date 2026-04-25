@@ -331,14 +331,36 @@ const tablePrefsSchema = z.object({
   config: z.string().max(4000),
 });
 
-// F9-07: CRUD for per-board custom columns (the "dodaj kolumnę"
-// dropdown in the Tabela view). All values are text-only in v1; we
-// keep `type` as a string so adding NUMBER/DATE/SELECT later is a
-// code-only change.
+// F9-07 / F10-A: CRUD for per-board custom columns. F10-A added type
+// + options so each column knows whether it's NUMBER, DATE, SELECT, etc.
+// `options` is opaque JSON validated by the FieldOptions schema in
+// lib/table-fields.ts — we trust the client picker here and only check
+// shape on read in formatCellValue.
+const FIELD_TYPES = [
+  "TEXT",
+  "LONG_TEXT",
+  "NUMBER",
+  "DATE",
+  "CHECKBOX",
+  "SINGLE_SELECT",
+  "MULTI_SELECT",
+  "URL",
+  "EMAIL",
+  "PHONE",
+  "RATING",
+  "USER",
+  "ATTACHMENT",
+  "CREATED_TIME",
+  "LAST_MODIFIED_TIME",
+  "AUTO_NUMBER",
+] as const;
+
 const createTableColumnSchema = z.object({
   workspaceId: z.string().min(1),
   boardId: z.string().min(1),
   name: z.string().trim().min(1).max(80),
+  type: z.enum(FIELD_TYPES).default("TEXT"),
+  options: z.string().max(8000).optional(),
 });
 
 export async function createTableColumnAction(formData: FormData) {
@@ -346,10 +368,22 @@ export async function createTableColumnAction(formData: FormData) {
     workspaceId: formData.get("workspaceId"),
     boardId: formData.get("boardId"),
     name: formData.get("name"),
+    type: formData.get("type") ?? "TEXT",
+    options: formData.get("options") ?? undefined,
   });
   if (!parsed.success) return;
 
   const ctx = await requireWorkspaceAction(parsed.data.workspaceId, "board.update");
+
+  let optionsJson: Prisma.InputJsonValue | typeof Prisma.DbNull = Prisma.DbNull;
+  if (parsed.data.options) {
+    try {
+      const obj = JSON.parse(parsed.data.options);
+      if (obj && typeof obj === "object") optionsJson = obj as Prisma.InputJsonValue;
+    } catch {
+      // invalid JSON → fall back to NULL options
+    }
+  }
 
   const last = await db.tableColumn.findFirst({
     where: { boardId: parsed.data.boardId },
@@ -360,7 +394,8 @@ export async function createTableColumnAction(formData: FormData) {
     data: {
       boardId: parsed.data.boardId,
       name: parsed.data.name,
-      type: "TEXT",
+      type: parsed.data.type,
+      options: optionsJson,
       order: (last?.order ?? 0) + 1,
     },
   });
@@ -370,9 +405,65 @@ export async function createTableColumnAction(formData: FormData) {
     objectId: parsed.data.boardId,
     actorId: ctx.userId,
     action: "tableColumn.created",
-    diff: { name: parsed.data.name },
+    diff: { name: parsed.data.name, type: parsed.data.type },
   });
   revalidatePath(`/w/${parsed.data.workspaceId}/b/${parsed.data.boardId}/table`);
+}
+
+// F10-A: rename + retype + reconfigure an existing column. Used by the
+// gear-icon popover in the table header. Type changes are destructive
+// in spirit (a NUMBER column becoming DATE will display NaN strings
+// from old text values), so the picker UI warns the user — we don't
+// scrub TaskCustomValue rows here.
+const configureColumnSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(1).max(80).optional(),
+  type: z.enum(FIELD_TYPES).optional(),
+  options: z.string().max(8000).optional(),
+});
+
+export async function configureColumnAction(formData: FormData) {
+  const parsed = configureColumnSchema.safeParse({
+    id: formData.get("id"),
+    name: formData.get("name") ?? undefined,
+    type: formData.get("type") ?? undefined,
+    options: formData.get("options") ?? undefined,
+  });
+  if (!parsed.success) return;
+
+  const col = await db.tableColumn.findUnique({
+    where: { id: parsed.data.id },
+    include: { board: { select: { workspaceId: true, id: true } } },
+  });
+  if (!col) return;
+  const ctx = await requireWorkspaceAction(col.board.workspaceId, "board.update");
+
+  const data: Prisma.TableColumnUpdateInput = {};
+  if (parsed.data.name !== undefined) data.name = parsed.data.name;
+  if (parsed.data.type !== undefined) data.type = parsed.data.type;
+  if (parsed.data.options !== undefined) {
+    if (parsed.data.options === "") {
+      data.options = Prisma.DbNull;
+    } else {
+      try {
+        const obj = JSON.parse(parsed.data.options);
+        data.options = obj && typeof obj === "object" ? (obj as Prisma.InputJsonValue) : Prisma.DbNull;
+      } catch {
+        return;
+      }
+    }
+  }
+
+  await db.tableColumn.update({ where: { id: parsed.data.id }, data });
+  await writeAudit({
+    workspaceId: col.board.workspaceId,
+    objectType: "Board",
+    objectId: col.board.id,
+    actorId: ctx.userId,
+    action: "tableColumn.configured",
+    diff: { id: parsed.data.id, type: parsed.data.type, name: parsed.data.name },
+  });
+  revalidatePath(`/w/${col.board.workspaceId}/b/${col.board.id}/table`);
 }
 
 const renameTableColumnSchema = z.object({
