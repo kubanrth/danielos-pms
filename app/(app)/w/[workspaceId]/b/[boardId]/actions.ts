@@ -225,16 +225,20 @@ export async function reorderStatusColumnsAction(formData: FormData) {
 }
 
 // F8b: create a named BoardView so the user can have multiple views of
-// the same type (e.g. two Kanbans with different filters).
+// the same type (e.g. two Kanbans with different filters), and also a
+// "name = null" default row that recreates the canonical pill (Tabela,
+// Kanban, …) when the user deleted it earlier.
 const createViewSchema = z.object({
   workspaceId: z.string().min(1),
   boardId: z.string().min(1),
   type: z.enum(["TABLE", "KANBAN", "ROADMAP", "GANTT", "WHITEBOARD"]),
-  name: z.string().trim().min(1).max(60),
+  // Empty string = recreate the default for this type. Server checks
+  // there isn't already a default of this type before allowing it.
+  name: z.string().trim().max(60).optional(),
 });
 
 export type CreateViewState =
-  | { ok: true; viewId: string }
+  | { ok: true; viewId: string; defaultPath: string | null }
   | { ok: false; error?: string; fieldErrors?: { name?: string; type?: string } }
   | null;
 
@@ -246,7 +250,7 @@ export async function createBoardViewAction(
     workspaceId: formData.get("workspaceId"),
     boardId: formData.get("boardId"),
     type: formData.get("type"),
-    name: formData.get("name"),
+    name: formData.get("name") || undefined,
   });
   if (!parsed.success) {
     const fe: { name?: string; type?: string } = {};
@@ -259,11 +263,26 @@ export async function createBoardViewAction(
 
   const ctx = await requireWorkspaceAction(parsed.data.workspaceId, "board.update");
 
+  const wantsDefault = !parsed.data.name || parsed.data.name.length === 0;
+  if (wantsDefault) {
+    // Guard: there should only ever be one "default" row (name=null)
+    // per (board, type). Fail loudly so the UI prompts for a name.
+    const existing = await db.boardView.findFirst({
+      where: { boardId: parsed.data.boardId, type: parsed.data.type, name: null },
+    });
+    if (existing) {
+      return {
+        ok: false,
+        fieldErrors: { name: "Domyślny widok tego typu już istnieje — podaj nazwę dla nowego." },
+      };
+    }
+  }
+
   const view = await db.boardView.create({
     data: {
       boardId: parsed.data.boardId,
       type: parsed.data.type,
-      name: parsed.data.name,
+      name: wantsDefault ? null : parsed.data.name,
     },
   });
 
@@ -273,11 +292,22 @@ export async function createBoardViewAction(
     objectId: parsed.data.boardId,
     actorId: ctx.userId,
     action: "boardView.created",
-    diff: { type: parsed.data.type, name: parsed.data.name },
+    diff: { type: parsed.data.type, name: parsed.data.name ?? null },
   });
 
-  revalidatePath(`/w/${parsed.data.workspaceId}/b/${parsed.data.boardId}/table`);
-  return { ok: true, viewId: view.id };
+  // Default views map back to canonical /table /kanban /roadmap etc.
+  // routes; named views live under /v/[viewId].
+  const defaultPath = wantsDefault
+    ? `/w/${parsed.data.workspaceId}/b/${parsed.data.boardId}/${parsed.data.type.toLowerCase()}`
+    : null;
+
+  // Revalidate every default route so the pill list updates regardless
+  // of which page the user lands on.
+  const base = `/w/${parsed.data.workspaceId}/b/${parsed.data.boardId}`;
+  for (const p of ["table", "kanban", "roadmap", "gantt", "whiteboard"]) {
+    revalidatePath(`${base}/${p}`);
+  }
+  return { ok: true, viewId: view.id, defaultPath };
 }
 
 const deleteViewSchema = z.object({ viewId: z.string().min(1) });

@@ -36,18 +36,29 @@ const TYPE_OPTIONS: {
   { value: "WHITEBOARD", name: "whiteboard", label: "Whiteboard", icon: Pencil },
 ];
 
-// Compact `+ Nowy widok` button rendered next to the ViewSwitcher. Opens
-// a dialog, creates a BoardView with a chosen type + label, redirects to
-// the new `/v/[viewId]` route on success.
+// Compact `+ Nowy widok` button rendered next to the ViewSwitcher.
+//
+// Two creation modes:
+// - If the picked type doesn't yet have a default BoardView on this
+//   board (e.g. the user previously deleted the default Kanban),
+//   submitting WITHOUT a name recreates that default — the canonical
+//   pill (Kanban) reappears and we route to /kanban.
+// - If a default already exists, the user must type a name — that
+//   creates a custom BoardView under /v/[viewId].
 export function CreateViewDialog({
   workspaceId,
   boardId,
   enabled,
+  existingDefaultTypes,
 }: {
   workspaceId: string;
   boardId: string;
-  // Filter offered types to those enabled in this workspace.
+  // All types enabled at the workspace level (independent of which
+  // currently have a default row on this board).
   enabled: ViewName[];
+  // Types whose default BoardView (name=null) currently exists on this
+  // board. Used to decide whether a name is required.
+  existingDefaultTypes: ViewName[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -59,17 +70,22 @@ export function CreateViewDialog({
 
   useEffect(() => {
     if (state?.ok) {
-      // Closing a dialog in response to an async action result is the
-      // "external → React" bridge the linter rule exempts; silence the
-      // heuristic here so we don't need a parallel ref dance.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setOpen(false);
-      router.push(`/w/${workspaceId}/b/${boardId}/v/${state.viewId}`);
+      router.push(
+        state.defaultPath ?? `/w/${workspaceId}/b/${boardId}/v/${state.viewId}`,
+      );
       router.refresh();
     }
   }, [state, router, workspaceId, boardId]);
 
   const options = TYPE_OPTIONS.filter((t) => enabled.includes(t.name));
+  // For the picked type: are we recreating a default (no name needed)
+  // or creating a custom (name required)?
+  const selectedName = TYPE_OPTIONS.find((t) => t.value === selectedType)?.name;
+  const recreatingDefault =
+    !!selectedName && !existingDefaultTypes.includes(selectedName);
+  const selectedLabel = TYPE_OPTIONS.find((t) => t.value === selectedType)?.label ?? "widok";
 
   return (
     <>
@@ -89,12 +105,13 @@ export function CreateViewDialog({
           <DialogHeader>
             <span className="eyebrow">Nowy widok</span>
             <DialogTitle className="font-display text-[1.45rem] font-bold leading-[1.15] tracking-[-0.02em] text-foreground">
-              Dodaj <span className="text-brand-gradient">własny</span> widok do
+              Dodaj <span className="text-brand-gradient">widok</span> do
               tablicy.
             </DialogTitle>
             <DialogDescription className="text-[0.9rem] leading-[1.55] text-muted-foreground">
-              Ten sam typ widoku możesz mieć wiele razy — np. dwa Kanbany z
-              różnymi filtrami.
+              Wybierz typ — jeśli dany domyślny widok został wcześniej usunięty,
+              możesz go przywrócić. Inaczej dostajesz dodatkowy widok z własną
+              nazwą (np. dwa Kanbany z różnymi filtrami).
             </DialogDescription>
           </DialogHeader>
 
@@ -132,23 +149,31 @@ export function CreateViewDialog({
               </div>
             </div>
 
-            <label className="flex flex-col gap-2">
-              <span className="eyebrow">Nazwa widoku</span>
-              <input
-                name="name"
-                required
-                autoFocus
-                maxLength={60}
-                placeholder="np. Sprint 4 · Kanban klienta"
-                aria-invalid={!state?.ok && !!state?.fieldErrors?.name}
-                className="h-10 border-b border-border bg-transparent pb-1 font-sans text-[1rem] outline-none focus:border-primary aria-[invalid=true]:border-destructive"
-              />
-              {!state?.ok && state?.fieldErrors?.name && (
-                <span className="font-mono text-[0.68rem] text-destructive">
-                  {state.fieldErrors.name}
-                </span>
-              )}
-            </label>
+            {recreatingDefault ? (
+              <p className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-[0.85rem] leading-[1.5] text-foreground">
+                Domyślny widok <strong>{selectedLabel}</strong> na tej tablicy
+                nie istnieje — kliknij <em>Przywróć</em> aby wrócił jako
+                stała pigułka w pasku widoków.
+              </p>
+            ) : (
+              <label className="flex flex-col gap-2">
+                <span className="eyebrow">Nazwa widoku</span>
+                <input
+                  name="name"
+                  required
+                  autoFocus
+                  maxLength={60}
+                  placeholder="np. Sprint 4 · Kanban klienta"
+                  aria-invalid={!state?.ok && !!state?.fieldErrors?.name}
+                  className="h-10 border-b border-border bg-transparent pb-1 font-sans text-[1rem] outline-none focus:border-primary aria-[invalid=true]:border-destructive"
+                />
+                {!state?.ok && state?.fieldErrors?.name && (
+                  <span className="font-mono text-[0.68rem] text-destructive">
+                    {state.fieldErrors.name}
+                  </span>
+                )}
+              </label>
+            )}
 
             {!state?.ok && state?.error && (
               <p className="font-mono text-[0.72rem] uppercase tracking-[0.14em] text-destructive">
@@ -169,7 +194,11 @@ export function CreateViewDialog({
                 disabled={pending}
                 className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-gradient px-5 font-sans text-[0.9rem] font-semibold text-white shadow-brand transition-[transform,opacity] duration-200 hover:-translate-y-[1px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60"
               >
-                {pending ? "Tworzę…" : "Utwórz widok"}
+                {pending
+                  ? "Tworzę…"
+                  : recreatingDefault
+                    ? `Przywróć ${selectedLabel}`
+                    : "Utwórz widok"}
               </button>
             </div>
           </form>

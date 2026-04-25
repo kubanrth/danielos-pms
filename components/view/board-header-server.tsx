@@ -78,7 +78,16 @@ export async function BoardHeaderServer({
           <CreateViewDialog
             workspaceId={workspaceId}
             boardId={boardId}
-            enabled={effectiveEnabled}
+            // Pass the FULL workspace-level enabled set so the user can
+            // recreate a default they previously deleted. effectiveEnabled
+            // (which we use for the pill list) is filtered down to types
+            // that currently have a default — wrong source for the picker.
+            enabled={enabledViews}
+            existingDefaultTypes={
+              Object.keys(defaultViewIds).filter(
+                (k): k is ViewName => Boolean(defaultViewIds[k as ViewName]),
+              )
+            }
           />
         ) : null
       }
