@@ -165,7 +165,12 @@ async function TableRenderer({
     filters?: unknown;
     sort?: unknown;
     groupBy?: unknown;
+    widths?: unknown;
   };
+  const cfgWidths =
+    cfg.widths && typeof cfg.widths === "object"
+      ? (cfg.widths as Record<string, number>)
+      : undefined;
   const cfgFilters = Array.isArray(cfg.filters)
     ? (cfg.filters as TableFilter[])
     : undefined;
@@ -217,6 +222,7 @@ async function TableRenderer({
       initialFilters={cfgFilters}
       initialSort={cfgSort}
       initialGroupBy={cfgGroupBy}
+      initialWidths={cfgWidths}
       customColumns={board.customColumns.map((c) => ({
         id: c.id,
         name: c.name,

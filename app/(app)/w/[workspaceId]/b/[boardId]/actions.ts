@@ -692,6 +692,8 @@ export async function saveTableColumnPrefsAction(formData: FormData) {
     .object({
       columnOrder: z.array(z.string()).optional(),
       hidden: z.array(z.string()).optional(),
+      // F10-X: per-column persisted pixel widths (TanStack columnSizing)
+      widths: z.record(z.string(), z.number().min(40).max(1200)).optional(),
     })
     .safeParse(config);
   if (!shape.success) return;
@@ -707,8 +709,9 @@ export async function saveTableColumnPrefsAction(formData: FormData) {
     ...(typeof existing?.configJson === "object" && existing.configJson
       ? (existing.configJson as Record<string, unknown>)
       : {}),
-    columnOrder: shape.data.columnOrder ?? [],
-    hidden: shape.data.hidden ?? [],
+    ...(shape.data.columnOrder !== undefined ? { columnOrder: shape.data.columnOrder } : {}),
+    ...(shape.data.hidden !== undefined ? { hidden: shape.data.hidden } : {}),
+    ...(shape.data.widths !== undefined ? { widths: shape.data.widths } : {}),
   };
 
   if (existing) {

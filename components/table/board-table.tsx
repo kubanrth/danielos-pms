@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   createColumnHelper,
@@ -9,15 +9,22 @@ import {
   getSortedRowModel,
   useReactTable,
   type ColumnOrderState,
+  type ColumnSizingState,
   type SortingState,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { Plus } from "lucide-react";
+import {
+  createTableColumnAction,
+  saveTableColumnPrefsAction,
+} from "@/app/(app)/w/[workspaceId]/b/[boardId]/actions";
+import { createTaskAction } from "@/app/(app)/w/[workspaceId]/t/actions";
 import { patchTaskAction } from "@/app/(app)/w/[workspaceId]/t/actions";
 import { useWorkspaceRealtime } from "@/hooks/use-workspace-realtime";
 import { taskPl } from "@/lib/pluralize";
 import { ColumnSettings, type ColumnDef } from "@/components/table/column-settings";
 import { FieldCell } from "@/components/table/field-cells";
+import { TableHeaderCell } from "@/components/table/header-cell";
 import { parseFieldOptions, type FieldOptions, type FieldType } from "@/lib/table-fields";
 import {
   TableFiltersToolbar,
@@ -29,6 +36,7 @@ import {
   type TableFilter,
   type TableSort,
 } from "@/lib/table-filters";
+import { saveTableFiltersAction } from "@/app/(app)/w/[workspaceId]/b/[boardId]/actions";
 import {
   useAssignHotkey,
   type AssignMember,
@@ -108,6 +116,7 @@ export function BoardTable({
   initialFilters,
   initialSort,
   initialGroupBy,
+  initialWidths,
   customColumns,
   members,
 }: {
@@ -123,6 +132,8 @@ export function BoardTable({
   initialFilters?: TableFilter[];
   initialSort?: TableSort | null;
   initialGroupBy?: string | null;
+  // F10-X: persisted per-column pixel widths.
+  initialWidths?: Record<string, number>;
   customColumns: CustomTableColumn[];
   // F9-13: needed for the `M` assign hotkey.
   members: AssignMember[];
@@ -161,12 +172,76 @@ export function BoardTable({
   });
   useWorkspaceRealtime(workspaceId);
 
+  // F10-X: persisted per-column widths. TanStack tracks live drag state;
+  // we persist to the server when the user releases the drag handle.
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(
+    () => initialWidths ?? {},
+  );
+  // Skip the first-render no-op write — initial state already matches
+  // what's on the server, no point round-tripping.
+  const sizingDirty = useRef(false);
+  const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!canManagePrefs) return;
+    if (!sizingDirty.current) {
+      sizingDirty.current = true;
+      return;
+    }
+    if (persistTimer.current) clearTimeout(persistTimer.current);
+    persistTimer.current = setTimeout(() => {
+      const fd = new FormData();
+      fd.set("workspaceId", workspaceId);
+      fd.set("boardId", boardId);
+      fd.set("config", JSON.stringify({ widths: columnSizing }));
+      startTransition(() => {
+        saveTableColumnPrefsAction(fd);
+      });
+    }, 250);
+    return () => {
+      if (persistTimer.current) clearTimeout(persistTimer.current);
+    };
+  }, [columnSizing, workspaceId, boardId, canManagePrefs]);
+
   // F10-B: filter / sort / group state. Persisted on BoardView.configJson
   // by the toolbar's onChange — we apply them client-side over `tasks`
   // so realtime patches keep working.
   const [filters, setFilters] = useState<TableFilter[]>(initialFilters ?? []);
   const [tableSort, setTableSort] = useState<TableSort | null>(initialSort ?? null);
   const [groupBy, setGroupBy] = useState<string | null>(initialGroupBy ?? null);
+
+  // Reusable persist for filter/sort/groupBy — used by the toolbar AND
+  // by header-cell context menu actions. Keeps the server in sync when
+  // user sorts/filters from the per-column menu instead of the toolbar.
+  const persistFilters = (next: {
+    filters: TableFilter[];
+    sort: TableSort | null;
+    groupBy: string | null;
+  }) => {
+    if (!canManagePrefs) return;
+    const fd = new FormData();
+    fd.set("workspaceId", workspaceId);
+    fd.set("boardId", boardId);
+    fd.set(
+      "payload",
+      JSON.stringify({ filters: next.filters, sort: next.sort, groupBy: next.groupBy }),
+    );
+    startTransition(() => saveTableFiltersAction(fd));
+  };
+
+  // Same for the prefs (order/hidden/widths). Used when the menu hides
+  // a column without going through ColumnSettings.
+  const persistPrefs = (patch: {
+    columnOrder?: string[];
+    hidden?: string[];
+    widths?: Record<string, number>;
+  }) => {
+    if (!canManagePrefs) return;
+    const fd = new FormData();
+    fd.set("workspaceId", workspaceId);
+    fd.set("boardId", boardId);
+    fd.set("config", JSON.stringify(patch));
+    startTransition(() => saveTableColumnPrefsAction(fd));
+  };
 
   // Pipeline: filter → sort. Grouping happens at render time so each
   // group keeps the same sort.
@@ -197,6 +272,8 @@ export function BoardTable({
     () => [
       col.accessor("statusColumnId", {
         header: "Status",
+        size: 160,
+        minSize: 80,
         cell: (info) => (
           <StatusCell
             taskId={info.row.original.id}
@@ -213,6 +290,8 @@ export function BoardTable({
       }),
       col.accessor("title", {
         header: "Tytuł",
+        size: 280,
+        minSize: 120,
         cell: (info) => (
           <Link
             href={`/w/${workspaceId}/t/${info.row.original.id}`}
@@ -224,6 +303,8 @@ export function BoardTable({
       }),
       col.accessor("assignees", {
         header: "Osoby",
+        size: 130,
+        minSize: 60,
         enableSorting: false,
         cell: (info) => {
           const assignees = info.getValue();
@@ -257,6 +338,8 @@ export function BoardTable({
       }),
       col.accessor("tags", {
         header: "Tagi",
+        size: 200,
+        minSize: 80,
         enableSorting: false,
         cell: (info) => {
           const tags = info.getValue();
@@ -281,6 +364,8 @@ export function BoardTable({
       }),
       col.accessor("startAt", {
         header: "Start",
+        size: 180,
+        minSize: 110,
         cell: (info) => (
           <DateCell
             taskId={info.row.original.id}
@@ -292,6 +377,8 @@ export function BoardTable({
       }),
       col.accessor("stopAt", {
         header: "Koniec",
+        size: 180,
+        minSize: 110,
         cell: (info) => (
           <DateCell
             taskId={info.row.original.id}
@@ -309,6 +396,8 @@ export function BoardTable({
         col.display({
           id: `custom:${c.id}`,
           header: c.name,
+          size: defaultSizeForType(c.type),
+          minSize: 80,
           cell: ({ row }) => (
             <FieldCell
               taskId={row.original.id}
@@ -328,10 +417,13 @@ export function BoardTable({
   const table = useReactTable({
     data: filteredSorted,
     columns,
-    state: { sorting, columnOrder, columnVisibility },
+    state: { sorting, columnOrder, columnVisibility, columnSizing },
     onSortingChange: setSorting,
     onColumnOrderChange: setColumnOrder,
     onColumnVisibilityChange: setColumnVisibility,
+    onColumnSizingChange: setColumnSizing,
+    enableColumnResizing: true,
+    columnResizeMode: "onChange",
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });
@@ -473,40 +565,124 @@ export function BoardTable({
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id} className="border-b border-border bg-muted/40">
                 {hg.headers.map((header) => {
-                  const canSort = header.column.getCanSort();
-                  const sortDir = header.column.getIsSorted();
+                  const canResize = header.column.getCanResize();
+                  const isResizing = header.column.getIsResizing();
+                  const colId = header.column.id;
+                  const isCustom = colId.startsWith("custom:");
+                  const customCol = isCustom
+                    ? customColumns.find((c) => `custom:${c.id}` === colId)
+                    : null;
+                  const headerLabel =
+                    typeof header.column.columnDef.header === "string"
+                      ? header.column.columnDef.header
+                      : colId;
+                  const sortDir =
+                    tableSort?.columnId ===
+                    (isCustom ? colId.replace(/^custom:/, "") : colId)
+                      ? tableSort.dir
+                      : false;
                   return (
                     <th
                       key={header.id}
-                      className="sticky top-0 h-10 px-4 text-left font-mono text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
-                      style={{ width: columnWidth(header.column.id) }}
+                      className="group/th relative sticky top-0 h-10 px-4 text-left font-mono text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+                      style={{ width: header.getSize() }}
                     >
-                      {canSort ? (
-                        <button
-                          type="button"
-                          onClick={header.column.getToggleSortingHandler()}
-                          className="flex items-center gap-1.5 transition-colors hover:text-foreground"
-                        >
-                          {flexRender(header.column.columnDef.header, header.getContext())}
-                          {sortDir === "asc" && <ArrowUp size={10} />}
-                          {sortDir === "desc" && <ArrowDown size={10} />}
-                          {sortDir === false && (
-                            <ArrowUpDown size={10} className="opacity-40" />
-                          )}
-                        </button>
-                      ) : (
-                        flexRender(header.column.columnDef.header, header.getContext())
+                      <TableHeaderCell
+                        columnId={colId}
+                        label={headerLabel}
+                        fieldType={customCol?.type}
+                        canManagePrefs={canManagePrefs}
+                        isSorted={sortDir as false | "asc" | "desc"}
+                        onSort={(dir) => {
+                          if (dir === null) {
+                            setTableSort(null);
+                            persistFilters({ filters, sort: null, groupBy });
+                          } else {
+                            const targetId = isCustom
+                              ? colId.replace(/^custom:/, "")
+                              : colId;
+                            const kind: TableSort["kind"] = customCol
+                              ? customCol.type
+                              : colId === "title"
+                                ? "BUILTIN_TITLE"
+                                : colId === "statusColumnId"
+                                  ? "BUILTIN_STATUS"
+                                  : "BUILTIN_DATE";
+                            const next: TableSort = { columnId: targetId, kind, dir };
+                            setTableSort(next);
+                            persistFilters({ filters, sort: next, groupBy });
+                          }
+                        }}
+                        onFilter={() => {
+                          // Add an empty filter for this column so the
+                          // toolbar chip pops up ready for value input.
+                          const targetId = isCustom
+                            ? colId.replace(/^custom:/, "")
+                            : colId;
+                          const kind: TableFilter["kind"] = customCol
+                            ? customCol.type
+                            : colId === "title"
+                              ? "BUILTIN_TITLE"
+                              : colId === "statusColumnId"
+                                ? "BUILTIN_STATUS"
+                                : "BUILTIN_DATE";
+                          const newFilter: TableFilter = {
+                            columnId: targetId,
+                            kind,
+                            op:
+                              kind === "BUILTIN_STATUS" || kind === "SINGLE_SELECT"
+                                ? "equals"
+                                : kind === "NUMBER" || kind === "RATING"
+                                  ? "equals"
+                                  : kind === "CHECKBOX"
+                                    ? "isChecked"
+                                    : "contains",
+                            value: "",
+                          };
+                          const nextFilters = [...filters, newFilter];
+                          setFilters(nextFilters);
+                          persistFilters({ filters: nextFilters, sort: tableSort, groupBy });
+                        }}
+                        onHide={() => {
+                          const next = { ...columnVisibility, [colId]: false };
+                          setColumnVisibility(next);
+                          const hidden = Object.entries(next)
+                            .filter(([, v]) => !v)
+                            .map(([id]) => id);
+                          persistPrefs({ hidden, columnOrder });
+                        }}
+                      />
+                      {canResize && canManagePrefs && (
+                        <div
+                          onMouseDown={header.getResizeHandler()}
+                          onTouchStart={header.getResizeHandler()}
+                          onDoubleClick={() => header.column.resetSize()}
+                          role="separator"
+                          aria-orientation="vertical"
+                          aria-label="Zmień szerokość kolumny"
+                          className={`absolute right-0 top-0 z-10 h-full w-1.5 cursor-col-resize select-none touch-none transition-colors ${
+                            isResizing ? "bg-primary" : "bg-transparent hover:bg-primary/40"
+                          }`}
+                        />
                       )}
                     </th>
                   );
                 })}
+                {canManagePrefs && (
+                  <th className="sticky top-0 h-10 w-12 px-2 text-left font-mono text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    <AddColumnButton workspaceId={workspaceId} boardId={boardId} />
+                  </th>
+                )}
               </tr>
             ))}
           </thead>
           <tbody>
             {table.getRowModel().rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="py-12 text-center text-muted-foreground">
+                <td
+                  colSpan={columns.length + (canManagePrefs ? 1 : 0)}
+                  className="py-12 text-center text-muted-foreground"
+                >
                   <p className="font-display text-[0.95rem] font-semibold">Brak zadań.</p>
                   <p className="mt-1 font-mono text-[0.68rem] uppercase tracking-[0.14em]">
                     {filters.length > 0 ? "filtry nic nie zwróciły" : "użyj „Nowe zadanie” powyżej"}
@@ -527,7 +703,7 @@ export function BoardTable({
                     key={bucket.key}
                     label={bucket.label}
                     color={bucket.color}
-                    columnCount={columns.length}
+                    columnCount={columns.length + (canManagePrefs ? 1 : 0)}
                     showHeader={Boolean(groupBy)}
                   >
                     {bucketRows.map((row) => (
@@ -540,15 +716,27 @@ export function BoardTable({
                         )}
                       >
                         {row.getVisibleCells().map((cell) => (
-                          <td key={cell.id} className="px-4 py-2.5 align-middle">
+                          <td
+                            key={cell.id}
+                            className="px-4 py-2.5 align-middle"
+                            style={{ width: cell.column.getSize() }}
+                          >
                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
                           </td>
                         ))}
+                        {canManagePrefs && <td className="w-12" />}
                       </tr>
                     ))}
                   </GroupBucket>
                 );
               })
+            )}
+            {canEdit && (
+              <AddRowInline
+                workspaceId={workspaceId}
+                boardId={boardId}
+                columnCount={columns.length + (canManagePrefs ? 1 : 0)}
+              />
             )}
           </tbody>
         </table>
@@ -565,19 +753,38 @@ export function BoardTable({
   );
 }
 
-function columnWidth(id: string): string | undefined {
-  switch (id) {
-    case "statusColumnId":
-      return "160px";
-    case "assignees":
-      return "130px";
-    case "tags":
-      return "200px";
-    case "startAt":
-    case "stopAt":
-      return "180px";
+// F10-X: starting widths per FieldType for newly-added custom columns.
+// User overrides via drag persist on top of this default.
+function defaultSizeForType(type: FieldType): number {
+  switch (type) {
+    case "CHECKBOX":
+      return 90;
+    case "RATING":
+      return 130;
+    case "NUMBER":
+    case "AUTO_NUMBER":
+      return 130;
+    case "DATE":
+    case "CREATED_TIME":
+    case "LAST_MODIFIED_TIME":
+      return 180;
+    case "PHONE":
+      return 160;
+    case "URL":
+    case "EMAIL":
+      return 220;
+    case "LONG_TEXT":
+      return 300;
+    case "MULTI_SELECT":
+      return 220;
+    case "SINGLE_SELECT":
+      return 160;
+    case "USER":
+      return 160;
+    case "ATTACHMENT":
+      return 200;
     default:
-      return undefined;
+      return 200;
   }
 }
 
@@ -721,6 +928,139 @@ function GroupBucket({
       </tr>
       {open && children}
     </>
+  );
+}
+
+// F10-X: small "+" trigger at the end of the header row. Opens a tiny
+// inline input — Enter creates a TEXT column with that name. Power
+// users can still configure the type via the column gear afterwards;
+// this is the "add fast" path that matches Airtable's "+ Add field".
+function AddColumnButton({
+  workspaceId,
+  boardId,
+}: {
+  workspaceId: string;
+  boardId: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const submit = () => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const fd = new FormData();
+    fd.set("workspaceId", workspaceId);
+    fd.set("boardId", boardId);
+    fd.set("name", trimmed);
+    fd.set("type", "TEXT");
+    startTransition(async () => {
+      await createTableColumnAction(fd);
+      setName("");
+      setOpen(false);
+    });
+  };
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Dodaj kolumnę"
+        title="Dodaj kolumnę"
+        className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+      >
+        <Plus size={13} />
+      </button>
+    );
+  }
+  return (
+    <input
+      autoFocus
+      value={name}
+      onChange={(e) => setName(e.target.value)}
+      onBlur={() => {
+        if (!name.trim()) setOpen(false);
+        else submit();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          submit();
+        } else if (e.key === "Escape") {
+          setName("");
+          setOpen(false);
+        }
+      }}
+      placeholder="nazwa…"
+      maxLength={80}
+      className="w-full rounded-sm border border-primary/40 bg-background px-1.5 py-0.5 text-[0.66rem] uppercase tracking-[0.14em] text-foreground outline-none focus:border-primary"
+    />
+  );
+}
+
+// F10-X: ghost "+ Nowy wiersz" row pinned at the end of tbody. Click
+// to expand into an inline title input; Enter creates the task. Saved
+// to the first status column with default rowOrder, same path as the
+// "Nowe zadanie" toolbar button — just less clicks to reach it.
+function AddRowInline({
+  workspaceId,
+  boardId,
+  columnCount,
+}: {
+  workspaceId: string;
+  boardId: string;
+  columnCount: number;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState("");
+  const submit = () => {
+    const trimmed = title.trim();
+    if (!trimmed) {
+      setEditing(false);
+      return;
+    }
+    const fd = new FormData();
+    fd.set("workspaceId", workspaceId);
+    fd.set("boardId", boardId);
+    fd.set("title", trimmed);
+    startTransition(async () => {
+      await createTaskAction(null, fd);
+      setTitle("");
+      // Stay in edit mode so the user can keep firing rows without
+      // clicking again — Airtable does the same thing.
+    });
+  };
+  return (
+    <tr className="border-t border-dashed border-border/70 hover:bg-accent/20">
+      <td colSpan={columnCount} className="px-4 py-2">
+        {editing ? (
+          <input
+            autoFocus
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={submit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                submit();
+              } else if (e.key === "Escape") {
+                setTitle("");
+                setEditing(false);
+              }
+            }}
+            maxLength={200}
+            placeholder="Tytuł zadania…"
+            className="w-full bg-transparent text-[0.92rem] outline-none placeholder:text-muted-foreground/50"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="inline-flex items-center gap-1.5 font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <Plus size={11} /> Nowy wiersz
+          </button>
+        )}
+      </td>
+    </tr>
   );
 }
 
