@@ -216,6 +216,22 @@ export async function saveCanvasSnapshotAction(
           }),
         ]
       : []),
+    // F10-W: strokes (pen-tool drawings). Same delete-and-recreate
+    // approach as edges — no FKs hanging off them.
+    db.processStroke.deleteMany({ where: { canvasId: canvas.id } }),
+    ...(parsed.data.strokes && parsed.data.strokes.length > 0
+      ? [
+          db.processStroke.createMany({
+            data: parsed.data.strokes.map((s) => ({
+              id: s.id,
+              canvasId: canvas.id,
+              colorHex: s.colorHex,
+              size: s.size,
+              points: s.points,
+            })),
+          }),
+        ]
+      : []),
     db.processCanvas.update({
       where: { id: canvas.id },
       data: { updatedAt: new Date() },
@@ -231,6 +247,7 @@ export async function saveCanvasSnapshotAction(
     diff: {
       nodeCount: parsed.data.nodes.length,
       edgeCount: parsed.data.edges.length,
+      strokeCount: parsed.data.strokes?.length ?? 0,
       created: toCreate.length,
       updated: toUpdate.length,
       deleted: toDelete.length,

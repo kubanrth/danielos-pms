@@ -8,7 +8,13 @@ export interface NodeTaskChip {
   title: string;
 }
 
-export type ShapeKind = "RECTANGLE" | "DIAMOND" | "CIRCLE" | "STICKY" | "FRAME";
+export type ShapeKind =
+  | "RECTANGLE"
+  | "DIAMOND"
+  | "CIRCLE"
+  | "STICKY"
+  | "FRAME"
+  | "TEXT";
 
 export interface ShapeNodeData {
   shape: ShapeKind;
@@ -36,6 +42,21 @@ export const ShapeNode = memo(function ShapeNode({ data, selected }: NodeProps) 
   if (d.shape === "FRAME") {
     return (
       <FrameShape
+        width={d.width}
+        height={d.height}
+        colorHex={d.colorHex}
+        label={label}
+        selected={!!selected}
+      />
+    );
+  }
+
+  // F10-W: TEXT renders as borderless / fill-less prose. The "color"
+  // field is the TEXT color (not background) so we map a sensible
+  // default if a legacy fill is passed.
+  if (d.shape === "TEXT") {
+    return (
+      <TextShape
         width={d.width}
         height={d.height}
         colorHex={d.colorHex}
@@ -283,22 +304,106 @@ function StickyShape({
   selected: boolean;
   children: React.ReactNode;
 }) {
+  // Mural-style sticky: paper feel via subtle paper gradient, sharper
+  // top edge (folded corner micro-detail), heavier drop shadow that
+  // reads as "lifted off the canvas". Slight tilt for charm.
+  const tilt = ((Math.abs(hashFromString(colorHex)) % 5) - 2) * 0.6; // -1.2..1.2°
+  const text = textColorFor(colorHex);
   return (
     <div
       style={{
         width,
         height,
-        background: colorHex,
-        borderRadius: 4,
-        transform: "rotate(-1.5deg)",
-        boxShadow: `${ringShadow === "none" ? "" : ringShadow + ", "}0 1px 2px rgba(0,0,0,0.06), 0 12px 20px -12px rgba(120, 80, 0, 0.35)`,
-        color: textColorFor(colorHex),
+        background: `linear-gradient(180deg, color-mix(in oklch, ${colorHex} 96%, white) 0%, ${colorHex} 100%)`,
+        borderRadius: 6,
+        transform: `rotate(${tilt}deg)`,
+        boxShadow: `${ringShadow === "none" ? "" : ringShadow + ", "}
+          0 1px 2px rgba(0,0,0,0.06),
+          0 6px 14px -8px rgba(0,0,0,0.18),
+          0 20px 30px -18px rgba(0,0,0,0.22),
+          inset 0 -2px 4px rgba(0,0,0,0.04)`,
+        color: text,
+        position: "relative",
       }}
       className="grid place-items-center"
     >
+      {/* folded-corner highlight — adds the "real paper" touch */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute right-0 top-0 h-3 w-3"
+        style={{
+          background: `linear-gradient(225deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 60%)`,
+          borderTopRightRadius: 6,
+        }}
+      />
       {children}
     </div>
   );
+}
+
+// F10-W: text-only object. No fill, no border. The colorHex is the
+// text color, not the background. Selection ring still renders so the
+// user knows which one is picked.
+function TextShape({
+  width,
+  height,
+  colorHex,
+  label,
+  selected,
+}: {
+  width: number;
+  height: number;
+  colorHex: string;
+  label: string;
+  selected: boolean;
+}) {
+  // If the user picked a near-white "fill" color (legacy palette), fall
+  // back to ink-dark so the text stays visible on the canvas background.
+  const ink = isPaleHex(colorHex) ? "#1F2937" : colorHex;
+  return (
+    <div
+      style={{
+        width,
+        height,
+        boxShadow: selected
+          ? "0 0 0 2px color-mix(in oklch, var(--primary) 40%, transparent)"
+          : "none",
+        borderRadius: 6,
+      }}
+      className="grid place-items-center px-2"
+    >
+      <span
+        className="pointer-events-none select-none text-center font-display tracking-[-0.01em]"
+        style={{
+          color: ink,
+          fontSize: Math.max(14, Math.min(48, height * 0.36)),
+          fontWeight: 700,
+          lineHeight: 1.1,
+        }}
+      >
+        {label || (
+          <span style={{ color: ink, opacity: 0.4, fontWeight: 500 }}>
+            dwuklik aby pisać
+          </span>
+        )}
+      </span>
+    </div>
+  );
+}
+
+// Stable per-string hash → tiny float, used for deterministic sticky tilt.
+function hashFromString(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h << 5) - h + s.charCodeAt(i);
+  return h;
+}
+
+function isPaleHex(hex: string): boolean {
+  if (!/^#[0-9A-Fa-f]{6}$/.test(hex)) return true;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.85;
 }
 
 function FrameShape({

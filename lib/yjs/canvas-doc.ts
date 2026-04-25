@@ -10,7 +10,15 @@
 
 import * as Y from "yjs";
 
-export const SHAPES = ["RECTANGLE", "DIAMOND", "CIRCLE", "STICKY", "FRAME"] as const;
+export const SHAPES = [
+  "RECTANGLE",
+  "DIAMOND",
+  "CIRCLE",
+  "STICKY",
+  "FRAME",
+  // F10-W: Mural-feel additions.
+  "TEXT",
+] as const;
 export type CanvasShape = (typeof SHAPES)[number];
 export const EDGE_ENDS = ["arrow", "none", "diamond", "circle"] as const;
 export type CanvasEdgeEnd = (typeof EDGE_ENDS)[number];
@@ -38,10 +46,23 @@ export interface CanvasEdgeValue {
 export type InitialNode = CanvasNodeValue;
 export type InitialEdge = CanvasEdgeValue;
 
+// F10-W: free-drawing strokes (pen tool). Each stroke is one continuous
+// pointer drag captured as an array of {x,y} world-coordinates. Stored
+// as Y.Map keyed by stroke id so deletes merge cleanly when multiple
+// users erase simultaneously. Points are flat number[] in [x0,y0,x1,y1…]
+// form to avoid the JSON parse/stringify roundtrip per stroke.
+export interface CanvasStrokeValue {
+  id: string;
+  colorHex: string;
+  size: number;
+  points: number[]; // flat: [x0, y0, x1, y1, …]
+}
+
 export interface CanvasYRefs {
   ydoc: Y.Doc;
   nodes: Y.Map<Y.Map<unknown>>;
   edges: Y.Map<Y.Map<unknown>>;
+  strokes: Y.Map<Y.Map<unknown>>;
 }
 
 export const LOCAL_ORIGIN = Symbol("canvas:local");
@@ -52,7 +73,8 @@ export function createCanvasYDoc(): CanvasYRefs {
   const ydoc = new Y.Doc();
   const nodes = ydoc.getMap<Y.Map<unknown>>("nodes");
   const edges = ydoc.getMap<Y.Map<unknown>>("edges");
-  return { ydoc, nodes, edges };
+  const strokes = ydoc.getMap<Y.Map<unknown>>("strokes");
+  return { ydoc, nodes, edges, strokes };
 }
 
 // Bulk-seed on open. Uses SEED_ORIGIN so the editor can skip any
@@ -61,10 +83,12 @@ export function seedCanvasDoc(
   refs: CanvasYRefs,
   initialNodes: InitialNode[],
   initialEdges: InitialEdge[],
+  initialStrokes: CanvasStrokeValue[] = [],
 ): void {
   refs.ydoc.transact(() => {
     for (const n of initialNodes) setNodeValue(refs.nodes, n);
     for (const e of initialEdges) setEdgeValue(refs.edges, e);
+    for (const s of initialStrokes) setStrokeValue(refs.strokes, s);
   }, SEED_ORIGIN);
 }
 
@@ -126,12 +150,40 @@ export function setEdgeValue(
   }
 }
 
+// F10-W: pen-tool stroke helpers. Strokes are immutable once finalized
+// (no point-by-point CRDT merge — pen drags are atomic), so we always
+// replace the Y.Map on write. Storing points as a Y.Array would buy us
+// nothing here.
+function toStrokeYMap(stroke: CanvasStrokeValue): Y.Map<unknown> {
+  const m = new Y.Map<unknown>();
+  m.set("colorHex", stroke.colorHex);
+  m.set("size", stroke.size);
+  m.set("points", stroke.points);
+  return m;
+}
+
+export function setStrokeValue(
+  strokesMap: Y.Map<Y.Map<unknown>>,
+  stroke: CanvasStrokeValue,
+): void {
+  // Always overwrite — strokes don't mutate after creation.
+  strokesMap.set(stroke.id, toStrokeYMap(stroke));
+}
+
+export function deleteStroke(
+  strokesMap: Y.Map<Y.Map<unknown>>,
+  id: string,
+): void {
+  strokesMap.delete(id);
+}
+
 // Read-back: returns a deterministic plain-object snapshot. Used by the
 // observer to re-derive React Flow state and by save actions to write
-// ProcessNode/ProcessEdge rows.
+// ProcessNode/ProcessEdge/ProcessStroke rows.
 export function readCanvasSnapshot(refs: CanvasYRefs): {
   nodes: CanvasNodeValue[];
   edges: CanvasEdgeValue[];
+  strokes: CanvasStrokeValue[];
 } {
   const nodes: CanvasNodeValue[] = [];
   refs.nodes.forEach((value, id) => {
@@ -163,7 +215,23 @@ export function readCanvasSnapshot(refs: CanvasYRefs): {
       endStyle: asEdgeEnd(value.get("endStyle")),
     });
   });
-  return { nodes, edges };
+  const strokes: CanvasStrokeValue[] = [];
+  refs.strokes.forEach((value, id) => {
+    const points = value.get("points");
+    if (!Array.isArray(points)) return;
+    const flat: number[] = [];
+    for (const p of points) {
+      if (typeof p === "number" && Number.isFinite(p)) flat.push(p);
+    }
+    if (flat.length < 4) return;
+    strokes.push({
+      id,
+      colorHex: asString(value.get("colorHex"), "#1F2937"),
+      size: asNumber(value.get("size"), 2),
+      points: flat,
+    });
+  });
+  return { nodes, edges, strokes };
 }
 
 function isCanvasShape(v: unknown): v is CanvasShape {
@@ -172,7 +240,8 @@ function isCanvasShape(v: unknown): v is CanvasShape {
     v === "DIAMOND" ||
     v === "CIRCLE" ||
     v === "STICKY" ||
-    v === "FRAME"
+    v === "FRAME" ||
+    v === "TEXT"
   );
 }
 

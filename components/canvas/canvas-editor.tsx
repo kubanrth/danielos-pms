@@ -14,6 +14,7 @@ import {
   useEdgesState,
   useNodesState,
   useReactFlow,
+  useViewport,
   type Connection,
   type Edge,
   type Node,
@@ -26,17 +27,21 @@ import {
 } from "@xyflow/react";
 import {
   Circle as CircleIcon,
+  Copy,
   Diamond as DiamondIcon,
   Download,
   Frame as FrameIcon,
   LayoutTemplate,
   Link2,
   Minus as MinusIcon,
+  MousePointer2,
   MoveRight as ArrowIcon,
+  Pencil,
   Save,
   Square as SquareIcon,
   StickyNote,
   Trash2,
+  Type as TypeIcon,
   Unlink2,
   X,
 } from "lucide-react";
@@ -56,13 +61,16 @@ import {
 import { useRouter } from "next/navigation";
 import {
   createCanvasYDoc,
+  deleteStroke,
   readCanvasSnapshot,
   seedCanvasDoc,
   setEdgeValue,
   setNodeValue,
+  setStrokeValue,
   LOCAL_ORIGIN,
   SEED_ORIGIN,
   type CanvasEdgeEnd,
+  type CanvasStrokeValue,
   type CanvasYRefs,
 } from "@/lib/yjs/canvas-doc";
 import { createCanvasRealtimeProvider } from "@/lib/yjs/canvas-realtime-provider";
@@ -117,7 +125,54 @@ const SHAPE_DEFAULTS: Record<ShapeKind, { width: number; height: number; color: 
   CIRCLE: { width: 120, height: 120, color: "#FFFFFF" },
   STICKY: { width: 150, height: 150, color: "#FEF3C7" },
   FRAME: { width: 520, height: 320, color: "#F1F5F9" },
+  // F10-W: TEXT carries its color in colorHex (text color, not bg).
+  TEXT: { width: 220, height: 60, color: "#1F2937" },
 };
+
+// F10-W: 8-color sticky palette (Mural-feel — yellow / pink / orange /
+// green / blue / purple / red / gray) — clicking a color while a sticky
+// is selected recolors it. Hover shows the swatch grow.
+const STICKY_COLORS = [
+  "#FEF3C7", // yellow
+  "#FBCFE8", // pink
+  "#FED7AA", // orange
+  "#BBF7D0", // green
+  "#BFDBFE", // blue
+  "#DDD6FE", // purple
+  "#FECACA", // red
+  "#E5E7EB", // gray
+];
+
+// Pen tool palette — 8 inks for free drawing. Stays parallel to STICKY_COLORS
+// in count so the format-toolbar layout doesn't reflow when switching tools.
+const PEN_COLORS = [
+  "#1F2937", // ink
+  "#EF4444", // red
+  "#F59E0B", // amber
+  "#10B981", // emerald
+  "#3B82F6", // blue
+  "#8B5CF6", // violet
+  "#EC4899", // pink
+  "#64748B", // slate
+];
+
+const PEN_SIZES = [2, 4, 8] as const;
+type PenSize = (typeof PEN_SIZES)[number];
+
+// Snap grid step — same as the visual Background gap.
+const SNAP_STEP = 8;
+
+// Tool modes — Mural-style left rail. "select" is the default mouse,
+// "pen" turns on free-draw, "eraser" removes strokes on click.
+type ToolMode = "select" | "pen" | "eraser";
+
+export interface EditorInitialStroke {
+  id: string;
+  colorHex: string;
+  size: number;
+  // Flat: [x0, y0, x1, y1, ...]
+  points: number[];
+}
 
 function cuidish(): string {
   // Small client-side id with enough entropy for a short editor session.
@@ -181,6 +236,7 @@ export function CanvasEditor(props: {
   canvasId: string;
   initialNodes: EditorInitialNode[];
   initialEdges: EditorInitialEdge[];
+  initialStrokes?: EditorInitialStroke[];
   canEdit: boolean;
   canCreateTask: boolean;
   workspaceTasks: WorkspaceTaskOption[];
@@ -198,6 +254,7 @@ function CanvasEditorInner({
   canvasId,
   initialNodes,
   initialEdges,
+  initialStrokes,
   canEdit,
   canCreateTask,
   workspaceTasks,
@@ -207,6 +264,7 @@ function CanvasEditorInner({
   canvasId: string;
   initialNodes: EditorInitialNode[];
   initialEdges: EditorInitialEdge[];
+  initialStrokes?: EditorInitialStroke[];
   canEdit: boolean;
   canCreateTask: boolean;
   workspaceTasks: WorkspaceTaskOption[];
@@ -223,11 +281,23 @@ function CanvasEditorInner({
   const [edges, setEdges, rfOnEdgesChange] = useEdgesState<RFEdge>(
     initialEdges.map(toRFEdge),
   );
+  const [strokes, setStrokes] = useState<CanvasStrokeValue[]>(initialStrokes ?? []);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const [isConnected, setIsConnected] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
+
+  // F10-W: tool mode + per-tool config. The pen tool draws in the
+  // selected color/size; switching tool mode swaps cursor + react-flow
+  // interaction (pen mode disables panOnDrag/selectionOnDrag).
+  const [toolMode, setToolMode] = useState<ToolMode>("select");
+  const [penColor, setPenColor] = useState<string>(PEN_COLORS[0]);
+  const [penSize, setPenSize] = useState<PenSize>(PEN_SIZES[1]);
+  // Right-click context menu position (viewport coords).
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  // Alignment guides shown while dragging a node.
+  const [guides, setGuides] = useState<{ vx: number[]; hy: number[] }>({ vx: [], hy: [] });
 
   // Y.Doc is the shared source of truth between concurrent editors; the
   // React Flow hooks above are an interactive view on top.
@@ -245,6 +315,7 @@ function CanvasEditorInner({
         style: e.style,
         endStyle: e.endStyle ?? "arrow",
       })),
+      initialStrokes ?? [],
     );
     yRefsRef.current = refs;
   }
@@ -288,9 +359,11 @@ function CanvasEditorInner({
           data: { style: e.style, endStyle: e.endStyle },
         })),
       );
+      setStrokes(snapshot.strokes);
     };
     refs.nodes.observeDeep(handler);
     refs.edges.observeDeep(handler);
+    refs.strokes.observeDeep(handler);
 
     const provider = createCanvasRealtimeProvider(refs, canvasId);
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -298,6 +371,7 @@ function CanvasEditorInner({
     return () => {
       refs.nodes.unobserveDeep(handler);
       refs.edges.unobserveDeep(handler);
+      refs.strokes.unobserveDeep(handler);
       provider.disconnect();
       setIsConnected(false);
     };
@@ -358,6 +432,24 @@ function CanvasEditorInner({
     },
     [yRefs],
   );
+  const commitStrokeToY = useCallback(
+    (stroke: CanvasStrokeValue) => {
+      yRefs.ydoc.transact(() => {
+        setStrokeValue(yRefs.strokes, stroke);
+      }, LOCAL_ORIGIN);
+    },
+    [yRefs],
+  );
+  // Bulk-clear strokes — used by the toolbar button when in pen mode.
+  // Per-stroke eraser tool is W2.
+  const clearAllStrokes = useCallback(() => {
+    if (strokes.length === 0) return;
+    if (!confirm(`Usunąć ${strokes.length} rysunki?`)) return;
+    setStrokes([]);
+    yRefs.ydoc.transact(() => {
+      yRefs.strokes.forEach((_v, id) => deleteStroke(yRefs.strokes, id));
+    }, LOCAL_ORIGIN);
+  }, [strokes.length, yRefs]);
 
   const onConnect: OnConnect = useCallback(
     (params: Connection) => {
@@ -417,6 +509,47 @@ function CanvasEditorInner({
     for (const id of removedNodeIds) deleteNodeFromY(id);
     for (const id of removedEdgeIds) deleteEdgeFromY(id);
   }, [nodes, edges, setNodes, setEdges, deleteNodeFromY, deleteEdgeFromY]);
+
+  // F10-W: clone selected nodes 24px down/right with fresh ids. Edges
+  // between *both* duplicated endpoints get cloned too — single-end
+  // duplicates would make orphan edges.
+  const duplicateSelected = useCallback(() => {
+    const selected = nodes.filter((n) => n.selected);
+    if (selected.length === 0) return;
+    const idMap = new Map<string, string>();
+    const newNodes: RFNode[] = selected.map((n) => {
+      const newId = cuidish();
+      idMap.set(n.id, newId);
+      return {
+        ...n,
+        id: newId,
+        position: { x: n.position.x + 24, y: n.position.y + 24 },
+        selected: true,
+      };
+    });
+    const newEdges: RFEdge[] = edges
+      .filter((e) => idMap.has(e.source) && idMap.has(e.target))
+      .map((e) => ({
+        ...e,
+        id: `e_${cuidish()}`,
+        source: idMap.get(e.source)!,
+        target: idMap.get(e.target)!,
+        selected: false,
+      }));
+    setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), ...newNodes]);
+    setEdges((es) => [...es, ...newEdges]);
+    for (const n of newNodes) commitNodeToY(n);
+    for (const e of newEdges) commitEdgeToY(e);
+  }, [nodes, edges, setNodes, setEdges, commitNodeToY, commitEdgeToY]);
+
+  // F10-W: bring selected nodes to top of stack (highest zIndex). React
+  // Flow uses zIndex inline so we just bump above the current max.
+  const bringSelectedToFront = useCallback(() => {
+    const maxZ = nodes.reduce((m, n) => Math.max(m, n.zIndex ?? 0), 0);
+    setNodes((ns) =>
+      ns.map((n) => (n.selected ? { ...n, zIndex: maxZ + 1 } : n)),
+    );
+  }, [nodes, setNodes]);
 
   const renameSelected = useCallback(() => {
     const target = nodes.find((n) => n.selected);
@@ -525,6 +658,12 @@ function CanvasEditorInner({
           style: e.data?.style ?? "solid",
           endStyle: e.data?.endStyle ?? "arrow",
         })),
+        strokes: strokes.map((s) => ({
+          id: s.id,
+          colorHex: s.colorHex,
+          size: s.size,
+          points: s.points,
+        })),
       });
       if (res.ok) {
         setSaveState("saved");
@@ -534,7 +673,7 @@ function CanvasEditorInner({
         setSaveError(res.error);
       }
     });
-  }, [canvasId, nodes, edges]);
+  }, [canvasId, nodes, edges, strokes]);
 
   // Apply a template: batches a set of pre-arranged nodes + edges onto
   // the canvas, offset from current bounds so we don't overlap existing
@@ -679,6 +818,13 @@ function CanvasEditorInner({
 
   const [linkError, setLinkError] = useState<string | null>(null);
 
+  // The three task-link callbacks below are deliberate manual memos over
+  // server-action invocations + state setter chains. React Compiler can't
+  // preserve the existing memoization here (singleSelectedNode is a
+  // derived array filter that mutates each render), and rewriting to fit
+  // its model would force a substantial refactor for zero runtime gain.
+  // Suppress its warnings rather than churn the file.
+  /* eslint-disable react-hooks/preserve-manual-memoization */
   const handleLinkTask = useCallback(
     async (taskId: string) => {
       if (!singleSelectedNode) return;
@@ -737,6 +883,7 @@ function CanvasEditorInner({
     ]);
     router.push(`/w/${workspaceId}/t/${res.taskId}`);
   }, [singleSelectedNode, defaultBoardId, patchNodeData, router, workspaceId]);
+  /* eslint-enable react-hooks/preserve-manual-memoization */
 
   return (
     <div className="relative h-full w-full" ref={flowWrapperRef}>
@@ -773,26 +920,127 @@ function CanvasEditorInner({
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onConnect={canEdit ? onConnect : undefined}
+        onConnect={canEdit && toolMode === "select" ? onConnect : undefined}
         nodeTypes={nodeTypes}
         onNodeDoubleClick={canEdit ? (_e, n) => {
           setNodes((ns) => ns.map((x) => ({ ...x, selected: x.id === n.id })));
           setTimeout(() => renameSelected(), 0);
         } : undefined}
-        deleteKeyCode={canEdit ? ["Delete", "Backspace"] : null}
+        deleteKeyCode={canEdit && toolMode === "select" ? ["Delete", "Backspace"] : null}
         minZoom={0.2}
         maxZoom={2}
         fitView
         proOptions={{ hideAttribution: true }}
+        // F10-W: marquee/lasso selection on left-drag (Mural-style),
+        // pan with middle/right or Space+drag. Disabled in pen mode so
+        // the overlay can capture pointer events.
+        selectionOnDrag={canEdit && toolMode === "select"}
+        panOnDrag={toolMode === "select" ? [1, 2] : false}
+        // Snap to 8px grid for clean alignment.
+        snapToGrid={canEdit && toolMode === "select"}
+        snapGrid={[SNAP_STEP, SNAP_STEP]}
+        // Right-click context menus.
+        onPaneContextMenu={(e) => {
+          if (!canEdit) return;
+          e.preventDefault();
+          setNodes((ns) => ns.map((n) => ({ ...n, selected: false })));
+          setEdges((es) => es.map((ed) => ({ ...ed, selected: false })));
+          setContextMenu({ x: e.clientX, y: e.clientY });
+        }}
+        onNodeContextMenu={(e, n) => {
+          if (!canEdit) return;
+          e.preventDefault();
+          setNodes((ns) =>
+            ns.map((x) => ({ ...x, selected: x.id === n.id ? true : x.selected })),
+          );
+          setContextMenu({ x: e.clientX, y: e.clientY });
+        }}
+        onNodeDrag={(_e, _n, draggedNodes) => {
+          if (!canEdit || toolMode !== "select") return;
+          const dragged = draggedNodes.map((d) => d.id);
+          const draggedSet = new Set(dragged);
+          const others = nodes.filter((n) => !draggedSet.has(n.id));
+          const vx = new Set<number>();
+          const hy = new Set<number>();
+          for (const dragNode of draggedNodes) {
+            const dx0 = dragNode.position.x;
+            const dy0 = dragNode.position.y;
+            const dxC = dx0 + (dragNode.measured?.width ?? dragNode.width ?? 0) / 2;
+            const dyC = dy0 + (dragNode.measured?.height ?? dragNode.height ?? 0) / 2;
+            for (const o of others) {
+              const ow = o.measured?.width ?? o.width ?? 0;
+              const oh = o.measured?.height ?? o.height ?? 0;
+              const ox0 = o.position.x;
+              const oy0 = o.position.y;
+              const oxC = ox0 + ow / 2;
+              const oyC = oy0 + oh / 2;
+              const ox1 = ox0 + ow;
+              const oy1 = oy0 + oh;
+              if (Math.abs(dxC - oxC) < 6) vx.add(oxC);
+              if (Math.abs(dx0 - ox0) < 6) vx.add(ox0);
+              if (Math.abs(dx0 - ox1) < 6) vx.add(ox1);
+              if (Math.abs(dyC - oyC) < 6) hy.add(oyC);
+              if (Math.abs(dy0 - oy0) < 6) hy.add(oy0);
+              if (Math.abs(dy0 - oy1) < 6) hy.add(oy1);
+            }
+          }
+          setGuides({ vx: Array.from(vx), hy: Array.from(hy) });
+        }}
+        onNodeDragStop={() => setGuides({ vx: [], hy: [] })}
+        onPaneClick={() => setContextMenu(null)}
       >
         <Background gap={24} size={1} />
         <Controls />
         <MiniMap pannable zoomable className="!bg-card" />
+        <StrokeViewportLayer strokes={strokes} />
+        <AlignmentGuides vx={guides.vx} hy={guides.hy} />
       </ReactFlow>
+
+      {canEdit && toolMode === "pen" && (
+        <PenOverlay
+          color={penColor}
+          size={penSize}
+          onCommit={(stroke) => {
+            setStrokes((prev) => [...prev, stroke]);
+            commitStrokeToY(stroke);
+          }}
+        />
+      )}
+
+      {contextMenu && canEdit && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          hasSelection={selectedCount > 0}
+          onClose={() => setContextMenu(null)}
+          onDelete={deleteSelected}
+          onDuplicate={duplicateSelected}
+          onBringFront={bringSelectedToFront}
+        />
+      )}
 
       {canEdit && (
         <div className="pointer-events-none absolute left-1/2 top-3 flex -translate-x-1/2 flex-col items-center gap-2">
           <div className="pointer-events-auto flex items-center gap-1 rounded-lg border border-border bg-card/95 p-1 shadow-lg backdrop-blur">
+            {/* F10-W: tool-mode toggle group (Mural-style). Pen mode
+                disables React Flow interactions and routes pointer
+                events to the overlay. */}
+            <ToolButton
+              label="Wskaźnik (V)"
+              active={toolMode === "select"}
+              onClick={() => setToolMode("select")}
+            >
+              <MousePointer2 size={14} />
+            </ToolButton>
+            <ToolButton
+              label="Pisak (P)"
+              active={toolMode === "pen"}
+              onClick={() => setToolMode("pen")}
+            >
+              <Pencil size={14} />
+            </ToolButton>
+            <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+
             <ToolButton label="Prostokąt" onClick={() => addShape("RECTANGLE")}>
               <SquareIcon size={14} />
             </ToolButton>
@@ -805,24 +1053,85 @@ function CanvasEditorInner({
             <ToolButton label="Sticky note" onClick={() => addShape("STICKY")}>
               <StickyNote size={14} />
             </ToolButton>
+            <ToolButton label="Tekst" onClick={() => addShape("TEXT")}>
+              <TypeIcon size={14} />
+            </ToolButton>
             <ToolButton label="Ramka" onClick={() => addShape("FRAME")}>
               <FrameIcon size={14} />
             </ToolButton>
+            {/* F10-W: contextual palette. In pen mode → pen ink colors +
+                size pickers. With a sticky selected → 8-color sticky
+                palette. Otherwise → general fill palette. */}
             <span className="mx-1 h-5 w-px bg-border" aria-hidden />
-            <div className="flex items-center gap-1 px-1">
-              {PALETTE.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => recolorSelected(c)}
-                  disabled={selectedNodes.length === 0}
-                  className="h-5 w-5 rounded-full border border-border transition-transform hover:scale-110 disabled:cursor-not-allowed disabled:opacity-40"
-                  style={{ background: c }}
-                  aria-label={`Kolor ${c}`}
-                  title={`Kolor ${c}`}
-                />
-              ))}
-            </div>
+            {toolMode === "pen" ? (
+              <div className="flex items-center gap-1 px-1">
+                {PEN_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setPenColor(c)}
+                    aria-label={`Kolor pisaka ${c}`}
+                    title={`Kolor pisaka ${c}`}
+                    className="h-5 w-5 rounded-full border border-border transition-transform hover:scale-110"
+                    style={{
+                      background: c,
+                      outline: penColor === c ? "2px solid var(--foreground)" : "none",
+                      outlineOffset: penColor === c ? 2 : 0,
+                    }}
+                  />
+                ))}
+                <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+                {PEN_SIZES.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setPenSize(s)}
+                    aria-label={`Grubość ${s}px`}
+                    title={`Grubość ${s}px`}
+                    className={`grid h-7 w-7 place-items-center rounded-md transition-colors ${
+                      penSize === s
+                        ? "bg-primary/15 text-primary"
+                        : "text-muted-foreground hover:bg-accent"
+                    }`}
+                  >
+                    <span
+                      className="block rounded-full"
+                      style={{
+                        background: penColor,
+                        width: s + 2,
+                        height: s + 2,
+                      }}
+                    />
+                  </button>
+                ))}
+                {strokes.length > 0 && (
+                  <ToolButton
+                    label={`Wyczyść rysunki (${strokes.length})`}
+                    onClick={clearAllStrokes}
+                  >
+                    <Trash2 size={13} />
+                  </ToolButton>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 px-1">
+                {(selectedNodes.some((n) => n.data.shape === "STICKY")
+                  ? STICKY_COLORS
+                  : PALETTE
+                ).map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => recolorSelected(c)}
+                    disabled={selectedNodes.length === 0}
+                    className="h-5 w-5 rounded-full border border-border transition-transform hover:scale-110 disabled:cursor-not-allowed disabled:opacity-40"
+                    style={{ background: c }}
+                    aria-label={`Kolor ${c}`}
+                    title={`Kolor ${c}`}
+                  />
+                ))}
+              </div>
+            )}
 
             {hasEdgeSelection && (
               <>
@@ -1098,11 +1407,13 @@ function ToolButton({
   label,
   onClick,
   disabled,
+  active,
 }: {
   children: React.ReactNode;
   label: string;
   onClick: () => void;
   disabled?: boolean;
+  active?: boolean;
 }) {
   return (
     <button
@@ -1111,9 +1422,311 @@ function ToolButton({
       disabled={disabled}
       aria-label={label}
       title={label}
-      className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+      aria-pressed={active}
+      className={`grid h-8 w-8 place-items-center rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+        active
+          ? "bg-primary/15 text-primary"
+          : "text-muted-foreground hover:bg-accent hover:text-foreground"
+      }`}
     >
       {children}
+    </button>
+  );
+}
+
+// F10-W: SVG layer that renders all strokes inside React Flow's
+// transformed viewport. Uses useViewport() to mirror pan/zoom — the SVG
+// itself is full-bleed but its inner <g> applies the same transform as
+// React Flow nodes, so points stay in world coordinates.
+function StrokeViewportLayer({ strokes }: { strokes: CanvasStrokeValue[] }) {
+  const { x, y, zoom } = useViewport();
+  return (
+    <svg
+      aria-hidden
+      style={{
+        position: "absolute",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        pointerEvents: "none",
+        // Below nodes (z-index 0) but above the dotted background.
+        zIndex: 0,
+      }}
+    >
+      <g transform={`translate(${x} ${y}) scale(${zoom})`}>
+        {strokes.map((s) => {
+          if (s.points.length < 4) return null;
+          let d = `M ${s.points[0]} ${s.points[1]}`;
+          for (let i = 2; i < s.points.length; i += 2) {
+            d += ` L ${s.points[i]} ${s.points[i + 1]}`;
+          }
+          return (
+            <path
+              key={s.id}
+              d={d}
+              fill="none"
+              stroke={s.colorHex}
+              strokeWidth={s.size}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          );
+        })}
+      </g>
+    </svg>
+  );
+}
+
+// F10-W: live alignment guide rendering during drag. Lines are world-
+// coordinate values; we transform them with the viewport so they align
+// with the dragged node's world position. Pure visual feedback —
+// snapping itself happens via React Flow's snapToGrid + this just
+// shows the user "your edge is aligned with X".
+function AlignmentGuides({ vx, hy }: { vx: number[]; hy: number[] }) {
+  const { x, y, zoom } = useViewport();
+  if (vx.length === 0 && hy.length === 0) return null;
+  return (
+    <svg
+      aria-hidden
+      style={{
+        position: "absolute",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        pointerEvents: "none",
+        zIndex: 5,
+      }}
+    >
+      <g transform={`translate(${x} ${y}) scale(${zoom})`}>
+        {vx.map((vxi, i) => (
+          <line
+            key={`v-${i}`}
+            x1={vxi}
+            y1={-100000}
+            x2={vxi}
+            y2={100000}
+            stroke="#7B68EE"
+            strokeWidth={1 / zoom}
+            strokeDasharray={`${4 / zoom} ${3 / zoom}`}
+          />
+        ))}
+        {hy.map((hyi, i) => (
+          <line
+            key={`h-${i}`}
+            x1={-100000}
+            y1={hyi}
+            x2={100000}
+            y2={hyi}
+            stroke="#7B68EE"
+            strokeWidth={1 / zoom}
+            strokeDasharray={`${4 / zoom} ${3 / zoom}`}
+          />
+        ))}
+      </g>
+    </svg>
+  );
+}
+
+// F10-W: pen-tool input layer. Sits above React Flow when toolMode='pen';
+// converts screen → world coords via reactFlow.screenToFlowPosition,
+// builds a points array, and commits as a stroke on pointerup.
+function PenOverlay({
+  color,
+  size,
+  onCommit,
+}: {
+  color: string;
+  size: number;
+  onCommit: (stroke: CanvasStrokeValue) => void;
+}) {
+  const reactFlow = useReactFlow();
+  const [drawing, setDrawing] = useState<{ id: string; points: number[] } | null>(null);
+
+  const ptr = (e: React.PointerEvent) => {
+    return reactFlow.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+  };
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 4,
+        cursor: "crosshair",
+        // Block React Flow from receiving pointer events while drawing.
+        background: "transparent",
+      }}
+      onPointerDown={(e) => {
+        if (e.button !== 0) return; // left click only
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        const p = ptr(e);
+        const id = `s_${Date.now().toString(36)}_${Math.floor(Math.random() * 0xffff).toString(16)}`;
+        setDrawing({ id, points: [p.x, p.y] });
+      }}
+      onPointerMove={(e) => {
+        if (!drawing) return;
+        const p = ptr(e);
+        // Skip points within 1.5px to keep stroke smooth without bloat.
+        const last = drawing.points;
+        const lx = last[last.length - 2];
+        const ly = last[last.length - 1];
+        if (Math.hypot(p.x - lx, p.y - ly) < 1.5) return;
+        setDrawing({ ...drawing, points: [...drawing.points, p.x, p.y] });
+      }}
+      onPointerUp={() => {
+        if (!drawing) return;
+        if (drawing.points.length >= 4) {
+          onCommit({
+            id: drawing.id,
+            colorHex: color,
+            size,
+            points: drawing.points,
+          });
+        }
+        setDrawing(null);
+      }}
+      onPointerCancel={() => setDrawing(null)}
+    >
+      {/* In-progress stroke — drawn outside Yjs until pointerup commits */}
+      {drawing && drawing.points.length >= 4 && (
+        <DrawingPreview points={drawing.points} color={color} size={size} />
+      )}
+    </div>
+  );
+}
+
+function DrawingPreview({
+  points,
+  color,
+  size,
+}: {
+  points: number[];
+  color: string;
+  size: number;
+}) {
+  const { x, y, zoom } = useViewport();
+  let d = `M ${points[0]} ${points[1]}`;
+  for (let i = 2; i < points.length; i += 2) {
+    d += ` L ${points[i]} ${points[i + 1]}`;
+  }
+  return (
+    <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
+      <g transform={`translate(${x} ${y}) scale(${zoom})`}>
+        <path
+          d={d}
+          fill="none"
+          stroke={color}
+          strokeWidth={size}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </g>
+    </svg>
+  );
+}
+
+// F10-W: right-click context menu. Floats at viewport coords; closes on
+// outside click, escape, or after firing an action.
+function ContextMenu({
+  x,
+  y,
+  hasSelection,
+  onClose,
+  onDelete,
+  onDuplicate,
+  onBringFront,
+}: {
+  x: number;
+  y: number;
+  hasSelection: boolean;
+  onClose: () => void;
+  onDelete: () => void;
+  onDuplicate: () => void;
+  onBringFront: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      // `Node` is shadowed by @xyflow's Node type in this file —
+      // use globalThis.Node for the DOM check.
+      if (!ref.current?.contains(e.target as globalThis.Node)) onClose();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      style={{ position: "fixed", top: y, left: x, zIndex: 60 }}
+      className="w-44 rounded-lg border border-border bg-popover p-1 shadow-[0_18px_40px_-12px_rgba(10,10,40,0.3)]"
+    >
+      <CtxItem
+        icon={<Copy size={11} />}
+        label="Duplikuj"
+        disabled={!hasSelection}
+        onClick={() => {
+          onDuplicate();
+          onClose();
+        }}
+      />
+      <CtxItem
+        icon={<TypeIcon size={11} />}
+        label="Na wierzch"
+        disabled={!hasSelection}
+        onClick={() => {
+          onBringFront();
+          onClose();
+        }}
+      />
+      <div className="my-1 h-px bg-border" />
+      <CtxItem
+        icon={<Trash2 size={11} />}
+        label="Usuń"
+        destructive
+        disabled={!hasSelection}
+        onClick={() => {
+          onDelete();
+          onClose();
+        }}
+      />
+    </div>
+  );
+}
+
+function CtxItem({
+  icon,
+  label,
+  onClick,
+  disabled,
+  destructive,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  destructive?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[0.82rem] transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+        destructive
+          ? "text-destructive hover:bg-destructive/10"
+          : "text-foreground hover:bg-accent"
+      }`}
+    >
+      <span className="grid h-4 w-4 place-items-center">{icon}</span>
+      <span className="flex-1 truncate">{label}</span>
     </button>
   );
 }

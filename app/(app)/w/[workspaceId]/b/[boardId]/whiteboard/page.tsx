@@ -27,6 +27,7 @@ async function ensureBoardCanvas(
         },
       },
       edges: true,
+      strokes: { orderBy: { createdAt: "asc" } },
     },
   });
   if (existing) return existing;
@@ -47,6 +48,7 @@ async function ensureBoardCanvas(
         },
       },
       edges: true,
+      strokes: { orderBy: { createdAt: "asc" } },
     },
   });
   return created;
@@ -125,6 +127,27 @@ export default async function BoardWhiteboardPage({
             label: e.label,
             style: e.style === "dashed" ? "dashed" : "solid",
           }))}
+          initialStrokes={(canvas.strokes ?? []).flatMap((s) => {
+            // Server stores points as JSON; we tolerate both flat number[]
+            // and legacy [{x,y}, ...] shapes here.
+            const raw = s.points as unknown;
+            const flat: number[] = [];
+            if (Array.isArray(raw)) {
+              for (const p of raw) {
+                if (typeof p === "number" && Number.isFinite(p)) {
+                  flat.push(p);
+                } else if (
+                  p && typeof p === "object" &&
+                  typeof (p as { x?: unknown }).x === "number" &&
+                  typeof (p as { y?: unknown }).y === "number"
+                ) {
+                  flat.push((p as { x: number }).x, (p as { y: number }).y);
+                }
+              }
+            }
+            if (flat.length < 4) return [];
+            return [{ id: s.id, colorHex: s.colorHex, size: s.size, points: flat }];
+          })}
           canEdit={canEdit}
           canCreateTask={canCreateTask}
           workspaceTasks={boardTasks}

@@ -7,6 +7,8 @@ export const NODE_SHAPES = [
   // F8b: Whimsical-lite additions.
   "STICKY",
   "FRAME",
+  // F10-W: Mural-feel additions.
+  "TEXT",
 ] as const;
 export type NodeShape = (typeof NODE_SHAPES)[number];
 
@@ -55,12 +57,24 @@ const edgeSnapshotSchema = z.object({
   endStyle: z.enum(EDGE_ENDS).default("arrow"),
 });
 
+// F10-W: pen-tool stroke (free-draw) snapshot. Points are flat number[]
+// in [x0,y0,x1,y1,…] form to keep the JSON small (~30% smaller than
+// {x,y} object array for typical strokes).
+const strokeSnapshotSchema = z.object({
+  id: z.string().min(1).max(64),
+  colorHex: z.string().regex(HEX_RE, "Kolor musi być #RRGGBB.").default("#1F2937"),
+  size: z.number().int().min(1).max(20).default(2),
+  points: z.array(z.number().finite()).min(4).max(4000),
+});
+
 export const saveCanvasSnapshotSchema = z.object({
   id: z.string().min(1),
   nodes: z.array(nodeSnapshotSchema).max(500, "Max 500 węzłów."),
   edges: z.array(edgeSnapshotSchema).max(1000, "Max 1000 krawędzi."),
+  strokes: z.array(strokeSnapshotSchema).max(500, "Max 500 strokes.").optional(),
 });
 
 export type NodeSnapshotInput = z.infer<typeof nodeSnapshotSchema>;
 export type EdgeSnapshotInput = z.infer<typeof edgeSnapshotSchema>;
+export type StrokeSnapshotInput = z.infer<typeof strokeSnapshotSchema>;
 export type SaveCanvasSnapshotInput = z.infer<typeof saveCanvasSnapshotSchema>;

@@ -703,6 +703,8 @@ model ProcessCanvas {
   creator   User          @relation("CanvasCreator", fields: [creatorId], references: [id])
   nodes     ProcessNode[]
   edges     ProcessEdge[]
+  // F10-W: pen-tool strokes captured by the user (Mural-style drawing).
+  strokes   ProcessStroke[]
 
   @@index([workspaceId])
 }
@@ -715,6 +717,25 @@ enum NodeShape {
   // F8b: Whimsical-lite additions.
   STICKY
   FRAME
+  // F10-W (Mural-feel): plain text — no fill, no border, just sized text.
+  TEXT
+}
+
+// F10-W: free-drawing strokes (pen tool) on a canvas. Each row = one
+// continuous stroke captured between pointerdown and pointerup. Points
+// stored as JSON [{x,y}, …] in canvas (world) coordinates so they pan
+// and zoom with the rest of the content.
+model ProcessStroke {
+  id        String   @id @default(cuid())
+  canvasId  String
+  colorHex  String   @default("#1F2937")
+  size      Int      @default(2)
+  points    Json
+  createdAt DateTime @default(now())
+
+  canvas ProcessCanvas @relation(fields: [canvasId], references: [id], onDelete: Cascade)
+
+  @@index([canvasId])
 }
 
 model ProcessNode {
