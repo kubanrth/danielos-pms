@@ -32,6 +32,7 @@ import { ColumnSettings, type ColumnDef } from "@/components/table/column-settin
 import { FieldCell } from "@/components/table/field-cells";
 import { TableHeaderCell } from "@/components/table/header-cell";
 import { FieldOptionsEditor, FieldTypePicker } from "@/components/table/field-config";
+import { StatusPicker } from "@/components/table/status-picker";
 import { parseFieldOptions, type FieldOptions, type FieldType } from "@/lib/table-fields";
 import {
   TableFiltersToolbar,
@@ -343,14 +344,21 @@ export function BoardTable({
         header: "Status",
         size: 160,
         minSize: 80,
-        cell: (info) => (
-          <StatusCell
-            taskId={info.row.original.id}
-            statusColumns={statusColumns}
-            value={info.getValue()}
-            disabled={!canEdit}
-          />
-        ),
+        cell: (info) => {
+          const value = info.getValue();
+          const current = value ? statusColumns.find((c) => c.id === value) ?? null : null;
+          return (
+            <StatusPicker
+              taskId={info.row.original.id}
+              workspaceId={workspaceId}
+              boardId={boardId}
+              current={current}
+              options={statusColumns}
+              canEdit={canEdit}
+              canManageBoard={canManagePrefs}
+            />
+          );
+        },
         sortingFn: (a, b) => {
           const ao = statusColumns.findIndex((c) => c.id === a.original.statusColumnId);
           const bo = statusColumns.findIndex((c) => c.id === b.original.statusColumnId);
@@ -480,7 +488,7 @@ export function BoardTable({
         }),
       ),
     ],
-    [statusColumns, canEdit, workspaceId, customColumns],
+    [statusColumns, canEdit, workspaceId, boardId, canManagePrefs, customColumns],
   );
 
   const table = useReactTable({
@@ -1140,56 +1148,6 @@ function defaultSizeForType(type: FieldType): number {
     default:
       return 200;
   }
-}
-
-function StatusCell({
-  taskId,
-  statusColumns,
-  value,
-  disabled,
-}: {
-  taskId: string;
-  statusColumns: BoardTableColumn[];
-  value: string | null;
-  disabled: boolean;
-}) {
-  const current = statusColumns.find((c) => c.id === value);
-  if (disabled) {
-    return current ? <StatusPill column={current} /> : <MutedDash />;
-  }
-  return (
-    <form action={patchTaskAction} className="m-0">
-      <input type="hidden" name="id" value={taskId} />
-      <select
-        name="statusColumnId"
-        defaultValue={value ?? ""}
-        onChange={(e) => (e.currentTarget.form as HTMLFormElement).requestSubmit()}
-        className="w-full appearance-none rounded-full px-3 py-1 font-mono text-[0.62rem] font-semibold uppercase tracking-[0.12em] outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"
-        style={{
-          color: current ? current.colorHex : "var(--muted-foreground)",
-          background: current ? `${current.colorHex}22` : "transparent",
-        }}
-      >
-        <option value="">— brak —</option>
-        {statusColumns.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.name}
-          </option>
-        ))}
-      </select>
-    </form>
-  );
-}
-
-function StatusPill({ column }: { column: BoardTableColumn }) {
-  return (
-    <span
-      className="inline-flex h-6 items-center rounded-full px-2 font-mono text-[0.62rem] font-semibold uppercase tracking-[0.12em]"
-      style={{ color: column.colorHex, background: `${column.colorHex}22` }}
-    >
-      {column.name}
-    </span>
-  );
 }
 
 function DateCell({

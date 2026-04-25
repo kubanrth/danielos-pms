@@ -4,7 +4,6 @@ import { requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { can } from "@/lib/permissions";
 import { BoardTable, type CustomTableColumn } from "@/components/table/board-table";
 import type { TableFilter, TableSort } from "@/lib/table-filters";
-import { CollapsibleColumnManager } from "@/components/table/collapsible-column-manager";
 import { CreateTaskButton } from "@/components/task/create-task-button";
 import { BackgroundCustomizer } from "@/components/view/background-customizer";
 import { BoardShell } from "@/components/view/board-shell";
@@ -162,17 +161,6 @@ export default async function BoardTablePage({
         members={memberships.map((m) => m.user)}
       />
 
-      {canManageBoard && (
-        <CollapsibleColumnManager
-          workspaceId={workspaceId}
-          boardId={board.id}
-          columns={board.statusColumns.map((c) => ({
-            id: c.id,
-            name: c.name,
-            colorHex: c.colorHex,
-          }))}
-        />
-      )}
     </BoardShell>
   );
 }

@@ -1,0 +1,485 @@
+"use client";
+
+// F10-X: rich Trello-style status picker. Replaces the bland <select>
+// in the status cell + obviates the heavy "Zarządzaj statusami" panel
+// underneath the table. One-click access to:
+// - Search statuses
+// - Pick one (auto-saves the task)
+// - Edit a status name + color (inline pencil)
+// - Delete a status (X)
+// - Add a new status (+ inline at bottom)
+//
+// Renders via portal so the popover can never be clipped by the
+// overflow-x-auto table wrapper.
+
+import { startTransition, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { Check, Pencil, Plus, Search, X } from "lucide-react";
+import {
+  createStatusColumnAction,
+  deleteStatusColumnAction,
+  updateStatusColumnAction,
+} from "@/app/(app)/w/[workspaceId]/b/[boardId]/actions";
+import { patchTaskAction } from "@/app/(app)/w/[workspaceId]/t/actions";
+
+export interface StatusOption {
+  id: string;
+  name: string;
+  colorHex: string;
+}
+
+const PRESET_COLORS = [
+  "#10B981",
+  "#F59E0B",
+  "#3B82F6",
+  "#8B5CF6",
+  "#EC4899",
+  "#EF4444",
+  "#14B8A6",
+  "#64748B",
+];
+
+export function StatusPicker({
+  taskId,
+  workspaceId,
+  boardId,
+  current,
+  options,
+  canEdit,
+  canManageBoard,
+}: {
+  taskId: string;
+  workspaceId: string;
+  boardId: string;
+  current: StatusOption | null;
+  options: StatusOption[];
+  canEdit: boolean;
+  // Whether the user can add/edit/delete statuses (board.update perm).
+  canManageBoard: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState<{
+    top: number;
+    left: number;
+    maxHeight: number;
+  } | null>(null);
+  const [query, setQuery] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+
+  const computeCoords = () => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const POP_WIDTH = 280;
+    const GAP = 4;
+    const PAD = 12;
+    const spaceBelow = window.innerHeight - rect.bottom - GAP - PAD;
+    const spaceAbove = rect.top - GAP - PAD;
+    const useBelow = spaceBelow >= 260 || spaceBelow >= spaceAbove;
+    const maxHeight = Math.max(220, useBelow ? spaceBelow : spaceAbove);
+    const top = useBelow ? rect.bottom + GAP : Math.max(PAD, rect.top - GAP - maxHeight);
+    const left = Math.max(8, Math.min(window.innerWidth - POP_WIDTH - 8, rect.left));
+    return { top, left, maxHeight };
+  };
+
+  const openPicker = () => {
+    const c = computeCoords();
+    if (!c) return;
+    setCoords(c);
+    setOpen(true);
+  };
+
+  const close = () => {
+    setOpen(false);
+    setCoords(null);
+    setQuery("");
+    setEditingId(null);
+    setAdding(false);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (
+        !popRef.current?.contains(e.target as Node) &&
+        !triggerRef.current?.contains(e.target as Node)
+      ) {
+        close();
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    const onReflow = () => {
+      const c = computeCoords();
+      if (c) setCoords(c);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", onReflow);
+    window.addEventListener("scroll", onReflow, true);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", onReflow);
+      window.removeEventListener("scroll", onReflow, true);
+    };
+  }, [open]);
+
+  const pick = (statusId: string) => {
+    // Toggle off if clicking the current selection — feels more
+    // forgiving than "you must reopen the picker to clear".
+    const next = current?.id === statusId ? "" : statusId;
+    const fd = new FormData();
+    fd.set("id", taskId);
+    fd.set("statusColumnId", next);
+    startTransition(() => patchTaskAction(fd));
+    close();
+  };
+
+  // Read-only fallback for non-editors. Hook ordering must remain
+  // stable, so this branch is below all hook calls.
+  if (!canEdit) {
+    return current ? <Pill option={current} /> : <Empty />;
+  }
+
+  const filtered = query.trim()
+    ? options.filter((o) => o.name.toLowerCase().includes(query.trim().toLowerCase()))
+    : options;
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => (open ? close() : openPicker())}
+        className="inline-flex h-7 max-w-full items-center rounded-full px-2.5 font-mono text-[0.62rem] font-semibold uppercase tracking-[0.12em] outline-none transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"
+        style={{
+          color: current ? current.colorHex : "var(--muted-foreground)",
+          background: current ? `${current.colorHex}22` : "transparent",
+          border: current ? "none" : "1px dashed var(--border)",
+        }}
+      >
+        <span className="truncate">{current ? current.name : "— brak —"}</span>
+      </button>
+
+      {open && coords && typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={popRef}
+            style={{
+              position: "fixed",
+              top: coords.top,
+              left: coords.left,
+              width: 280,
+              maxHeight: coords.maxHeight,
+            }}
+            className="z-[60] flex flex-col overflow-hidden rounded-xl border border-border bg-popover shadow-[0_18px_40px_-12px_rgba(10,10,40,0.3)]"
+          >
+            <div className="shrink-0 border-b border-border px-2.5 py-2">
+              <div className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1">
+                <Search size={11} className="text-muted-foreground" />
+                <input
+                  autoFocus
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Szukaj statusu…"
+                  className="flex-1 bg-transparent text-[0.82rem] outline-none placeholder:text-muted-foreground/60"
+                />
+              </div>
+            </div>
+
+            <ul className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1">
+              {filtered.length === 0 && !adding && (
+                <li className="px-2 py-3 text-center font-mono text-[0.62rem] uppercase tracking-[0.12em] text-muted-foreground/70">
+                  brak statusów
+                </li>
+              )}
+              {filtered.map((o) => (
+                <li key={o.id}>
+                  {editingId === o.id ? (
+                    <EditRow
+                      workspaceId={workspaceId}
+                      option={o}
+                      onDone={() => setEditingId(null)}
+                    />
+                  ) : (
+                    <Row
+                      option={o}
+                      isCurrent={current?.id === o.id}
+                      canManage={canManageBoard}
+                      canDelete={canManageBoard && options.length > 1}
+                      onPick={() => pick(o.id)}
+                      onEdit={() => setEditingId(o.id)}
+                      onDelete={() => {
+                        if (!confirm(`Usunąć status „${o.name}"?`)) return;
+                        const fd = new FormData();
+                        fd.set("workspaceId", workspaceId);
+                        fd.set("columnId", o.id);
+                        startTransition(() => deleteStatusColumnAction(fd));
+                      }}
+                    />
+                  )}
+                </li>
+              ))}
+            </ul>
+
+            {canManageBoard && (
+              <div className="shrink-0 border-t border-border bg-popover">
+                {adding ? (
+                  <AddRow
+                    workspaceId={workspaceId}
+                    boardId={boardId}
+                    onDone={() => setAdding(false)}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setAdding(true)}
+                    className="flex w-full items-center gap-1.5 px-3 py-2 text-left font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  >
+                    <Plus size={11} /> Dodaj status
+                  </button>
+                )}
+              </div>
+            )}
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}
+
+function Pill({ option }: { option: StatusOption }) {
+  return (
+    <span
+      className="inline-flex h-6 items-center rounded-full px-2 font-mono text-[0.62rem] font-semibold uppercase tracking-[0.12em]"
+      style={{ color: option.colorHex, background: `${option.colorHex}22` }}
+    >
+      {option.name}
+    </span>
+  );
+}
+
+function Empty() {
+  return (
+    <span className="font-mono text-[0.7rem] text-muted-foreground/60">—</span>
+  );
+}
+
+function Row({
+  option,
+  isCurrent,
+  canManage,
+  canDelete,
+  onPick,
+  onEdit,
+  onDelete,
+}: {
+  option: StatusOption;
+  isCurrent: boolean;
+  canManage: boolean;
+  canDelete: boolean;
+  onPick: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="group flex items-center gap-1.5 rounded-md px-1 py-0.5 hover:bg-accent">
+      <button
+        type="button"
+        onClick={onPick}
+        className="flex flex-1 items-center gap-2 rounded-md py-1 pl-1.5 text-left"
+      >
+        <span
+          className="grid h-3.5 w-3.5 shrink-0 place-items-center rounded-sm border"
+          style={{
+            borderColor: isCurrent ? option.colorHex : "var(--border)",
+            background: isCurrent ? option.colorHex : "transparent",
+          }}
+        >
+          {isCurrent && <Check size={9} className="text-white" strokeWidth={3} />}
+        </span>
+        <span
+          className="inline-flex flex-1 items-center truncate rounded-full px-2 py-0.5 text-[0.74rem] font-semibold"
+          style={{ color: option.colorHex, background: `${option.colorHex}22` }}
+        >
+          {option.name}
+        </span>
+      </button>
+      {canManage && (
+        <button
+          type="button"
+          onClick={onEdit}
+          aria-label={`Edytuj ${option.name}`}
+          className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
+        >
+          <Pencil size={11} />
+        </button>
+      )}
+      {canDelete && (
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label={`Usuń ${option.name}`}
+          className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+        >
+          <X size={11} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function EditRow({
+  workspaceId,
+  option,
+  onDone,
+}: {
+  workspaceId: string;
+  option: StatusOption;
+  onDone: () => void;
+}) {
+  const [name, setName] = useState(option.name);
+  const [color, setColor] = useState(option.colorHex);
+  const submit = () => {
+    if (!name.trim()) return;
+    const fd = new FormData();
+    fd.set("workspaceId", workspaceId);
+    fd.set("columnId", option.id);
+    fd.set("name", name.trim());
+    fd.set("colorHex", color);
+    startTransition(async () => {
+      await updateStatusColumnAction(fd);
+      onDone();
+    });
+  };
+  return (
+    <div className="flex flex-col gap-1.5 rounded-md border border-primary/40 bg-primary/5 p-2">
+      <input
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            submit();
+          } else if (e.key === "Escape") {
+            onDone();
+          }
+        }}
+        maxLength={40}
+        className="rounded-sm border border-border bg-background px-1.5 py-0.5 text-[0.78rem] outline-none focus:border-primary/60"
+      />
+      <ColorRow selected={color} onChange={setColor} />
+      <div className="flex items-center justify-end gap-1">
+        <button
+          type="button"
+          onClick={onDone}
+          className="font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Anuluj
+        </button>
+        <button
+          type="button"
+          onClick={submit}
+          className="inline-flex h-6 items-center rounded-md bg-primary px-2 font-mono text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-primary-foreground transition-opacity hover:opacity-90"
+        >
+          Zapisz
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AddRow({
+  workspaceId,
+  boardId,
+  onDone,
+}: {
+  workspaceId: string;
+  boardId: string;
+  onDone: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [color, setColor] = useState(PRESET_COLORS[0]);
+  const submit = () => {
+    if (!name.trim()) return;
+    const fd = new FormData();
+    fd.set("workspaceId", workspaceId);
+    fd.set("boardId", boardId);
+    fd.set("name", name.trim());
+    fd.set("colorHex", color);
+    startTransition(async () => {
+      await createStatusColumnAction(fd);
+      onDone();
+    });
+  };
+  return (
+    <div className="flex flex-col gap-1.5 p-2">
+      <input
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            submit();
+          } else if (e.key === "Escape") {
+            onDone();
+          }
+        }}
+        placeholder="Nazwa statusu…"
+        maxLength={40}
+        className="rounded-sm border border-border bg-background px-1.5 py-1 text-[0.82rem] outline-none focus:border-primary/60"
+      />
+      <ColorRow selected={color} onChange={setColor} />
+      <div className="flex items-center justify-end gap-1">
+        <button
+          type="button"
+          onClick={onDone}
+          className="font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Anuluj
+        </button>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={!name.trim()}
+          className="inline-flex h-6 items-center rounded-md bg-primary px-2 font-mono text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          Dodaj
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ColorRow({
+  selected,
+  onChange,
+}: {
+  selected: string;
+  onChange: (c: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      {PRESET_COLORS.map((c) => (
+        <button
+          key={c}
+          type="button"
+          onClick={() => onChange(c)}
+          aria-label={`Kolor ${c}`}
+          className="grid h-5 w-5 place-items-center rounded-full transition-transform hover:scale-110"
+          style={{
+            background: c,
+            outline: selected === c ? "2px solid var(--foreground)" : "none",
+            outlineOffset: selected === c ? 2 : 0,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
