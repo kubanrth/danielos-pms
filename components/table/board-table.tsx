@@ -20,6 +20,16 @@ import { ColumnSettings, type ColumnDef } from "@/components/table/column-settin
 import { FieldCell } from "@/components/table/field-cells";
 import { parseFieldOptions, type FieldOptions, type FieldType } from "@/lib/table-fields";
 import {
+  TableFiltersToolbar,
+  type ToolbarColumnRef,
+} from "@/components/table/table-filters-toolbar";
+import {
+  compareValues,
+  matchesFilter,
+  type TableFilter,
+  type TableSort,
+} from "@/lib/table-filters";
+import {
   useAssignHotkey,
   type AssignMember,
 } from "@/components/task/assign-hotkey";
@@ -95,6 +105,9 @@ export function BoardTable({
   canManagePrefs,
   initialColumnOrder,
   initialHiddenColumns,
+  initialFilters,
+  initialSort,
+  initialGroupBy,
   customColumns,
   members,
 }: {
@@ -106,6 +119,10 @@ export function BoardTable({
   canManagePrefs: boolean;
   initialColumnOrder?: string[];
   initialHiddenColumns?: string[];
+  // F10-B: persisted filter / sort / group state from BoardView.configJson.
+  initialFilters?: TableFilter[];
+  initialSort?: TableSort | null;
+  initialGroupBy?: string | null;
   customColumns: CustomTableColumn[];
   // F9-13: needed for the `M` assign hotkey.
   members: AssignMember[];
@@ -143,6 +160,38 @@ export function BoardTable({
     return vis;
   });
   useWorkspaceRealtime(workspaceId);
+
+  // F10-B: filter / sort / group state. Persisted on BoardView.configJson
+  // by the toolbar's onChange — we apply them client-side over `tasks`
+  // so realtime patches keep working.
+  const [filters, setFilters] = useState<TableFilter[]>(initialFilters ?? []);
+  const [tableSort, setTableSort] = useState<TableSort | null>(initialSort ?? null);
+  const [groupBy, setGroupBy] = useState<string | null>(initialGroupBy ?? null);
+
+  // Pipeline: filter → sort. Grouping happens at render time so each
+  // group keeps the same sort.
+  const filteredSorted = useMemo(() => {
+    const valueOf = (t: BoardTableTask, columnId: string): string => {
+      if (columnId === "title") return t.title;
+      if (columnId === "statusColumnId") return t.statusColumnId ?? "";
+      if (columnId === "startAt") return t.startAt ?? "";
+      if (columnId === "stopAt") return t.stopAt ?? "";
+      return t.customValues[columnId] ?? "";
+    };
+    let rows = tasks;
+    if (filters.length > 0) {
+      rows = rows.filter((t) => filters.every((f) => matchesFilter(f, valueOf(t, f.columnId))));
+    }
+    if (tableSort) {
+      const dirMul = tableSort.dir === "asc" ? 1 : -1;
+      rows = [...rows].sort(
+        (a, b) =>
+          dirMul *
+          compareValues(valueOf(a, tableSort.columnId), valueOf(b, tableSort.columnId), tableSort.kind),
+      );
+    }
+    return rows;
+  }, [tasks, filters, tableSort]);
 
   const columns = useMemo(
     () => [
@@ -277,7 +326,7 @@ export function BoardTable({
   );
 
   const table = useReactTable({
-    data: tasks,
+    data: filteredSorted,
     columns,
     state: { sorting, columnOrder, columnVisibility },
     onSortingChange: setSorting,
@@ -305,10 +354,95 @@ export function BoardTable({
     })),
   ];
 
+  // F10-B: every filterable / sortable / groupable column reduced to the
+  // shape the toolbar needs (kind + label + options for the value picker).
+  // Built-ins use BUILTIN_* kinds so the operators table gives them a
+  // sensible default set.
+  const toolbarColumns: ToolbarColumnRef[] = [
+    { id: "title", label: "Tytuł", kind: "BUILTIN_TITLE" },
+    {
+      id: "statusColumnId",
+      label: "Status",
+      kind: "BUILTIN_STATUS",
+      statusOptions: statusColumns.map((s) => ({ id: s.id, label: s.name, color: s.colorHex })),
+    },
+    { id: "startAt", label: "Start", kind: "BUILTIN_DATE" },
+    { id: "stopAt", label: "Koniec", kind: "BUILTIN_DATE" },
+    ...customColumns.map((c) => ({
+      id: c.id,
+      label: c.name,
+      kind: c.type,
+      fieldOptions: parseFieldOptions(c.options),
+    })),
+  ];
+
+  // Group rows by the active groupBy column. Returns ordered buckets so
+  // the rendering side can iterate without re-sorting.
+  const groupedRows: { key: string; label: string; color?: string; rows: typeof filteredSorted }[] = (() => {
+    if (!groupBy) return [{ key: "_all", label: "", rows: filteredSorted }];
+
+    const buckets = new Map<string, typeof filteredSorted>();
+    for (const t of filteredSorted) {
+      const raw =
+        groupBy === "statusColumnId"
+          ? t.statusColumnId ?? ""
+          : groupBy === "title"
+            ? t.title
+            : groupBy === "startAt"
+              ? t.startAt ?? ""
+              : groupBy === "stopAt"
+                ? t.stopAt ?? ""
+                : t.customValues[groupBy] ?? "";
+      const k = raw || "_empty";
+      if (!buckets.has(k)) buckets.set(k, []);
+      buckets.get(k)!.push(t);
+    }
+
+    const labelFor = (k: string): { label: string; color?: string } => {
+      if (k === "_empty") return { label: "— brak —" };
+      if (groupBy === "statusColumnId") {
+        const s = statusColumns.find((x) => x.id === k);
+        return { label: s?.name ?? "—", color: s?.colorHex };
+      }
+      const customCol = customColumns.find((c) => c.id === groupBy);
+      if (customCol?.type === "SINGLE_SELECT") {
+        const opts = parseFieldOptions(customCol.options).selectOptions ?? [];
+        const opt = opts.find((o) => o.value === k);
+        return { label: opt?.value ?? k, color: opt?.color };
+      }
+      if (customCol?.type === "CHECKBOX") {
+        return { label: k === "true" || k === "1" ? "Zaznaczone" : "Niezaznaczone" };
+      }
+      if (customCol?.type === "RATING") {
+        return { label: `${k} ★` };
+      }
+      return { label: k };
+    };
+
+    return Array.from(buckets.entries()).map(([key, rows]) => {
+      const { label, color } = labelFor(key);
+      return { key, label, color, rows };
+    });
+  })();
+
   return (
     <div className="flex flex-col gap-3">
-      {canManagePrefs && (
-        <div className="flex justify-end">
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <TableFiltersToolbar
+          workspaceId={workspaceId}
+          boardId={boardId}
+          columns={toolbarColumns}
+          filters={filters}
+          sort={tableSort}
+          groupBy={groupBy}
+          canEdit={canManagePrefs}
+          onChange={(next) => {
+            setFilters(next.filters);
+            setTableSort(next.sort);
+            setGroupBy(next.groupBy);
+          }}
+        />
+        {canManagePrefs && (
           <ColumnSettings
             workspaceId={workspaceId}
             boardId={boardId}
@@ -329,8 +463,9 @@ export function BoardTable({
             }}
             canManageCustom={canManagePrefs}
           />
-        </div>
-      )}
+        )}
+      </div>
+
     <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(10,10,40,0.04)]">
       <div className="overflow-x-auto">
         <table className="w-full text-[0.88rem]">
@@ -374,27 +509,46 @@ export function BoardTable({
                 <td colSpan={columns.length} className="py-12 text-center text-muted-foreground">
                   <p className="font-display text-[0.95rem] font-semibold">Brak zadań.</p>
                   <p className="mt-1 font-mono text-[0.68rem] uppercase tracking-[0.14em]">
-                    użyj „Nowe zadanie" powyżej
+                    {filters.length > 0 ? "filtry nic nie zwróciły" : "użyj „Nowe zadanie” powyżej"}
                   </p>
                 </td>
               </tr>
             ) : (
-              table.getRowModel().rows.map((row) => (
-                <tr
-                  key={row.id}
-                  className="border-b border-border last:border-b-0 transition-colors hover:bg-accent/40"
-                  {...assign.rowProps(
-                    row.original.id,
-                    row.original.assignees.map((a) => a.id),
-                  )}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-2.5 align-middle">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  ))}
-                </tr>
-              ))
+              // F10-B: when grouped, the row model is partitioned by
+              // bucket — each bucket gets a colored header row, then the
+              // matching subset of TanStack rows underneath.
+              groupedRows.map((bucket) => {
+                const bucketRows = table
+                  .getRowModel()
+                  .rows.filter((r) => bucket.rows.some((t) => t.id === r.original.id));
+                if (bucketRows.length === 0) return null;
+                return (
+                  <GroupBucket
+                    key={bucket.key}
+                    label={bucket.label}
+                    color={bucket.color}
+                    columnCount={columns.length}
+                    showHeader={Boolean(groupBy)}
+                  >
+                    {bucketRows.map((row) => (
+                      <tr
+                        key={row.id}
+                        className="border-b border-border last:border-b-0 transition-colors hover:bg-accent/40"
+                        {...assign.rowProps(
+                          row.original.id,
+                          row.original.assignees.map((a) => a.id),
+                        )}
+                      >
+                        {row.getVisibleCells().map((cell) => (
+                          <td key={cell.id} className="px-4 py-2.5 align-middle">
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </GroupBucket>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -520,5 +674,53 @@ function DateCell({
 
 function MutedDash() {
   return <span className="font-mono text-[0.7rem] text-muted-foreground/60">—</span>;
+}
+
+// F10-B: collapsible group header + row container. When `showHeader`
+// is false (no groupBy active) we render only the children — keeps the
+// non-grouped path 1:1 with the previous behaviour.
+function GroupBucket({
+  label,
+  color,
+  columnCount,
+  showHeader,
+  children,
+}: {
+  label: string;
+  color?: string;
+  columnCount: number;
+  showHeader: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(true);
+  if (!showHeader) return <>{children}</>;
+  const accent = color ?? "var(--muted-foreground)";
+  return (
+    <>
+      <tr className="bg-muted/30">
+        <td colSpan={columnCount} className="px-4 py-2">
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            className="inline-flex items-center gap-2"
+          >
+            <span
+              className="grid h-5 w-5 place-items-center rounded-sm text-[0.7rem] text-muted-foreground transition-transform"
+              style={{ transform: open ? "rotate(0deg)" : "rotate(-90deg)" }}
+            >
+              ▾
+            </span>
+            <span
+              className="inline-flex items-center rounded-full px-2 py-0.5 font-mono text-[0.62rem] font-semibold uppercase tracking-[0.12em]"
+              style={{ color: accent, background: `${accent}1F` }}
+            >
+              {label || "—"}
+            </span>
+          </button>
+        </td>
+      </tr>
+      {open && children}
+    </>
+  );
 }
 

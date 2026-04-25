@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { can } from "@/lib/permissions";
 import { BoardTable, type CustomTableColumn } from "@/components/table/board-table";
+import type { TableFilter, TableSort } from "@/lib/table-filters";
 import { CollapsibleColumnManager } from "@/components/table/collapsible-column-manager";
 import { CreateTaskButton } from "@/components/task/create-task-button";
 import { BackgroundCustomizer } from "@/components/view/background-customizer";
@@ -58,12 +59,31 @@ export default async function BoardTablePage({
   const bgCss = backgroundToCss(background);
   const enabledViews = parseEnabledViews(board.workspace.enabledViews);
 
-  // Table view config: F8b added column order + hidden columns. Legacy
-  // boards don't have these keys yet, in which case we fall back to defaults.
+  // Table view config: F8b added column order + hidden columns; F10-B
+  // added filters/sort/groupBy. Legacy boards don't have these keys, in
+  // which case we fall back to defaults.
   const tableConfig = (tableView?.configJson ?? {}) as {
     columnOrder?: string[];
     hidden?: string[];
+    filters?: unknown;
+    sort?: unknown;
+    groupBy?: unknown;
   };
+  // We trust the shape was validated on write — reads still guard
+  // arrays/null because legacy rows or hand-edited configs may differ.
+  const initialFilters = Array.isArray(tableConfig.filters)
+    ? (tableConfig.filters as TableFilter[])
+    : undefined;
+  const initialSort =
+    tableConfig.sort && typeof tableConfig.sort === "object"
+      ? (tableConfig.sort as TableSort)
+      : tableConfig.sort === null
+        ? null
+        : undefined;
+  const initialGroupBy =
+    typeof tableConfig.groupBy === "string" || tableConfig.groupBy === null
+      ? (tableConfig.groupBy as string | null)
+      : undefined;
 
   return (
     <BoardShell bgCss={bgCss}>
@@ -124,6 +144,9 @@ export default async function BoardTablePage({
         canManagePrefs={canManageBoard}
         initialColumnOrder={Array.isArray(tableConfig.columnOrder) ? tableConfig.columnOrder : undefined}
         initialHiddenColumns={Array.isArray(tableConfig.hidden) ? tableConfig.hidden : undefined}
+        initialFilters={initialFilters}
+        initialSort={initialSort}
+        initialGroupBy={initialGroupBy}
         customColumns={board.customColumns.map((c) => ({
           id: c.id,
           name: c.name,

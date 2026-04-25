@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { can } from "@/lib/permissions";
 import { BoardTable, type CustomTableColumn } from "@/components/table/board-table";
+import type { TableFilter, TableSort } from "@/lib/table-filters";
 import { KanbanBoard } from "@/components/kanban/kanban-board";
 import { RoadmapView } from "@/components/roadmap/roadmap-view";
 import { GanttView } from "@/components/roadmap/gantt-view";
@@ -158,7 +159,26 @@ async function TableRenderer({
   });
   if (!board) return null;
 
-  const cfg = (configJson ?? {}) as { columnOrder?: string[]; hidden?: string[] };
+  const cfg = (configJson ?? {}) as {
+    columnOrder?: string[];
+    hidden?: string[];
+    filters?: unknown;
+    sort?: unknown;
+    groupBy?: unknown;
+  };
+  const cfgFilters = Array.isArray(cfg.filters)
+    ? (cfg.filters as TableFilter[])
+    : undefined;
+  const cfgSort =
+    cfg.sort && typeof cfg.sort === "object"
+      ? (cfg.sort as TableSort)
+      : cfg.sort === null
+        ? null
+        : undefined;
+  const cfgGroupBy =
+    typeof cfg.groupBy === "string" || cfg.groupBy === null
+      ? (cfg.groupBy as string | null)
+      : undefined;
 
   return (
     <BoardTable
@@ -194,6 +214,9 @@ async function TableRenderer({
       canManagePrefs={canManageBoard}
       initialColumnOrder={Array.isArray(cfg.columnOrder) ? cfg.columnOrder : undefined}
       initialHiddenColumns={Array.isArray(cfg.hidden) ? cfg.hidden : undefined}
+      initialFilters={cfgFilters}
+      initialSort={cfgSort}
+      initialGroupBy={cfgGroupBy}
       customColumns={board.customColumns.map((c) => ({
         id: c.id,
         name: c.name,

@@ -577,6 +577,103 @@ export async function setTaskCustomValueAction(formData: FormData) {
   revalidatePath(`/w/${task.workspaceId}/b/${task.boardId}/table`);
 }
 
+// F10-B: persist filter + sort + groupBy on the default TABLE view's
+// configJson (alongside columnOrder/hidden saved by saveTableColumnPrefsAction).
+// All three are optional — UI sends only the keys it edits, and we
+// merge with whatever already lives on the view.
+const tableFiltersSchema = z.object({
+  workspaceId: z.string().min(1),
+  boardId: z.string().min(1),
+  // Stringified JSON: `{ filters?, sort?, groupBy? }`
+  payload: z.string().max(8000),
+});
+
+export async function saveTableFiltersAction(formData: FormData) {
+  const parsed = tableFiltersSchema.safeParse({
+    workspaceId: formData.get("workspaceId"),
+    boardId: formData.get("boardId"),
+    payload: formData.get("payload"),
+  });
+  if (!parsed.success) return;
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(parsed.data.payload);
+  } catch {
+    return;
+  }
+  const shape = z
+    .object({
+      filters: z
+        .array(
+          z.object({
+            columnId: z.string().min(1),
+            kind: z.string(),
+            op: z.string(),
+            value: z.string().max(2000),
+          }),
+        )
+        .optional(),
+      sort: z
+        .object({
+          columnId: z.string().min(1),
+          kind: z.string(),
+          dir: z.enum(["asc", "desc"]),
+        })
+        .nullable()
+        .optional(),
+      groupBy: z.string().nullable().optional(),
+    })
+    .safeParse(payload);
+  if (!shape.success) return;
+
+  const ctx = await requireWorkspaceAction(parsed.data.workspaceId, "board.update");
+
+  const existing = await db.boardView.findFirst({
+    where: { boardId: parsed.data.boardId, type: "TABLE", name: null },
+    select: { id: true, configJson: true },
+  });
+
+  const merged: Prisma.InputJsonValue = {
+    ...(typeof existing?.configJson === "object" && existing.configJson
+      ? (existing.configJson as Record<string, unknown>)
+      : {}),
+    ...(shape.data.filters !== undefined ? { filters: shape.data.filters } : {}),
+    ...(shape.data.sort !== undefined ? { sort: shape.data.sort } : {}),
+    ...(shape.data.groupBy !== undefined ? { groupBy: shape.data.groupBy } : {}),
+  };
+
+  if (existing) {
+    await db.boardView.update({
+      where: { id: existing.id },
+      data: { configJson: merged },
+    });
+  } else {
+    await db.boardView.create({
+      data: {
+        boardId: parsed.data.boardId,
+        type: "TABLE",
+        configJson: merged,
+      },
+    });
+  }
+
+  await writeAudit({
+    workspaceId: parsed.data.workspaceId,
+    objectType: "Board",
+    objectId: parsed.data.boardId,
+    actorId: ctx.userId,
+    action: "board.tableFiltersUpdated",
+    diff: {
+      filters: shape.data.filters?.length ?? 0,
+      sort: shape.data.sort?.columnId ?? null,
+      groupBy: shape.data.groupBy ?? null,
+    },
+  });
+
+  revalidatePath(`/w/${parsed.data.workspaceId}/b/${parsed.data.boardId}/table`);
+}
+
 export async function saveTableColumnPrefsAction(formData: FormData) {
   const parsed = tablePrefsSchema.safeParse({
     workspaceId: formData.get("workspaceId"),
