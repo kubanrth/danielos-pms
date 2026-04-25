@@ -22,14 +22,12 @@ import {
   Eye,
   EyeOff,
   GripVertical,
-  Plus,
   RotateCcw,
   Settings2,
   Trash2,
 } from "lucide-react";
 import {
   configureColumnAction,
-  createTableColumnAction,
   deleteTableColumnAction,
   saveTableColumnPrefsAction,
 } from "@/app/(app)/w/[workspaceId]/b/[boardId]/actions";
@@ -61,7 +59,6 @@ export function ColumnSettings({
   columnOrder,
   hidden,
   onLocalChange,
-  canManageCustom,
 }: {
   workspaceId: string;
   boardId: string;
@@ -69,7 +66,6 @@ export function ColumnSettings({
   columnOrder: string[];
   hidden: string[];
   onLocalChange: (next: { order: string[]; hidden: string[] }) => void;
-  canManageCustom: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -175,6 +171,8 @@ export function ColumnSettings({
           </div>
           <p className="mb-3 font-mono text-[0.62rem] uppercase tracking-[0.12em] text-muted-foreground/80">
             przeciągnij aby zmienić kolejność · klik oka by ukryć · ⚙ aby zmienić typ
+            <br />
+            nową kolumnę dodaj klikając „+” na końcu nagłówków tabeli
           </p>
 
           <DndContext
@@ -187,9 +185,6 @@ export function ColumnSettings({
               strategy={verticalListSortingStrategy}
             >
               <ul className="flex flex-col gap-1">
-                {canManageCustom && (
-                  <AddCustomColumnRow workspaceId={workspaceId} boardId={boardId} />
-                )}
                 {orderedColumns.map((c) => (
                   <SortableRow
                     key={c.id}
@@ -404,87 +399,3 @@ function ConfigureColumnButton({
   );
 }
 
-// Two-step add: name → optional type/options before commit. Default
-// type is TEXT, so a power user can hit Enter and skip the type picker.
-function AddCustomColumnRow({
-  workspaceId,
-  boardId,
-}: {
-  workspaceId: string;
-  boardId: string;
-}) {
-  const [name, setName] = useState("");
-  const [type, setType] = useState<FieldType>("TEXT");
-  const [options, setOptions] = useState<FieldOptions>({});
-  const [expanded, setExpanded] = useState(false);
-
-  const submit = () => {
-    if (!name.trim()) return;
-    const fd = new FormData();
-    fd.set("workspaceId", workspaceId);
-    fd.set("boardId", boardId);
-    fd.set("name", name.trim());
-    fd.set("type", type);
-    fd.set("options", JSON.stringify(options ?? {}));
-    startTransition(async () => {
-      await createTableColumnAction(fd);
-      setName("");
-      setType("TEXT");
-      setOptions({});
-      setExpanded(false);
-    });
-  };
-
-  return (
-    <li>
-      <div className="flex flex-col gap-2 rounded-md border border-dashed border-border bg-background px-2 py-1.5">
-        <div className="flex items-center gap-2">
-          <Plus size={12} className="text-muted-foreground" />
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                submit();
-              }
-            }}
-            maxLength={80}
-            placeholder="Dodaj kolumnę…"
-            className="flex-1 min-w-0 bg-transparent text-[0.82rem] outline-none placeholder:text-muted-foreground/60"
-          />
-          <button
-            type="button"
-            onClick={() => setExpanded((e) => !e)}
-            aria-label="Wybierz typ"
-            title={`Typ: ${FIELD_TYPE_META[type].label}`}
-            className="inline-flex h-6 items-center gap-1 rounded-sm px-1.5 text-[0.62rem] font-mono uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            {FIELD_TYPE_META[type].label}
-          </button>
-        </div>
-        {expanded && (
-          <div className="border-t border-border pt-2">
-            <p className="mb-1.5 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground/80">
-              Typ
-            </p>
-            <FieldTypePicker value={type} onChange={setType} />
-            <div className="mt-2">
-              <FieldOptionsEditor type={type} value={options} onChange={setOptions} />
-            </div>
-            <div className="mt-2 flex justify-end">
-              <button
-                type="button"
-                onClick={submit}
-                disabled={!name.trim()}
-                className="inline-flex h-7 items-center rounded-md bg-primary px-3 font-mono text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
-                Dodaj
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </li>
-  );
-}

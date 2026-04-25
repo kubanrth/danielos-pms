@@ -30,6 +30,7 @@ import { taskPl } from "@/lib/pluralize";
 import { ColumnSettings, type ColumnDef } from "@/components/table/column-settings";
 import { FieldCell } from "@/components/table/field-cells";
 import { TableHeaderCell } from "@/components/table/header-cell";
+import { FieldOptionsEditor, FieldTypePicker } from "@/components/table/field-config";
 import { parseFieldOptions, type FieldOptions, type FieldType } from "@/lib/table-fields";
 import {
   TableFiltersToolbar,
@@ -657,7 +658,6 @@ export function BoardTable({
               }
               setColumnVisibility(vis);
             }}
-            canManageCustom={canManagePrefs}
           />
         )}
       </div>
@@ -1288,6 +1288,11 @@ function GroupBucket({
 // inline input — Enter creates a TEXT column with that name. Power
 // users can still configure the type via the column gear afterwards;
 // this is the "add fast" path that matches Airtable's "+ Add field".
+// Single canonical "add column" path (mirrors Airtable's "+ Add field"):
+// click + → popover with name input + type picker + per-type options.
+// The earlier dual path (popover Kolumny had its own row, plus inline +)
+// was confusing — now the popover Kolumny is purely about reordering /
+// hiding / configuring existing columns.
 function AddColumnButton({
   workspaceId,
   boardId,
@@ -1297,6 +1302,33 @@ function AddColumnButton({
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  const [type, setType] = useState<FieldType>("TEXT");
+  const [options, setOptions] = useState<FieldOptions>({});
+  const ref = useRef<HTMLDivElement>(null);
+
+  const closeReset = () => {
+    setName("");
+    setType("TEXT");
+    setOptions({});
+    setOpen(false);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) closeReset();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeReset();
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
   const submit = () => {
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -1304,48 +1336,69 @@ function AddColumnButton({
     fd.set("workspaceId", workspaceId);
     fd.set("boardId", boardId);
     fd.set("name", trimmed);
-    fd.set("type", "TEXT");
+    fd.set("type", type);
+    fd.set("options", JSON.stringify(options ?? {}));
     startTransition(async () => {
       await createTableColumnAction(fd);
-      setName("");
-      setOpen(false);
+      closeReset();
     });
   };
-  if (!open) {
-    return (
+
+  return (
+    <div ref={ref} className="relative">
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => setOpen((o) => !o)}
         aria-label="Dodaj kolumnę"
         title="Dodaj kolumnę"
         className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
       >
         <Plus size={13} />
       </button>
-    );
-  }
-  return (
-    <input
-      autoFocus
-      value={name}
-      onChange={(e) => setName(e.target.value)}
-      onBlur={() => {
-        if (!name.trim()) setOpen(false);
-        else submit();
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          submit();
-        } else if (e.key === "Escape") {
-          setName("");
-          setOpen(false);
-        }
-      }}
-      placeholder="nazwa…"
-      maxLength={80}
-      className="w-full rounded-sm border border-primary/40 bg-background px-1.5 py-0.5 text-[0.66rem] uppercase tracking-[0.14em] text-foreground outline-none focus:border-primary"
-    />
+      {open && (
+        <div className="absolute right-0 top-[calc(100%+6px)] z-50 w-80 rounded-xl border border-border bg-popover p-3 shadow-[0_18px_40px_-12px_rgba(10,10,40,0.3)]">
+          <p className="eyebrow mb-2">Nowa kolumna</p>
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && name.trim()) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+            maxLength={80}
+            placeholder="Nazwa pola…"
+            className="mb-3 w-full rounded-md border border-border bg-background px-2 py-1.5 text-[0.86rem] outline-none focus:border-primary/60"
+          />
+          <p className="mb-1.5 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted-foreground/80">
+            Typ
+          </p>
+          <FieldTypePicker value={type} onChange={setType} />
+          <div className="mt-3 space-y-2">
+            <FieldOptionsEditor type={type} value={options} onChange={setOptions} />
+          </div>
+          <div className="mt-3 flex items-center justify-end gap-2 border-t border-border pt-2">
+            <button
+              type="button"
+              onClick={closeReset}
+              className="font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Anuluj
+            </button>
+            <button
+              type="button"
+              onClick={submit}
+              disabled={!name.trim()}
+              className="inline-flex h-7 items-center rounded-md bg-primary px-3 font-mono text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              Dodaj kolumnę
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
