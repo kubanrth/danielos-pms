@@ -32,11 +32,26 @@ import {
   type CanvasYRefs,
 } from "@/lib/yjs/canvas-doc";
 
+export interface CanvasPresenceState {
+  clientId: string;
+  name: string | null;
+  color: string;
+  // Cursor in world (canvas) coordinates so peers see the same point
+  // regardless of their pan/zoom.
+  x: number;
+  y: number;
+  // Bumped each broadcast so peers can detect "stale" senders → cleanup.
+  ts: number;
+}
+
 export interface CanvasProviderHandle {
   clientId: string;
   disconnect: () => void;
   // For tests / debug — forces a resend of local state.
   resync: () => void;
+  // F10-W2: cursor / presence pipe layered on the same channel.
+  broadcastPresence: (state: Omit<CanvasPresenceState, "clientId" | "ts">) => void;
+  onPresence: (cb: (states: Map<string, CanvasPresenceState>) => void) => () => void;
 }
 
 export function createCanvasRealtimeProvider(
@@ -72,6 +87,20 @@ export function createCanvasRealtimeProvider(
     });
   };
 
+  // F10-W2: presence (cursor) state, keyed by clientId. Stale entries
+  // (ts older than 5s) are pruned on each presence event.
+  const presence = new Map<string, CanvasPresenceState>();
+  const presenceListeners = new Set<(s: Map<string, CanvasPresenceState>) => void>();
+  const PRESENCE_TTL_MS = 5_000;
+
+  const fanOutPresence = () => {
+    const now = Date.now();
+    for (const [id, s] of presence) {
+      if (now - s.ts > PRESENCE_TTL_MS) presence.delete(id);
+    }
+    for (const cb of presenceListeners) cb(new Map(presence));
+  };
+
   channel
     .on("broadcast", { event: "sync" }, ({ payload }) => {
       const p = payload as { from?: unknown; update?: unknown };
@@ -92,6 +121,27 @@ export function createCanvasRealtimeProvider(
         broadcastFullState();
       }
     })
+    .on("broadcast", { event: "presence" }, ({ payload }) => {
+      const p = payload as Partial<CanvasPresenceState>;
+      if (!p.clientId || p.clientId === clientId) return;
+      if (typeof p.x !== "number" || typeof p.y !== "number") return;
+      presence.set(p.clientId, {
+        clientId: p.clientId,
+        name: typeof p.name === "string" ? p.name : null,
+        color: typeof p.color === "string" ? p.color : "#7B68EE",
+        x: p.x,
+        y: p.y,
+        ts: typeof p.ts === "number" ? p.ts : Date.now(),
+      });
+      fanOutPresence();
+    })
+    .on("broadcast", { event: "presence-leave" }, ({ payload }) => {
+      const p = payload as { clientId?: unknown };
+      if (typeof p.clientId === "string") {
+        presence.delete(p.clientId);
+        fanOutPresence();
+      }
+    })
     .subscribe((status) => {
       if (status !== "SUBSCRIBED") return;
       // Joined — ask peers for their latest state.
@@ -102,13 +152,37 @@ export function createCanvasRealtimeProvider(
       });
     });
 
+  // Periodic prune: handles peers who left without sending presence-leave
+  // (closed tab, network drop). Runs once per second, cheap.
+  const pruneTimer = setInterval(fanOutPresence, 1_000);
+
+  const broadcastPresence: CanvasProviderHandle["broadcastPresence"] = (s) => {
+    void channel.send({
+      type: "broadcast",
+      event: "presence",
+      payload: { ...s, clientId, ts: Date.now() },
+    });
+  };
+
   return {
     clientId,
     disconnect: () => {
+      void channel.send({
+        type: "broadcast",
+        event: "presence-leave",
+        payload: { clientId },
+      });
+      clearInterval(pruneTimer);
       refs.ydoc.off("update", onYjsUpdate);
       void sb.removeChannel(channel);
     },
     resync: broadcastFullState,
+    broadcastPresence,
+    onPresence: (cb) => {
+      presenceListeners.add(cb);
+      cb(new Map(presence));
+      return () => presenceListeners.delete(cb);
+    },
   };
 }
 

@@ -73,7 +73,11 @@ import {
   type CanvasStrokeValue,
   type CanvasYRefs,
 } from "@/lib/yjs/canvas-doc";
-import { createCanvasRealtimeProvider } from "@/lib/yjs/canvas-realtime-provider";
+import {
+  createCanvasRealtimeProvider,
+  type CanvasPresenceState,
+  type CanvasProviderHandle,
+} from "@/lib/yjs/canvas-realtime-provider";
 import { applyCanvasTemplate, TEMPLATES, type TemplateKey } from "@/components/canvas/templates";
 
 export interface EditorInitialNode {
@@ -298,6 +302,26 @@ function CanvasEditorInner({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   // Alignment guides shown while dragging a node.
   const [guides, setGuides] = useState<{ vx: number[]; hy: number[] }>({ vx: [], hy: [] });
+  // F10-W2: remote cursors keyed by clientId. Updated by the provider
+  // presence pipe; rendered as labeled dots that pan/zoom with the canvas.
+  const [remoteCursors, setRemoteCursors] = useState<Map<string, CanvasPresenceState>>(
+    () => new Map(),
+  );
+  // Stable handle to provider so the mousemove listener can broadcast
+  // without rebinding on every render.
+  const providerRef = useRef<CanvasProviderHandle | null>(null);
+  // Stable client identity (color + name suffix). Color picked from a
+  // small palette so concurrent users get distinguishable cursors.
+  // Lazy useState init keeps Math.random() out of render path (React
+  // Compiler flags impure calls during render).
+  const [myCursorIdentity] = useState(() => {
+    const palette = ["#7B68EE", "#10B981", "#F59E0B", "#EF4444", "#3B82F6", "#EC4899"];
+    const idx = Math.floor(Math.random() * palette.length);
+    return {
+      color: palette[idx],
+      name: `Gość ${Math.floor(Math.random() * 999)}`,
+    };
+  });
 
   // Y.Doc is the shared source of truth between concurrent editors; the
   // React Flow hooks above are an interactive view on top.
@@ -366,17 +390,48 @@ function CanvasEditorInner({
     refs.strokes.observeDeep(handler);
 
     const provider = createCanvasRealtimeProvider(refs, canvasId);
+    providerRef.current = provider;
+    const offPresence = provider.onPresence((states) => setRemoteCursors(states));
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsConnected(true);
     return () => {
       refs.nodes.unobserveDeep(handler);
       refs.edges.unobserveDeep(handler);
       refs.strokes.unobserveDeep(handler);
+      offPresence();
       provider.disconnect();
+      providerRef.current = null;
       setIsConnected(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasId, workspaceId]);
+
+  // F10-W2: track local cursor + broadcast presence at ~30Hz. Listening
+  // on flowWrapperRef ensures we capture mousemove anywhere over the
+  // canvas without conflicting with React Flow's own pointer handlers.
+  useEffect(() => {
+    if (!canEdit) return;
+    const wrap = flowWrapperRef.current;
+    if (!wrap) return;
+    let last = 0;
+    const onMove = (e: MouseEvent) => {
+      const now = performance.now();
+      if (now - last < 33) return; // ~30 fps cap
+      last = now;
+      const provider = providerRef.current;
+      if (!provider) return;
+      // Convert page coords → world coords via React Flow.
+      const world = reactFlow.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      provider.broadcastPresence({
+        x: world.x,
+        y: world.y,
+        color: myCursorIdentity.color,
+        name: myCursorIdentity.name,
+      });
+    };
+    wrap.addEventListener("mousemove", onMove);
+    return () => wrap.removeEventListener("mousemove", onMove);
+  }, [canEdit, reactFlow, myCursorIdentity]);
 
   const commitNodeToY = useCallback(
     (node: RFNode) => {
@@ -931,6 +986,9 @@ function CanvasEditorInner({
         maxZoom={2}
         fitView
         proOptions={{ hideAttribution: true }}
+        // F10-W2: smoothstep edges route around obstacles cleanly (90° bends),
+        // much closer to Mural's connector behaviour than raw bezier.
+        defaultEdgeOptions={{ type: "smoothstep" }}
         // F10-W: marquee/lasso selection on left-drag (Mural-style),
         // pan with middle/right or Space+drag. Disabled in pen mode so
         // the overlay can capture pointer events.
@@ -994,6 +1052,9 @@ function CanvasEditorInner({
         <MiniMap pannable zoomable className="!bg-card" />
         <StrokeViewportLayer strokes={strokes} />
         <AlignmentGuides vx={guides.vx} hy={guides.hy} />
+        {/* F10-W2: remote cursors — peers' mouse pointers drawn at world
+            coords, so they pan/zoom with the canvas. */}
+        <RemoteCursorsLayer cursors={remoteCursors} />
       </ReactFlow>
 
       {canEdit && toolMode === "pen" && (
@@ -1697,6 +1758,74 @@ function ContextMenu({
           onClose();
         }}
       />
+    </div>
+  );
+}
+
+// F10-W2: remote cursors. Renders one labeled dot per peer at their
+// world position; uses the React Flow viewport transform so cursors
+// match the same canvas as the local user.
+function RemoteCursorsLayer({
+  cursors,
+}: {
+  cursors: Map<string, CanvasPresenceState>;
+}) {
+  const { x, y, zoom } = useViewport();
+  if (cursors.size === 0) return null;
+  return (
+    <div
+      aria-hidden
+      style={{
+        position: "absolute",
+        inset: 0,
+        pointerEvents: "none",
+        zIndex: 6,
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          transform: `translate(${x}px, ${y}px) scale(${zoom})`,
+          transformOrigin: "0 0",
+        }}
+      >
+        {Array.from(cursors.values()).map((c) => (
+          <div
+            key={c.clientId}
+            style={{
+              position: "absolute",
+              left: c.x,
+              top: c.y,
+              transform: `translate(-2px, -2px) scale(${1 / zoom})`,
+              transformOrigin: "0 0",
+            }}
+          >
+            {/* Mouse pointer SVG */}
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 18 18"
+              style={{ display: "block", filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.25))" }}
+            >
+              <path
+                d="M2 2 L2 16 L6 12 L9 17 L11 16 L8 11 L14 11 Z"
+                fill={c.color}
+                stroke="white"
+                strokeWidth="1.2"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <span
+              className="absolute left-3.5 top-3.5 inline-block whitespace-nowrap rounded px-1.5 py-0.5 font-mono text-[0.62rem] uppercase tracking-[0.12em] text-white shadow-sm"
+              style={{ background: c.color }}
+            >
+              {c.name ?? c.clientId.slice(0, 4)}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
