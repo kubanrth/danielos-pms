@@ -10,15 +10,20 @@ import {
   useReactTable,
   type ColumnOrderState,
   type ColumnSizingState,
+  type RowSelectionState,
   type SortingState,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { Plus } from "lucide-react";
+import { Plus, Search, X } from "lucide-react";
 import {
   createTableColumnAction,
   saveTableColumnPrefsAction,
 } from "@/app/(app)/w/[workspaceId]/b/[boardId]/actions";
-import { createTaskAction } from "@/app/(app)/w/[workspaceId]/t/actions";
+import {
+  bulkDeleteTasksAction,
+  bulkUpdateStatusAction,
+  createTaskAction,
+} from "@/app/(app)/w/[workspaceId]/t/actions";
 import { patchTaskAction } from "@/app/(app)/w/[workspaceId]/t/actions";
 import { useWorkspaceRealtime } from "@/hooks/use-workspace-realtime";
 import { taskPl } from "@/lib/pluralize";
@@ -172,6 +177,26 @@ export function BoardTable({
   });
   useWorkspaceRealtime(workspaceId);
 
+  // F10-X T2.2: multi-select row state. TanStack handles toggles via
+  // checkbox onChange; shift-click range selection is implemented
+  // manually because TanStack doesn't ship that out of the box.
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const lastClickedRowRef = useRef<string | null>(null);
+  const extendSelection = (toId: string) => {
+    if (!lastClickedRowRef.current) return;
+    const fromId = lastClickedRowRef.current;
+    const ids = filteredSorted.map((t) => t.id);
+    const fromIdx = ids.indexOf(fromId);
+    const toIdx = ids.indexOf(toId);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const [a, b] = fromIdx < toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx];
+    setRowSelection((prev) => {
+      const next = { ...prev };
+      for (let i = a; i <= b; i++) next[ids[i]] = true;
+      return next;
+    });
+  };
+
   // F10-X: persisted per-column widths. TanStack tracks live drag state;
   // we persist to the server when the user releases the drag handle.
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(
@@ -208,6 +233,38 @@ export function BoardTable({
   const [filters, setFilters] = useState<TableFilter[]>(initialFilters ?? []);
   const [tableSort, setTableSort] = useState<TableSort | null>(initialSort ?? null);
   const [groupBy, setGroupBy] = useState<string | null>(initialGroupBy ?? null);
+
+  // F10-X T2.3: in-table search. Cmd+F (Ctrl+F) opens an input that
+  // narrows rows by substring across title + every custom cell.
+  // Server-side filters (F10-B) still apply on top — the search is
+  // a UI-only refinement, never persisted.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // F10-X T2.1: keyboard navigation. We track the active cell as
+  // [rowIdx, colIdx] indices over the visible row + column lists. Arrow
+  // keys move the active cell, Enter focuses the first focusable element
+  // inside (input/select/button) so the user can immediately type.
+  const [activeCell, setActiveCell] = useState<{ row: number; col: number } | null>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        setSearchOpen(true);
+        // Focus on next tick — input must mount first.
+        setTimeout(() => searchInputRef.current?.focus(), 0);
+      } else if (e.key === "Escape" && searchOpen) {
+        setSearchOpen(false);
+        setSearchQuery("");
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [searchOpen]);
 
   // Reusable persist for filter/sort/groupBy — used by the toolbar AND
   // by header-cell context menu actions. Keeps the server in sync when
@@ -257,6 +314,16 @@ export function BoardTable({
     if (filters.length > 0) {
       rows = rows.filter((t) => filters.every((f) => matchesFilter(f, valueOf(t, f.columnId))));
     }
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      rows = rows.filter((t) => {
+        if (t.title.toLowerCase().includes(q)) return true;
+        for (const v of Object.values(t.customValues)) {
+          if (v && v.toLowerCase().includes(q)) return true;
+        }
+        return false;
+      });
+    }
     if (tableSort) {
       const dirMul = tableSort.dir === "asc" ? 1 : -1;
       rows = [...rows].sort(
@@ -266,7 +333,7 @@ export function BoardTable({
       );
     }
     return rows;
-  }, [tasks, filters, tableSort]);
+  }, [tasks, filters, tableSort, searchQuery]);
 
   const columns = useMemo(
     () => [
@@ -417,16 +484,21 @@ export function BoardTable({
   const table = useReactTable({
     data: filteredSorted,
     columns,
-    state: { sorting, columnOrder, columnVisibility, columnSizing },
+    state: { sorting, columnOrder, columnVisibility, columnSizing, rowSelection },
     onSortingChange: setSorting,
     onColumnOrderChange: setColumnOrder,
     onColumnVisibilityChange: setColumnVisibility,
     onColumnSizingChange: setColumnSizing,
+    onRowSelectionChange: setRowSelection,
+    getRowId: (row) => row.id,
     enableColumnResizing: true,
     columnResizeMode: "onChange",
+    enableRowSelection: canEdit,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });
+
+  const selectedTaskIds = Object.keys(rowSelection).filter((id) => rowSelection[id]);
 
   const hiddenIds = Object.entries(columnVisibility)
     .filter(([, visible]) => !visible)
@@ -519,6 +591,38 @@ export function BoardTable({
 
   return (
     <div className="flex flex-col gap-3">
+      {searchOpen && (
+        <div className="flex items-center gap-2 rounded-lg border border-primary/40 bg-popover px-3 py-1.5 shadow-[0_4px_12px_-4px_rgba(10,10,40,0.15)]">
+          <Search size={14} className="text-muted-foreground" />
+          <input
+            ref={searchInputRef}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setSearchQuery("");
+                setSearchOpen(false);
+              }
+            }}
+            placeholder="Szukaj w tabeli… (Esc aby zamknąć)"
+            className="flex-1 bg-transparent text-[0.9rem] outline-none placeholder:text-muted-foreground/60"
+          />
+          <span className="font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted-foreground">
+            {filteredSorted.length} {taskPl(filteredSorted.length)}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setSearchQuery("");
+              setSearchOpen(false);
+            }}
+            aria-label="Zamknij wyszukiwarkę"
+            className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <TableFiltersToolbar
           workspaceId={workspaceId}
@@ -560,11 +664,91 @@ export function BoardTable({
 
     <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(10,10,40,0.04)]">
       <div className="overflow-x-auto">
-        <table className="w-full text-[0.88rem]">
+        <table
+          ref={tableRef}
+          className="w-full text-[0.88rem]"
+          onKeyDown={(e) => {
+            if (!activeCell) return;
+            // Only intercept arrow keys / Enter when a CELL (td) is the
+            // active focus target — otherwise inputs inside cells own
+            // their keystrokes.
+            const target = e.target as HTMLElement;
+            const onCellTd = target.tagName === "TD" || target.dataset.cell === "1";
+            if (!onCellTd) return;
+            const visibleRows = filteredSorted;
+            const colIds = table.getVisibleLeafColumns().map((c) => c.id);
+            const moveTo = (r: number, c: number) => {
+              const clampedR = Math.max(0, Math.min(visibleRows.length - 1, r));
+              const clampedC = Math.max(0, Math.min(colIds.length - 1, c));
+              setActiveCell({ row: clampedR, col: clampedC });
+              const sel = `td[data-cell="1"][data-row="${clampedR}"][data-col="${clampedC}"]`;
+              const next = tableRef.current?.querySelector<HTMLTableCellElement>(sel);
+              next?.focus();
+            };
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              moveTo(activeCell.row + 1, activeCell.col);
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              moveTo(activeCell.row - 1, activeCell.col);
+            } else if (e.key === "ArrowLeft") {
+              e.preventDefault();
+              moveTo(activeCell.row, activeCell.col - 1);
+            } else if (e.key === "ArrowRight" || (e.key === "Tab" && !e.shiftKey)) {
+              e.preventDefault();
+              const nextCol = activeCell.col + 1;
+              if (nextCol >= colIds.length) {
+                moveTo(activeCell.row + 1, 0);
+              } else {
+                moveTo(activeCell.row, nextCol);
+              }
+            } else if (e.key === "Tab" && e.shiftKey) {
+              e.preventDefault();
+              const prevCol = activeCell.col - 1;
+              if (prevCol < 0) {
+                moveTo(activeCell.row - 1, colIds.length - 1);
+              } else {
+                moveTo(activeCell.row, prevCol);
+              }
+            } else if (e.key === "Enter" || e.key === "F2") {
+              // Focus first interactive element inside the cell (input,
+              // textarea, button, select) so the user can start typing
+              // immediately. Escape inside the cell will return focus
+              // to the td (browser default).
+              e.preventDefault();
+              const editable = target.querySelector<HTMLElement>(
+                'input, textarea, select, button:not([aria-label="Konfiguruj kolumnę"])',
+              );
+              editable?.focus();
+            }
+          }}
+        >
           <thead>
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id} className="border-b border-border bg-muted/40">
-                {hg.headers.map((header) => {
+                {canEdit && (
+                  <th className="sticky left-0 top-0 z-30 h-10 w-10 bg-muted/95 px-2 shadow-[1px_0_0_0_var(--border)] backdrop-blur-sm">
+                    <input
+                      type="checkbox"
+                      aria-label="Zaznacz wszystkie wiersze"
+                      checked={
+                        table.getRowModel().rows.length > 0 &&
+                        table.getRowModel().rows.every((r) => rowSelection[r.id])
+                      }
+                      onChange={(e) => {
+                        if (e.currentTarget.checked) {
+                          const next: RowSelectionState = {};
+                          for (const r of table.getRowModel().rows) next[r.id] = true;
+                          setRowSelection(next);
+                        } else {
+                          setRowSelection({});
+                        }
+                      }}
+                      className="h-3.5 w-3.5 cursor-pointer accent-[var(--primary)]"
+                    />
+                  </th>
+                )}
+                {hg.headers.map((header, hIdx) => {
                   const canResize = header.column.getCanResize();
                   const isResizing = header.column.getIsResizing();
                   const colId = header.column.id;
@@ -581,11 +765,24 @@ export function BoardTable({
                     (isCustom ? colId.replace(/^custom:/, "") : colId)
                       ? tableSort.dir
                       : false;
+                  // F10-X T2.4: freeze the first visible data column.
+                  // When checkbox column is rendered the status cell
+                  // sticks at left-[40px] so both stay visible during
+                  // horizontal scroll.
+                  const isFrozen = hIdx === 0;
+                  const frozenLeft = canEdit ? "40px" : "0px";
                   return (
                     <th
                       key={header.id}
-                      className="group/th relative sticky top-0 h-10 px-4 text-left font-mono text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
-                      style={{ width: header.getSize() }}
+                      className={`group/th relative sticky top-0 h-10 px-4 text-left font-mono text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground ${
+                        isFrozen
+                          ? "z-20 bg-muted/95 shadow-[1px_0_0_0_var(--border)] backdrop-blur-sm"
+                          : ""
+                      }`}
+                      style={{
+                        width: header.getSize(),
+                        ...(isFrozen ? { left: frozenLeft } : {}),
+                      }}
                     >
                       <TableHeaderCell
                         columnId={colId}
@@ -706,27 +903,81 @@ export function BoardTable({
                     columnCount={columns.length + (canManagePrefs ? 1 : 0)}
                     showHeader={Boolean(groupBy)}
                   >
-                    {bucketRows.map((row) => (
-                      <tr
-                        key={row.id}
-                        className="border-b border-border last:border-b-0 transition-colors hover:bg-accent/40"
-                        {...assign.rowProps(
-                          row.original.id,
-                          row.original.assignees.map((a) => a.id),
-                        )}
-                      >
-                        {row.getVisibleCells().map((cell) => (
-                          <td
-                            key={cell.id}
-                            className="px-4 py-2.5 align-middle"
-                            style={{ width: cell.column.getSize() }}
-                          >
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </td>
-                        ))}
-                        {canManagePrefs && <td className="w-12" />}
-                      </tr>
-                    ))}
+                    {bucketRows.map((row) => {
+                      const isSelected = !!rowSelection[row.id];
+                      return (
+                        <tr
+                          key={row.id}
+                          className={`border-b border-border last:border-b-0 transition-colors ${
+                            isSelected ? "bg-primary/5" : "hover:bg-accent/40"
+                          }`}
+                          {...assign.rowProps(
+                            row.original.id,
+                            row.original.assignees.map((a) => a.id),
+                          )}
+                        >
+                          {canEdit && (
+                            <td
+                              className="sticky left-0 z-10 w-10 bg-card px-2 align-middle shadow-[1px_0_0_0_var(--border)]"
+                              style={{
+                                background: isSelected ? "rgba(var(--primary-rgb,0,0,0),0.05)" : undefined,
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                aria-label={`Zaznacz wiersz ${row.original.title}`}
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  // Shift-click extends the range from the
+                                  // last clicked row.
+                                  const ev = e.nativeEvent as MouseEvent;
+                                  if (ev.shiftKey && lastClickedRowRef.current) {
+                                    extendSelection(row.original.id);
+                                  } else {
+                                    setRowSelection((prev) => ({
+                                      ...prev,
+                                      [row.original.id]: !prev[row.original.id],
+                                    }));
+                                  }
+                                  lastClickedRowRef.current = row.original.id;
+                                }}
+                                className="h-3.5 w-3.5 cursor-pointer accent-[var(--primary)]"
+                              />
+                            </td>
+                          )}
+                          {row.getVisibleCells().map((cell, cIdx) => {
+                            const isFrozen = cIdx === 0;
+                            const visibleRowIdx = filteredSorted.findIndex(
+                              (t) => t.id === row.original.id,
+                            );
+                            const isActive =
+                              activeCell?.row === visibleRowIdx && activeCell?.col === cIdx;
+                            return (
+                              <td
+                                key={cell.id}
+                                data-cell="1"
+                                data-row={visibleRowIdx}
+                                data-col={cIdx}
+                                tabIndex={0}
+                                onFocus={() => setActiveCell({ row: visibleRowIdx, col: cIdx })}
+                                className={`px-4 py-2.5 align-middle outline-none ${
+                                  isFrozen
+                                    ? "sticky z-10 bg-card shadow-[1px_0_0_0_var(--border)]"
+                                    : ""
+                                } ${isActive ? "ring-2 ring-inset ring-primary/60" : ""}`}
+                                style={{
+                                  width: cell.column.getSize(),
+                                  ...(isFrozen ? { left: canEdit ? "40px" : "0px" } : {}),
+                                }}
+                              >
+                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                              </td>
+                            );
+                          })}
+                          {canManagePrefs && <td className="w-12" />}
+                        </tr>
+                      );
+                    })}
                   </GroupBucket>
                 );
               })
@@ -749,6 +1000,108 @@ export function BoardTable({
       </div>
     </div>
     {assign.menu}
+    {selectedTaskIds.length > 0 && (
+      <BulkActionsBar
+        workspaceId={workspaceId}
+        selectedIds={selectedTaskIds}
+        statusColumns={statusColumns}
+        onClear={() => setRowSelection({})}
+      />
+    )}
+    </div>
+  );
+}
+
+// F10-X T2.2: floating action bar shown when ≥ 1 row is selected.
+// Sits at the bottom of the viewport. Modes: change status / delete /
+// clear. Server actions revalidate so deleted/moved rows disappear
+// without a full reload.
+function BulkActionsBar({
+  workspaceId,
+  selectedIds,
+  statusColumns,
+  onClear,
+}: {
+  workspaceId: string;
+  selectedIds: string[];
+  statusColumns: BoardTableColumn[];
+  onClear: () => void;
+}) {
+  const [statusMenu, setStatusMenu] = useState(false);
+  const submitDelete = () => {
+    if (!confirm(`Usunąć ${selectedIds.length} zadań? Tego nie da się cofnąć z UI.`)) return;
+    const fd = new FormData();
+    fd.set("workspaceId", workspaceId);
+    fd.set("ids", selectedIds.join(","));
+    startTransition(async () => {
+      await bulkDeleteTasksAction(fd);
+      onClear();
+    });
+  };
+  const setStatus = (statusColumnId: string) => {
+    const fd = new FormData();
+    fd.set("workspaceId", workspaceId);
+    fd.set("ids", selectedIds.join(","));
+    fd.set("statusColumnId", statusColumnId);
+    startTransition(async () => {
+      await bulkUpdateStatusAction(fd);
+      setStatusMenu(false);
+      onClear();
+    });
+  };
+  return (
+    <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-border bg-popover px-4 py-2 shadow-[0_18px_40px_-12px_rgba(10,10,40,0.3)]">
+      <span className="font-mono text-[0.7rem] uppercase tracking-[0.14em] text-muted-foreground">
+        Zaznaczone: <strong className="text-foreground">{selectedIds.length}</strong>
+      </span>
+      <span className="h-4 w-px bg-border" />
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setStatusMenu((m) => !m)}
+          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[0.78rem] font-medium text-foreground transition-colors hover:bg-accent"
+        >
+          Zmień status
+        </button>
+        {statusMenu && (
+          <div className="absolute bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2 rounded-lg border border-border bg-popover p-1 shadow-md">
+            <button
+              type="button"
+              onClick={() => setStatus("")}
+              className="block w-full whitespace-nowrap rounded-md px-2 py-1 text-left text-[0.78rem] text-muted-foreground transition-colors hover:bg-accent"
+            >
+              — brak —
+            </button>
+            {statusColumns.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setStatus(s.id)}
+                className="block w-full whitespace-nowrap rounded-md px-2 py-1 text-left text-[0.78rem] transition-colors hover:bg-accent"
+                style={{ color: s.colorHex }}
+              >
+                {s.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={submitDelete}
+        className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[0.78rem] font-medium text-destructive transition-colors hover:bg-destructive/10"
+      >
+        Usuń
+      </button>
+      <span className="h-4 w-px bg-border" />
+      <button
+        type="button"
+        onClick={onClear}
+        aria-label="Wyczyść zaznaczenie"
+        className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+      >
+        <X size={12} />
+      </button>
     </div>
   );
 }

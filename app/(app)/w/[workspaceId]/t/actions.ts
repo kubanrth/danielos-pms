@@ -215,6 +215,55 @@ export async function deleteTaskAction(formData: FormData) {
   redirect(`/w/${workspaceId}`);
 }
 
+// F10-X T2.2: bulk operations from the table multi-select toolbar.
+// Stays on the same page (no redirect) — caller refreshes.
+export async function bulkDeleteTasksAction(formData: FormData) {
+  const workspaceId = String(formData.get("workspaceId") ?? "");
+  const idsRaw = String(formData.get("ids") ?? "");
+  const ids = idsRaw.split(",").filter(Boolean);
+  if (!workspaceId || ids.length === 0) return;
+  const ctx = await requireWorkspaceAction(workspaceId, "task.delete");
+
+  await db.task.updateMany({
+    where: { id: { in: ids }, workspaceId },
+    data: { deletedAt: new Date() },
+  });
+  await writeAudit({
+    workspaceId,
+    objectType: "Task",
+    objectId: ids[0],
+    actorId: ctx.userId,
+    action: "task.bulkDeleted",
+    diff: { count: ids.length },
+  });
+  revalidatePath(`/w/${workspaceId}`);
+  await broadcastWorkspaceChange(workspaceId, { type: "task.changed" });
+}
+
+export async function bulkUpdateStatusAction(formData: FormData) {
+  const workspaceId = String(formData.get("workspaceId") ?? "");
+  const idsRaw = String(formData.get("ids") ?? "");
+  const statusColumnId = String(formData.get("statusColumnId") ?? "");
+  const ids = idsRaw.split(",").filter(Boolean);
+  if (!workspaceId || ids.length === 0) return;
+  const ctx = await requireWorkspaceAction(workspaceId, "task.update");
+
+  await db.task.updateMany({
+    where: { id: { in: ids }, workspaceId },
+    data: { statusColumnId: statusColumnId || null },
+  });
+  await writeAudit({
+    workspaceId,
+    objectType: "Task",
+    objectId: ids[0],
+    actorId: ctx.userId,
+    action: "task.bulkStatusChanged",
+    diff: { count: ids.length, statusColumnId: statusColumnId || null },
+  });
+  revalidatePath(`/w/${workspaceId}`);
+  await broadcastWorkspaceChange(workspaceId, { type: "task.changed" });
+}
+
 // F9-03: dedicated description save — lets the task-detail UI flip
 // description to "view mode" (rendered prose) after save without
 // round-tripping other fields.
