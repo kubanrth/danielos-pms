@@ -1301,7 +1301,12 @@ function AddColumnButton({
   boardId: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const [coords, setCoords] = useState<{
+    top: number;
+    left: number;
+    maxHeight: number;
+    placement: "below" | "above";
+  } | null>(null);
   const [name, setName] = useState("");
   const [type, setType] = useState<FieldType>("TEXT");
   const [options, setOptions] = useState<FieldOptions>({});
@@ -1316,14 +1321,29 @@ function AddColumnButton({
     setCoords(null);
   };
 
-  const openWithCoords = () => {
+  // Position popover relative to viewport. If there's not enough room
+  // below the trigger, flip above. Always clamp maxHeight so the footer
+  // (Anuluj / Dodaj) never falls off-screen.
+  const computeCoords = () => {
     const rect = triggerRef.current?.getBoundingClientRect();
-    if (!rect) return;
+    if (!rect) return null;
     const POP_WIDTH = 320;
-    // Anchor below the button, right-aligned to it; clamp into viewport.
+    const GAP = 6;
+    const PAGE_PAD = 16;
+    const spaceBelow = window.innerHeight - rect.bottom - GAP - PAGE_PAD;
+    const spaceAbove = rect.top - GAP - PAGE_PAD;
+    const wantBelow = spaceBelow >= 300 || spaceBelow >= spaceAbove;
+    const placement: "below" | "above" = wantBelow ? "below" : "above";
+    const maxHeight = Math.max(220, wantBelow ? spaceBelow : spaceAbove);
+    const top = wantBelow ? rect.bottom + GAP : Math.max(PAGE_PAD, rect.top - GAP - maxHeight);
     const left = Math.max(8, Math.min(window.innerWidth - POP_WIDTH - 8, rect.right - POP_WIDTH));
-    const top = rect.bottom + 6;
-    setCoords({ top, left });
+    return { top, left, maxHeight, placement };
+  };
+
+  const openWithCoords = () => {
+    const c = computeCoords();
+    if (!c) return;
+    setCoords(c);
     setOpen(true);
   };
 
@@ -1340,11 +1360,21 @@ function AddColumnButton({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") closeReset();
     };
+    // Recompute on resize/scroll so popover stays anchored as the user
+    // resizes the window or scrolls the page underneath it.
+    const onReflow = () => {
+      const c = computeCoords();
+      if (c) setCoords(c);
+    };
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", onReflow);
+    window.addEventListener("scroll", onReflow, true);
     return () => {
       document.removeEventListener("mousedown", onDoc);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", onReflow);
+      window.removeEventListener("scroll", onReflow, true);
     };
   }, [open]);
 
@@ -1384,14 +1414,17 @@ function AddColumnButton({
               top: coords.top,
               left: coords.left,
               width: 320,
-              maxHeight: "calc(100vh - 32px)",
+              maxHeight: coords.maxHeight,
             }}
             className="z-[60] flex flex-col overflow-hidden rounded-xl border border-border bg-popover shadow-[0_18px_40px_-12px_rgba(10,10,40,0.3)]"
           >
-            <div className="border-b border-border px-3 py-2">
+            <div className="shrink-0 border-b border-border px-3 py-2">
               <p className="eyebrow">Nowa kolumna</p>
             </div>
-            <div className="flex-1 overflow-y-auto p-3">
+            {/* min-h-0 is the magic that lets flex-1 + overflow-y-auto
+                actually clip the middle section. Without it the parent
+                stretches to fit content and the footer falls off-screen. */}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
               <input
                 autoFocus
                 value={name}
@@ -1414,7 +1447,7 @@ function AddColumnButton({
                 <FieldOptionsEditor type={type} value={options} onChange={setOptions} />
               </div>
             </div>
-            <div className="flex items-center justify-end gap-2 border-t border-border bg-popover/95 px-3 py-2 backdrop-blur-sm">
+            <div className="shrink-0 flex items-center justify-end gap-2 border-t border-border bg-popover px-3 py-2">
               <button
                 type="button"
                 onClick={closeReset}
