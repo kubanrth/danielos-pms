@@ -6,7 +6,14 @@ export type TemplateKey =
   | "flowchart"
   | "userflow"
   | "wireframe"
-  | "retro";
+  | "retro"
+  // F10-W3: workshop facilitation templates inspired by Mural.
+  | "eisenhower"
+  | "lean-canvas"
+  | "fishbone"
+  | "customer-journey"
+  | "kanban-swimlane"
+  | "mvp-launch";
 
 // Mutable scratchpad used by the editor to pair up node↔edge indices
 // when committing a template. `__assignedId` is set during apply.
@@ -181,6 +188,124 @@ export const TEMPLATES: TemplateDef[] = [
         sticky("Przykład: ", 720, 110, "#DBEAFE"),
       ];
       return { nodes, edges: [] };
+    },
+  },
+  {
+    key: "eisenhower",
+    label: "Macierz Eisenhowera",
+    glyph: "▦",
+    build: () => {
+      // 2×2 priority matrix: urgent×important.
+      const nodes: TemplateNodeSpec[] = [
+        frame("Pilne · Ważne (zrób)", 40, 40, 360, 320),
+        frame("Niepilne · Ważne (planuj)", 420, 40, 360, 320),
+        frame("Pilne · Nieważne (deleguj)", 40, 380, 360, 320),
+        frame("Niepilne · Nieważne (eliminuj)", 420, 380, 360, 320),
+      ];
+      return { nodes, edges: [] };
+    },
+  },
+  {
+    key: "lean-canvas",
+    label: "Lean Canvas",
+    glyph: "▥",
+    build: () => {
+      // Ash Maurya's 9-block. Layout matches the standard sheet.
+      const nodes: TemplateNodeSpec[] = [
+        frame("1. Problem", 40, 40, 200, 240),
+        frame("2. Segmenty klientów", 880, 40, 200, 240),
+        frame("3. Unikalna wartość", 460, 40, 220, 240),
+        frame("4. Rozwiązanie", 240, 40, 220, 240),
+        frame("5. Kanały", 680, 40, 200, 240),
+        frame("6. Strumienie przychodu", 460, 280, 220, 240),
+        frame("7. Struktura kosztów", 40, 280, 420, 240),
+        frame("8. Kluczowe metryki", 240, 280, 220, 240),
+        frame("9. Przewaga", 680, 280, 400, 240),
+      ];
+      return { nodes, edges: [] };
+    },
+  },
+  {
+    key: "fishbone",
+    label: "Diagram Ishikawy",
+    glyph: "🠷",
+    build: () => {
+      // Spine (effect on right) + 4 ribs (causes).
+      const nodes: TemplateNodeSpec[] = [
+        rect("Problem / Skutek", 760, 240),
+        rect("Ludzie", 60, 60),
+        rect("Proces", 360, 60),
+        rect("Materiały", 60, 440),
+        rect("Maszyny", 360, 440),
+      ];
+      const edges: TemplateEdgeSpec[] = [
+        { fromIdx: 1, toIdx: 0, style: "solid", endStyle: "arrow" },
+        { fromIdx: 2, toIdx: 0, style: "solid", endStyle: "arrow" },
+        { fromIdx: 3, toIdx: 0, style: "solid", endStyle: "arrow" },
+        { fromIdx: 4, toIdx: 0, style: "solid", endStyle: "arrow" },
+      ];
+      return { nodes, edges };
+    },
+  },
+  {
+    key: "customer-journey",
+    label: "Customer Journey",
+    glyph: "↦",
+    build: () => {
+      // 5 stages × 3 rows (action / thoughts / emotion). Sticky cells.
+      const stages = ["Świadomość", "Rozważanie", "Decyzja", "Użycie", "Polecanie"];
+      const colW = 200;
+      const stageY = 40;
+      const nodes: TemplateNodeSpec[] = [];
+      stages.forEach((s, i) => {
+        nodes.push(rect(s, 40 + i * colW, stageY));
+        nodes.push(sticky("Akcja", 60 + i * colW, stageY + 110, "#DBEAFE"));
+        nodes.push(sticky("Myśli", 60 + i * colW, stageY + 290, "#FEF3C7"));
+        nodes.push(sticky("Emocja", 60 + i * colW, stageY + 470, "#FBCFE8"));
+      });
+      return { nodes, edges: [] };
+    },
+  },
+  {
+    key: "kanban-swimlane",
+    label: "Kanban (3 kolumny)",
+    glyph: "▰",
+    build: () => {
+      const nodes: TemplateNodeSpec[] = [
+        frame("Do zrobienia", 40, 40, 280, 460),
+        frame("W toku", 340, 40, 280, 460),
+        frame("Gotowe", 640, 40, 280, 460),
+        sticky("Zadanie A", 60, 110, "#FEF3C7"),
+        sticky("Zadanie B", 60, 290, "#FEF3C7"),
+        sticky("Zadanie C", 360, 110, "#BFDBFE"),
+        sticky("Zadanie D", 660, 110, "#BBF7D0"),
+      ];
+      return { nodes, edges: [] };
+    },
+  },
+  {
+    key: "mvp-launch",
+    label: "MVP Launch",
+    glyph: "▶",
+    build: () => {
+      // Linear pipeline: idea → validate → MVP → launch → measure.
+      const nodes: TemplateNodeSpec[] = [
+        circle("Pomysł", 40, 200),
+        rect("Walidacja", 220, 200),
+        rect("MVP", 440, 200),
+        rect("Launch", 660, 200),
+        circle("Mierz", 880, 200),
+        sticky("Ryzyka", 220, 60, "#FEE2E2"),
+        sticky("Hipotezy", 440, 60, "#FEF3C7"),
+        sticky("Metryki", 880, 60, "#DBEAFE"),
+      ];
+      const edges: TemplateEdgeSpec[] = [
+        { fromIdx: 0, toIdx: 1, style: "solid", endStyle: "arrow" },
+        { fromIdx: 1, toIdx: 2, style: "solid", endStyle: "arrow" },
+        { fromIdx: 2, toIdx: 3, style: "solid", endStyle: "arrow" },
+        { fromIdx: 3, toIdx: 4, style: "solid", endStyle: "arrow" },
+      ];
+      return { nodes, edges };
     },
   },
 ];

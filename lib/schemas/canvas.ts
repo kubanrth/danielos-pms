@@ -46,6 +46,10 @@ const nodeSnapshotSchema = z.object({
   width: z.number().finite().positive().max(5000).default(160),
   height: z.number().finite().positive().max(5000).default(80),
   colorHex: z.string().regex(HEX_RE, "Kolor musi być #RRGGBB.").default("#FFFFFF"),
+  // F10-W2/W3: optional per-node metadata. Server stores under
+  // ProcessNode.dataJson. Reactions: emoji → count map. Locked: bool.
+  reactions: z.record(z.string().max(8), z.number().int().min(0).max(9999)).optional(),
+  locked: z.boolean().optional(),
 });
 
 const edgeSnapshotSchema = z.object({

@@ -33,6 +33,7 @@ import {
   Frame as FrameIcon,
   LayoutTemplate,
   Link2,
+  Lock,
   Minus as MinusIcon,
   MousePointer2,
   MoveRight as ArrowIcon,
@@ -40,6 +41,7 @@ import {
   Save,
   Square as SquareIcon,
   StickyNote,
+  Timer as TimerIcon,
   Trash2,
   Type as TypeIcon,
   Unlink2,
@@ -90,6 +92,10 @@ export interface EditorInitialNode {
   height: number;
   colorHex: string;
   linkedTasks: NodeTaskChip[];
+  // F10-W2: emoji reactions persisted on the node.
+  reactions?: Record<string, number>;
+  // F10-W3: when true, node is locked (no drag/resize/delete).
+  locked?: boolean;
 }
 
 export interface WorkspaceTaskOption {
@@ -213,12 +219,17 @@ function toRFNode(n: EditorInitialNode, workspaceId: string): RFNode {
       height: n.height,
       linkedTasks: n.linkedTasks,
       workspaceId,
+      reactions: n.reactions,
+      locked: n.locked,
     },
     width: n.width,
     height: n.height,
     // FRAME sits behind other nodes so it acts as a backdrop you can drop
     // shapes over. React Flow honours negative `zIndex` on a per-node basis.
     zIndex: n.shape === "FRAME" ? -10 : 0,
+    // F10-W3: locked nodes can't be moved or selected for delete.
+    draggable: !n.locked,
+    selectable: true,
   };
 }
 
@@ -366,10 +377,13 @@ function CanvasEditorInner({
             height: n.height,
             linkedTasks: prevLinks.get(n.id) ?? [],
             workspaceId,
+            reactions: n.reactions,
+            locked: n.locked,
           },
           width: n.width,
           height: n.height,
           zIndex: n.shape === "FRAME" ? -10 : 0,
+          draggable: !n.locked,
         }));
       });
       setEdges(() =>
@@ -445,6 +459,8 @@ function CanvasEditorInner({
           width: node.data.width,
           height: node.data.height,
           colorHex: node.data.colorHex,
+          reactions: node.data.reactions,
+          locked: node.data.locked,
         });
       }, LOCAL_ORIGIN);
     },
@@ -553,7 +569,12 @@ function CanvasEditorInner({
   );
 
   const deleteSelected = useCallback(() => {
-    const removedNodeIds = new Set(nodes.filter((n) => n.selected).map((n) => n.id));
+    // F10-W3: locked nodes are immune to delete via this flow. Edges
+    // attached to a locked node also stay (otherwise deleting an edge
+    // would orphan the locked node visually).
+    const removedNodeIds = new Set(
+      nodes.filter((n) => n.selected && !n.data.locked).map((n) => n.id),
+    );
     const removedEdgeIds = new Set(
       edges
         .filter((e) => e.selected || removedNodeIds.has(e.source) || removedNodeIds.has(e.target))
@@ -605,6 +626,56 @@ function CanvasEditorInner({
       ns.map((n) => (n.selected ? { ...n, zIndex: maxZ + 1 } : n)),
     );
   }, [nodes, setNodes]);
+
+  // F10-W2: toggle an emoji reaction on every selected node. Increments
+  // count if missing/zero, decrements (and clears at 0) if already there.
+  const toggleReaction = useCallback(
+    (emoji: string) => {
+      const touched: RFNode[] = [];
+      setNodes((ns) =>
+        ns.map((n) => {
+          if (!n.selected) return n;
+          const cur = { ...(n.data.reactions ?? {}) };
+          const had = (cur[emoji] ?? 0) > 0;
+          if (had) {
+            const nextCount = (cur[emoji] ?? 0) - 1;
+            if (nextCount <= 0) delete cur[emoji];
+            else cur[emoji] = nextCount;
+          } else {
+            cur[emoji] = (cur[emoji] ?? 0) + 1;
+          }
+          const next: RFNode = {
+            ...n,
+            data: { ...n.data, reactions: cur },
+          };
+          touched.push(next);
+          return next;
+        }),
+      );
+      for (const n of touched) commitNodeToY(n);
+    },
+    [setNodes, commitNodeToY],
+  );
+
+  // F10-W3: toggle locked flag on selected nodes. Locked → undraggable,
+  // can't be deleted by Delete key, can't be marquee-selected for delete.
+  const toggleLockSelected = useCallback(() => {
+    const touched: RFNode[] = [];
+    setNodes((ns) =>
+      ns.map((n) => {
+        if (!n.selected) return n;
+        const nextLocked = !n.data.locked;
+        const next: RFNode = {
+          ...n,
+          data: { ...n.data, locked: nextLocked },
+          draggable: !nextLocked,
+        };
+        touched.push(next);
+        return next;
+      }),
+    );
+    for (const n of touched) commitNodeToY(n);
+  }, [setNodes, commitNodeToY]);
 
   const renameSelected = useCallback(() => {
     const target = nodes.find((n) => n.selected);
@@ -704,6 +775,8 @@ function CanvasEditorInner({
           width: n.data.width,
           height: n.data.height,
           colorHex: n.data.colorHex,
+          reactions: n.data.reactions,
+          locked: n.data.locked,
         })),
         edges: edges.map((e) => ({
           id: e.id,
@@ -1073,10 +1146,13 @@ function CanvasEditorInner({
           x={contextMenu.x}
           y={contextMenu.y}
           hasSelection={selectedCount > 0}
+          isLocked={singleSelectedNode?.data.locked === true}
           onClose={() => setContextMenu(null)}
           onDelete={deleteSelected}
           onDuplicate={duplicateSelected}
           onBringFront={bringSelectedToFront}
+          onReact={toggleReaction}
+          onToggleLock={toggleLockSelected}
         />
       )}
 
@@ -1234,6 +1310,8 @@ function CanvasEditorInner({
                 setTemplateOpen(false);
               }}
             />
+
+            <TimerWidget />
 
             <ToolButton label="Eksport PNG" onClick={exportPng}>
               <Download size={14} />
@@ -1688,22 +1766,30 @@ function DrawingPreview({
 
 // F10-W: right-click context menu. Floats at viewport coords; closes on
 // outside click, escape, or after firing an action.
+const REACTION_EMOJIS = ["👍", "❤️", "🎉", "🔥", "💯", "🤔", "👀", "✨"];
+
 function ContextMenu({
   x,
   y,
   hasSelection,
+  isLocked,
   onClose,
   onDelete,
   onDuplicate,
   onBringFront,
+  onReact,
+  onToggleLock,
 }: {
   x: number;
   y: number;
   hasSelection: boolean;
+  isLocked: boolean;
   onClose: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
   onBringFront: () => void;
+  onReact: (emoji: string) => void;
+  onToggleLock: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -1727,8 +1813,32 @@ function ContextMenu({
     <div
       ref={ref}
       style={{ position: "fixed", top: y, left: x, zIndex: 60 }}
-      className="w-44 rounded-lg border border-border bg-popover p-1 shadow-[0_18px_40px_-12px_rgba(10,10,40,0.3)]"
+      className="w-52 rounded-lg border border-border bg-popover p-1 shadow-[0_18px_40px_-12px_rgba(10,10,40,0.3)]"
     >
+      {hasSelection && (
+        <>
+          <div className="px-2 py-1 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground/80">
+            Reakcja
+          </div>
+          <div className="grid grid-cols-8 gap-0.5 px-1.5 pb-1.5">
+            {REACTION_EMOJIS.map((e) => (
+              <button
+                key={e}
+                type="button"
+                onClick={() => {
+                  onReact(e);
+                  onClose();
+                }}
+                aria-label={`Reaguj ${e}`}
+                className="grid h-6 w-6 place-items-center rounded text-[0.92rem] transition-colors hover:bg-accent"
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+          <div className="my-1 h-px bg-border" />
+        </>
+      )}
       <CtxItem
         icon={<Copy size={11} />}
         label="Duplikuj"
@@ -1747,6 +1857,15 @@ function ContextMenu({
           onClose();
         }}
       />
+      <CtxItem
+        icon={<Lock size={11} />}
+        label={isLocked ? "Odblokuj" : "Zablokuj"}
+        disabled={!hasSelection}
+        onClick={() => {
+          onToggleLock();
+          onClose();
+        }}
+      />
       <div className="my-1 h-px bg-border" />
       <CtxItem
         icon={<Trash2 size={11} />}
@@ -1758,6 +1877,125 @@ function ContextMenu({
           onClose();
         }}
       />
+    </div>
+  );
+}
+
+// F10-W3: pure-UI countdown timer pinned in the toolbar. State lives
+// only in this client (not synced) — it's a workshop nudge, not data.
+// Click the clock to expand a popover with start/pause/reset and a
+// preset list (1/3/5/10 min). Default 5 min.
+function TimerWidget() {
+  const [open, setOpen] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(5 * 60);
+  const [running, setRunning] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => {
+      setSecondsLeft((s) => {
+        if (s <= 1) {
+          setRunning(false);
+          // Tiny audio cue when the timer hits 0 — workshops appreciate the
+          // beep. Web Audio API is enough; no asset needed.
+          try {
+            const ctx = new (window.AudioContext ||
+              (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext!)();
+            const o = ctx.createOscillator();
+            const g = ctx.createGain();
+            o.connect(g);
+            g.connect(ctx.destination);
+            o.frequency.value = 660;
+            g.gain.value = 0.08;
+            o.start();
+            o.stop(ctx.currentTime + 0.4);
+          } catch {
+            /* swallow — audio not critical */
+          }
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [running]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as globalThis.Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const mm = String(Math.floor(secondsLeft / 60)).padStart(2, "0");
+  const ss = String(secondsLeft % 60).padStart(2, "0");
+  const PRESETS = [60, 180, 300, 600];
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-label="Timer"
+        title="Timer"
+        className={`grid h-8 min-w-[2.5rem] place-items-center rounded-md px-1.5 transition-colors ${
+          running
+            ? "bg-primary/15 text-primary"
+            : "text-muted-foreground hover:bg-accent hover:text-foreground"
+        }`}
+      >
+        {running || secondsLeft !== 5 * 60 ? (
+          <span className="font-mono text-[0.74rem] tabular-nums">
+            {mm}:{ss}
+          </span>
+        ) : (
+          <TimerIcon size={14} />
+        )}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-[calc(100%+4px)] z-50 w-44 rounded-lg border border-border bg-popover p-2 shadow-[0_18px_40px_-12px_rgba(10,10,40,0.3)]">
+          <div className="mb-2 grid place-items-center font-mono text-[1.25rem] tabular-nums text-foreground">
+            {mm}:{ss}
+          </div>
+          <div className="mb-2 flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setRunning((r) => !r)}
+              className="flex-1 rounded-md bg-primary py-1 font-mono text-[0.66rem] uppercase tracking-[0.14em] text-primary-foreground"
+            >
+              {running ? "Pauza" : "Start"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRunning(false);
+                setSecondsLeft(5 * 60);
+              }}
+              className="rounded-md border border-border px-2 py-1 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Reset
+            </button>
+          </div>
+          <div className="grid grid-cols-4 gap-1">
+            {PRESETS.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => {
+                  setSecondsLeft(s);
+                  setRunning(true);
+                }}
+                className="rounded-md border border-border py-1 text-center font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
+              >
+                {s < 60 ? `${s}s` : `${Math.floor(s / 60)}m`}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -32,6 +32,13 @@ export interface CanvasNodeValue {
   width: number;
   height: number;
   colorHex: string;
+  // F10-W2: emoji reaction counts on this node. Keyed by emoji char,
+  // value is the count. Plain Record so Yjs sync stays cheap (no Y.Map
+  // per node — reactions are infrequent, full overwrite is fine).
+  reactions?: Record<string, number>;
+  // F10-W3: when locked, the node can't be moved, resized, or deleted
+  // via React Flow's normal interactions. The UI shows a lock icon.
+  locked?: boolean;
 }
 
 export interface CanvasEdgeValue {
@@ -101,6 +108,8 @@ function toNodeYMap(node: CanvasNodeValue): Y.Map<unknown> {
   m.set("width", node.width);
   m.set("height", node.height);
   m.set("colorHex", node.colorHex);
+  if (node.reactions) m.set("reactions", node.reactions);
+  if (node.locked) m.set("locked", true);
   return m;
 }
 
@@ -129,6 +138,15 @@ export function setNodeValue(
     if (existing.get("width") !== node.width) existing.set("width", node.width);
     if (existing.get("height") !== node.height) existing.set("height", node.height);
     if (existing.get("colorHex") !== node.colorHex) existing.set("colorHex", node.colorHex);
+    // Reactions are an object — compare via JSON to avoid spurious writes.
+    const prevReactions = existing.get("reactions");
+    const nextReactions = node.reactions ?? {};
+    if (JSON.stringify(prevReactions ?? {}) !== JSON.stringify(nextReactions)) {
+      existing.set("reactions", nextReactions);
+    }
+    if ((existing.get("locked") ?? false) !== Boolean(node.locked)) {
+      existing.set("locked", Boolean(node.locked));
+    }
   } else {
     nodesMap.set(node.id, toNodeYMap(node));
   }
@@ -189,6 +207,8 @@ export function readCanvasSnapshot(refs: CanvasYRefs): {
   refs.nodes.forEach((value, id) => {
     const shape = value.get("shape");
     if (!isCanvasShape(shape)) return;
+    const rawReactions = value.get("reactions");
+    const reactions = asReactions(rawReactions);
     nodes.push({
       id,
       shape,
@@ -198,6 +218,8 @@ export function readCanvasSnapshot(refs: CanvasYRefs): {
       width: asNumber(value.get("width"), 160),
       height: asNumber(value.get("height"), 80),
       colorHex: asString(value.get("colorHex"), "#FFFFFF"),
+      reactions: Object.keys(reactions).length > 0 ? reactions : undefined,
+      locked: value.get("locked") === true ? true : undefined,
     });
   });
   const edges: CanvasEdgeValue[] = [];
@@ -258,6 +280,17 @@ function asString(v: unknown, fallback: string): string {
 }
 function asNullString(v: unknown): string | null {
   return typeof v === "string" ? v : null;
+}
+
+function asReactions(v: unknown): Record<string, number> {
+  if (!v || typeof v !== "object") return {};
+  const out: Record<string, number> = {};
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    if (typeof val === "number" && Number.isFinite(val) && val > 0) {
+      out[k] = Math.floor(val);
+    }
+  }
+  return out;
 }
 
 // Byte-level update helpers — used by the Realtime provider to move

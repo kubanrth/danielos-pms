@@ -109,17 +109,39 @@ export default async function BoardWhiteboardPage({
         <CanvasEditorLazy
           workspaceId={workspaceId}
           canvasId={canvas.id}
-          initialNodes={canvas.nodes.map((n) => ({
-            id: n.id,
-            shape: n.shape === "ICON" ? "RECTANGLE" : n.shape,
-            label: n.label,
-            x: n.x,
-            y: n.y,
-            width: n.width,
-            height: n.height,
-            colorHex: n.colorHex,
-            linkedTasks: linksByNode.get(n.id) ?? [],
-          }))}
+          initialNodes={canvas.nodes.map((n) => {
+            // F10-W2/W3: dataJson stores reactions + locked (and any
+            // future per-node extras). Tolerate any shape.
+            const meta =
+              n.dataJson && typeof n.dataJson === "object"
+                ? (n.dataJson as {
+                    reactions?: unknown;
+                    locked?: unknown;
+                  })
+                : {};
+            const reactions =
+              meta.reactions && typeof meta.reactions === "object"
+                ? (Object.fromEntries(
+                    Object.entries(meta.reactions as Record<string, unknown>)
+                      .filter(([, v]) => typeof v === "number" && v > 0)
+                      .map(([k, v]) => [k, v as number]),
+                  ) as Record<string, number>)
+                : undefined;
+            return {
+              id: n.id,
+              shape: n.shape === "ICON" ? "RECTANGLE" : n.shape,
+              label: n.label,
+              x: n.x,
+              y: n.y,
+              width: n.width,
+              height: n.height,
+              colorHex: n.colorHex,
+              linkedTasks: linksByNode.get(n.id) ?? [],
+              reactions:
+                reactions && Object.keys(reactions).length > 0 ? reactions : undefined,
+              locked: meta.locked === true ? true : undefined,
+            };
+          })}
           initialEdges={canvas.edges.map((e) => ({
             id: e.id,
             fromNodeId: e.fromNodeId,

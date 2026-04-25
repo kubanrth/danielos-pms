@@ -1,6 +1,7 @@
 "use client";
 
 import { memo } from "react";
+import { Lock } from "lucide-react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 
 export interface NodeTaskChip {
@@ -24,6 +25,10 @@ export interface ShapeNodeData {
   height: number;
   linkedTasks?: NodeTaskChip[];
   workspaceId?: string;
+  // F10-W2: emoji reaction counts. Keyed by emoji char, value = count.
+  reactions?: Record<string, number>;
+  // F10-W3: when true, the node is locked (no drag/resize/delete in UI).
+  locked?: boolean;
   [key: string]: unknown;
 }
 
@@ -165,6 +170,40 @@ export const ShapeNode = memo(function ShapeNode({ data, selected }: NodeProps) 
             </span>
           )}
         </div>
+      )}
+
+      {/* F10-W2: emoji reactions strip (always visible when reactions
+          exist). Mural-style: emoji + count chip. Pointer events live so
+          users can click to toggle their reaction. */}
+      {d.reactions && Object.keys(d.reactions).length > 0 && (
+        <div
+          className="pointer-events-auto absolute -top-3 left-1/2 flex max-w-[calc(100%+60px)] -translate-x-1/2 flex-wrap justify-center gap-1"
+          data-reactions=""
+        >
+          {Object.entries(d.reactions)
+            .filter(([, c]) => c > 0)
+            .slice(0, 6)
+            .map(([emoji, count]) => (
+              <span
+                key={emoji}
+                className="inline-flex items-center gap-0.5 rounded-full border border-border bg-background px-1.5 py-0.5 text-[0.66rem] font-medium shadow-sm"
+              >
+                <span>{emoji}</span>
+                {count > 1 && <span className="text-muted-foreground">{count}</span>}
+              </span>
+            ))}
+        </div>
+      )}
+
+      {/* F10-W3: lock badge. Small lock icon top-right when locked. */}
+      {d.locked && (
+        <span
+          aria-label="Zablokowany"
+          title="Zablokowany"
+          className="pointer-events-none absolute -top-2 -right-2 grid h-5 w-5 place-items-center rounded-full bg-muted-foreground/90 text-background shadow"
+        >
+          <Lock size={9} />
+        </span>
       )}
     </>
   );

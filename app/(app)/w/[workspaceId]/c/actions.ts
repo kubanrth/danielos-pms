@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
+import { Prisma } from "@/lib/generated/prisma/client";
 import { requireWorkspaceAction, requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { writeAudit } from "@/lib/audit";
 import {
@@ -10,8 +11,20 @@ import {
   deleteCanvasSchema,
   renameCanvasSchema,
   saveCanvasSnapshotSchema,
+  type NodeSnapshotInput,
   type SaveCanvasSnapshotInput,
 } from "@/lib/schemas/canvas";
+
+// F10-W2/W3: collapse the node's optional reactions + locked flags into
+// a JSON blob for ProcessNode.dataJson. Returns DbNull when nothing
+// non-default is set so we don't bloat rows with empty objects.
+function nodeMeta(n: NodeSnapshotInput): Prisma.InputJsonValue | typeof Prisma.DbNull {
+  const meta: Record<string, unknown> = {};
+  if (n.reactions && Object.keys(n.reactions).length > 0) meta.reactions = n.reactions;
+  if (n.locked) meta.locked = true;
+  if (Object.keys(meta).length === 0) return Prisma.DbNull;
+  return meta as Prisma.InputJsonValue;
+}
 
 type CreateCanvasFieldErrors = { name?: string };
 
@@ -180,6 +193,7 @@ export async function saveCanvasSnapshotAction(
               width: n.width,
               height: n.height,
               colorHex: n.colorHex,
+              dataJson: nodeMeta(n),
             })),
           }),
         ]
@@ -197,6 +211,7 @@ export async function saveCanvasSnapshotAction(
           width: n.width,
           height: n.height,
           colorHex: n.colorHex,
+          dataJson: nodeMeta(n),
         },
       }),
     ),
