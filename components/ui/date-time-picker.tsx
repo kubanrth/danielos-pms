@@ -29,6 +29,15 @@ export interface DateTimePickerProps {
   disabled?: boolean;
   placeholder?: string;
   label?: string;
+  // F12-K7: "cell" variant for inline use in table rows — strips the
+  // input-style border + calendar icon so the cell is just the date text
+  // (with click-to-open and hover clear-X). "input" is the default
+  // (modal/form) look.
+  variant?: "input" | "cell";
+  // Optional change callback — fires whenever the date changes (day pick,
+  // time edit, today, clear). Useful for cells that auto-save without a
+  // wrapping <form> — pass an ISO string ("" when cleared).
+  onChange?: (iso: string) => void;
 }
 
 function isoToDate(iso: string | null): Date | null {
@@ -59,6 +68,8 @@ export function DateTimePicker({
   disabled,
   placeholder = "Wybierz datę",
   label,
+  variant = "input",
+  onChange,
 }: DateTimePickerProps) {
   const [date, setDate] = useState<Date | null>(() => isoToDate(defaultValue));
   const [open, setOpen] = useState(false);
@@ -75,6 +86,22 @@ export function DateTimePicker({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDate(isoToDate(defaultValue));
   }, [defaultValue]);
+
+  // F12-K7: notify parent whenever the user actually edits the date so
+  // table cells (or other auto-save consumers) can persist immediately
+  // without a wrapping <form>. Skip the first render so we don't fire on
+  // mount with the initial value.
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const initialIsoRef = useRef(date ? date.toISOString() : "");
+  const previousIsoRef = useRef(initialIsoRef.current);
+  useEffect(() => {
+    const next = date ? date.toISOString() : "";
+    if (next === previousIsoRef.current) return;
+    previousIsoRef.current = next;
+    if (next === initialIsoRef.current) return;
+    onChangeRef.current?.(next);
+  }, [date]);
 
   const recompute = () => {
     if (!triggerRef.current) return;
@@ -170,6 +197,17 @@ export function DateTimePicker({
   const mm = date ? pad2(date.getMinutes()) : "00";
   const isoForForm = date ? date.toISOString() : "";
 
+  const isCell = variant === "cell";
+  const triggerClass = isCell
+    ? `group/dt flex w-full items-center gap-1.5 rounded-md py-1 text-left text-[0.84rem] transition-colors enabled:hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-60 ${
+        open ? "bg-accent/40" : ""
+      }`
+    : `flex h-10 w-full items-center gap-2 rounded-md border bg-background px-3 text-left text-[0.88rem] transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+        open
+          ? "border-primary"
+          : "border-border hover:border-primary/60 focus-visible:border-primary focus-visible:outline-none"
+      }`;
+
   return (
     <div className="relative">
       <button
@@ -179,23 +217,27 @@ export function DateTimePicker({
         disabled={disabled}
         aria-label={label ?? placeholder}
         aria-expanded={open}
-        className={`flex h-10 w-full items-center gap-2 rounded-md border bg-background px-3 text-left text-[0.88rem] transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-          open
-            ? "border-primary"
-            : "border-border hover:border-primary/60 focus-visible:border-primary focus-visible:outline-none"
-        }`}
+        className={triggerClass}
       >
-        <CalendarIcon
-          size={14}
-          className={date ? "text-foreground" : "text-muted-foreground"}
-          aria-hidden
-        />
+        {!isCell && (
+          <CalendarIcon
+            size={14}
+            className={date ? "text-foreground" : "text-muted-foreground"}
+            aria-hidden
+          />
+        )}
         <span
           className={`min-w-0 flex-1 truncate ${
-            date ? "text-foreground" : "text-muted-foreground"
+            date
+              ? isCell
+                ? "font-mono text-[0.8rem] text-foreground"
+                : "text-foreground"
+              : isCell
+                ? "font-mono text-[0.7rem] uppercase tracking-[0.14em] text-muted-foreground/60"
+                : "text-muted-foreground"
           }`}
         >
-          {date ? display : placeholder}
+          {date ? display : isCell ? "—" : placeholder}
         </span>
         {date && !disabled && (
           <span
@@ -207,7 +249,11 @@ export function DateTimePicker({
             }}
             aria-label="Wyczyść datę"
             title="Wyczyść"
-            className="grid h-5 w-5 shrink-0 cursor-pointer place-items-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className={
+              isCell
+                ? "grid h-5 w-5 shrink-0 cursor-pointer place-items-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/dt:opacity-100"
+                : "grid h-5 w-5 shrink-0 cursor-pointer place-items-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            }
           >
             <X size={11} />
           </span>

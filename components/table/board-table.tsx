@@ -35,6 +35,7 @@ import {
   TagPickerCell,
   type PickerTag,
 } from "@/components/table/cell-pickers";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { FieldCell } from "@/components/table/field-cells";
 import { TableHeaderCell } from "@/components/table/header-cell";
 import { FieldOptionsEditor, FieldTypePicker } from "@/components/table/field-config";
@@ -1220,21 +1221,27 @@ function DateCell({
       <MutedDash />
     );
   }
+  // F12-K7: in-cell DateTimePicker — variant "cell" strips the
+  // input-style border + native calendar icon, autosave fires via
+  // patchTaskAction whenever the user picks/clears a date.
+  const persist = (iso: string) => {
+    const fd = new FormData();
+    fd.set("id", taskId);
+    fd.set(field, iso);
+    startTransition(async () => {
+      await patchTaskAction(fd);
+    });
+  };
   return (
-    <form action={patchTaskAction} className="m-0">
-      <input type="hidden" name="id" value={taskId} />
-      <input
-        name={field}
-        type="datetime-local"
-        defaultValue={toLocalInput(value)}
-        onBlur={(e) => {
-          const initial = toLocalInput(value);
-          if (e.currentTarget.value === initial) return;
-          (e.currentTarget.form as HTMLFormElement).requestSubmit();
-        }}
-        className="w-full bg-transparent font-mono text-[0.8rem] outline-none focus-visible:text-foreground"
-      />
-    </form>
+    <DateTimePicker
+      // `name` is unused in cell mode (no wrapping form) but keep it set
+      // so the hidden input is still present for accessibility tooling.
+      name={field}
+      defaultValue={value}
+      variant="cell"
+      placeholder={field === "startAt" ? "Brak daty startu" : "Brak daty końca"}
+      onChange={persist}
+    />
   );
 }
 
