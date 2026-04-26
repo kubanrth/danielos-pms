@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import {
   Bell,
   BookOpen,
+  LifeBuoy,
   CalendarDays,
   CheckSquare,
   ChevronLeft,
@@ -296,6 +297,12 @@ export function Sidebar({
                       className="inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-[0.78rem] font-mono uppercase tracking-[0.12em] text-muted-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-foreground"
                     >
                       <BookOpen size={11} /> Wiki
+                    </Link>
+                    <Link
+                      href={`/w/${ws.id}/support`}
+                      className="inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-[0.78rem] font-mono uppercase tracking-[0.12em] text-muted-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-foreground"
+                    >
+                      <LifeBuoy size={11} /> Support
                     </Link>
                     {canManage(ws.role) && (
                       <Link

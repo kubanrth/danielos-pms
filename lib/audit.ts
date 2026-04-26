@@ -9,7 +9,9 @@ export type AuditObjectType =
   | "Comment"
   | "Attachment"
   | "Tag"
-  | "ProcessCanvas";
+  | "ProcessCanvas"
+  // F11-20: support helpdesk module.
+  | "SupportTicket";
 
 export interface WriteAuditInput {
   workspaceId: string;
