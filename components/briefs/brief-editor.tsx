@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Smile, Trash2 } from "lucide-react";
 import {
   deleteBriefAction,
+  requestBriefImageUploadAction,
   updateBriefAction,
 } from "@/app/(app)/w/[workspaceId]/briefs/actions";
 import {
@@ -112,7 +113,7 @@ export function BriefEditor({
             href={`/w/${brief.workspaceId}/briefs`}
             className="inline-flex items-center gap-1 transition-colors hover:text-foreground"
           >
-            <ArrowLeft size={12} /> wszystkie briefy
+            <ArrowLeft size={12} /> creative board
           </Link>
           {savedAt && canEdit && (
             <span className="text-primary">· zapisano {savedAt}</span>
@@ -264,9 +265,39 @@ export function BriefEditor({
         <RichTextEditor
           initial={doc}
           readOnly={!canEdit}
-          variant="display"
+          variant={canEdit ? "field" : "display"}
+          extras="brief"
           placeholder="Zacznij pisać brief…"
           onChange={(d) => setDoc(d)}
+          onImageUpload={async (file) => {
+            const res = await requestBriefImageUploadAction(
+              brief.id,
+              file.name,
+              file.type,
+              file.size,
+            );
+            if (!res.ok) {
+              alert(res.error);
+              return null;
+            }
+            // Upload to signed URL via direct PUT.
+            try {
+              const putRes = await fetch(res.uploadUrl, {
+                method: "PUT",
+                headers: { "Content-Type": file.type },
+                body: file,
+              });
+              if (!putRes.ok) {
+                alert("Upload nie powiódł się.");
+                return null;
+              }
+            } catch (err) {
+              console.warn("[brief-image] upload error", err);
+              alert("Upload nie powiódł się — sprawdź połączenie.");
+              return null;
+            }
+            return res.publicSrc;
+          }}
         />
       </div>
     </div>

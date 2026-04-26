@@ -314,7 +314,7 @@ export function Sidebar({
                       href={`/w/${ws.id}/briefs`}
                       className="inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-[0.78rem] font-mono uppercase tracking-[0.12em] text-muted-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-foreground"
                     >
-                      <FileText size={11} /> Briefy
+                      <FileText size={11} /> Creative Board
                     </Link>
                     <Link
                       href={`/w/${ws.id}/calendar`}

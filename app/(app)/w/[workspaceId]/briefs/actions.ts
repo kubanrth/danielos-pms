@@ -3,10 +3,18 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { requireWorkspaceAction, requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { writeAudit } from "@/lib/audit";
+import {
+  ATTACHMENTS_BUCKET,
+  MAX_ATTACHMENT_BYTES,
+  createSignedUploadUrl,
+  isImageMime,
+  supabaseAdmin,
+} from "@/lib/storage";
 
 // F11-21 (#25): Creative brief CRUD. Tworzenie wymaga membership;
 // edycja/usuwanie creator + admin (task.update perm).
@@ -171,4 +179,114 @@ export async function deleteBriefAction(formData: FormData) {
     diff: { briefId: id },
   });
   redirect(`/w/${brief.workspaceId}/briefs`);
+}
+
+// F12-K12: image upload do briefu. Reuse Supabase Storage `attachments`
+// bucket (ten sam co task attachments) ale pod ścieżką `briefs/`.
+// Klient dostaje signed upload URL, przesyła plik, potem inserts <img>
+// z `src=/api/brief-image/<encoded-key>` — route-handler weryfikuje
+// access do briefu na każdy request i zwraca świeży signed download URL
+// (eliminuje problem expiry'i osadzonych URLi w contentJson).
+
+const uploadImageSchema = z.object({
+  briefId: z.string().min(1),
+  filename: z.string().trim().min(1).max(200),
+  contentType: z.string().min(1).max(100),
+  sizeBytes: z.number().int().positive().max(MAX_ATTACHMENT_BYTES),
+});
+
+export type BriefImageUploadResult =
+  | { ok: true; uploadUrl: string; storageKey: string; publicSrc: string }
+  | { ok: false; error: string };
+
+function sanitizeFilename(name: string): string {
+  return (
+    name
+      .replace(/[\\/]/g, "_")
+      .replace(/[^\w.\-]/g, "_")
+      .replace(/_+/g, "_")
+      .slice(-120) || "image"
+  );
+}
+
+export async function requestBriefImageUploadAction(
+  briefId: string,
+  filename: string,
+  contentType: string,
+  sizeBytes: number,
+): Promise<BriefImageUploadResult> {
+  const parsed = uploadImageSchema.safeParse({ briefId, filename, contentType, sizeBytes });
+  if (!parsed.success) {
+    return { ok: false, error: "Nieprawidłowe parametry pliku." };
+  }
+  if (!isImageMime(parsed.data.contentType)) {
+    return { ok: false, error: "Wymagany obraz (PNG / JPEG / WebP / GIF)." };
+  }
+
+  const brief = await db.creativeBrief.findFirst({
+    where: { id: parsed.data.briefId, deletedAt: null },
+    select: { id: true, workspaceId: true, creatorId: true },
+  });
+  if (!brief) return { ok: false, error: "Brief nie istnieje." };
+
+  // Authoring permission: creator OR workspace admin (task.update).
+  const ctx = await requireWorkspaceMembership(brief.workspaceId);
+  const isCreator = ctx.userId === brief.creatorId;
+  const isAdmin = ctx.role === "ADMIN" || ctx.role === "MEMBER";
+  if (!isCreator && !isAdmin) {
+    return { ok: false, error: "Brak uprawnień do edycji briefu." };
+  }
+
+  const safe = sanitizeFilename(parsed.data.filename);
+  const rand = randomBytes(9).toString("base64url");
+  const storageKey = `w/${brief.workspaceId}/briefs/${brief.id}/${rand}-${safe}`;
+
+  try {
+    const signed = await createSignedUploadUrl(storageKey);
+    return {
+      ok: true,
+      uploadUrl: signed.signedUrl,
+      storageKey,
+      // Route handler weryfikuje access przy każdym GET i 302-redirectuje
+      // na świeży signed download URL.
+      publicSrc: `/api/brief-image/${encodeURI(storageKey)}`,
+    };
+  } catch (err) {
+    console.warn("[brief-image] signed upload failed", err);
+    return { ok: false, error: "Nie udało się przygotować uploadu." };
+  }
+}
+
+// Rzadko wołana — używana TYLKO z route-handlera /api/brief-image gdy
+// chcemy zwrócić signed download URL bez exportowania `supabaseAdmin`
+// poza serwer.
+export async function getBriefImageDownloadUrl(
+  storageKey: string,
+  userId: string,
+): Promise<string | null> {
+  // Storage key formie: w/<wid>/briefs/<bid>/<rand-name>
+  const parts = storageKey.split("/");
+  if (parts.length < 5 || parts[0] !== "w" || parts[2] !== "briefs") return null;
+  const workspaceId = parts[1];
+  const briefId = parts[3];
+
+  const brief = await db.creativeBrief.findFirst({
+    where: { id: briefId, workspaceId, deletedAt: null },
+    select: { id: true, creatorId: true, workspaceId: true },
+  });
+  if (!brief) return null;
+
+  // Reader = każdy workspace member. Brief jest workspace-wide,
+  // tak jak teraz lista /briefs. Brak per-brief ACL.
+  const membership = await db.workspaceMembership.findUnique({
+    where: { workspaceId_userId: { workspaceId, userId } },
+    select: { id: true },
+  });
+  if (!membership) return null;
+
+  const { data, error } = await supabaseAdmin()
+    .storage.from(ATTACHMENTS_BUCKET)
+    .createSignedUrl(storageKey, 60 * 60); // 1h
+  if (error || !data) return null;
+  return data.signedUrl;
 }

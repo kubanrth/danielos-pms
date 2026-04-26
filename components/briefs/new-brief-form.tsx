@@ -15,7 +15,7 @@ export function NewBriefForm({ workspaceId }: { workspaceId: string }) {
         onClick={() => setOpen(true)}
         className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg bg-brand-gradient px-4 font-sans text-[0.9rem] font-semibold text-white shadow-brand transition-[transform,opacity] hover:-translate-y-[1px]"
       >
-        <Plus size={14} /> Nowy brief
+        <Plus size={14} /> Nowy board
       </button>
     );
   }

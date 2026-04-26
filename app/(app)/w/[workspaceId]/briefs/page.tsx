@@ -39,12 +39,12 @@ export default async function CreativeBriefsListPage({
         <div className="flex flex-col gap-2">
           <span className="eyebrow">Workspace</span>
           <h1 className="font-display text-[2.2rem] font-bold leading-[1.1] tracking-[-0.03em]">
-            <span className="text-brand-gradient">Creative</span> briefy.
+            <span className="text-brand-gradient">Creative</span> Board.
           </h1>
           <p className="max-w-[60ch] text-[0.95rem] leading-[1.55] text-muted-foreground">
             Strukturalne dokumenty projektowe — cele, grupa docelowa,
-            deliverables, brand guidelines, referencje, timeline.
-            Każdy nowy brief startuje z gotowego template&apos;a.
+            deliverables, brand guidelines, referencje, timeline. Tabele,
+            kolory, emoji, obrazy. Każdy nowy brief startuje z gotowego template&apos;a.
           </p>
         </div>
         <NewBriefForm workspaceId={workspaceId} />
@@ -52,9 +52,9 @@ export default async function CreativeBriefsListPage({
 
       {briefs.length === 0 ? (
         <div className="grid place-items-center rounded-xl border border-dashed border-border bg-card/40 py-16 text-center">
-          <p className="font-display text-[1rem] font-semibold">Brak briefów.</p>
+          <p className="font-display text-[1rem] font-semibold">Brak boardów.</p>
           <p className="mt-1 font-mono text-[0.7rem] uppercase tracking-[0.14em] text-muted-foreground">
-            kliknij „Nowy brief” powyżej
+            kliknij „Nowy board” powyżej
           </p>
         </div>
       ) : (
