@@ -1,16 +1,27 @@
 "use client";
 
-// Date+time picker — F11 (klient #17): native HTML5 datetime-local input.
-// Wcześniejsza wersja używała base-ui Popover + react-day-picker, ale
-// klient zgłosił że nie da się ustawić daty (popover się nie otwierał
-// w niektórych browser-ach / edge case'ach). Switch na natywne — proste,
-// szybkie, bez bibliotek, działa wszędzie.
+// F12-K6: dedykowany date+time picker. Trzecia iteracja: poprzednia
+// (native datetime-local) miała ohydny browser-specific UI a dwa
+// wcześniejsze popovery same nie otwierały się przez containing-block
+// trap (backdrop-blur na ancestorze → position:fixed pozycjonowane do
+// niego zamiast viewportu). Ten:
 //
-// Emits a hidden `<input name={name}>` z ISO string (lub "" gdy puste)
-// żeby Server Actions dostały tę samą formę co przedtem.
+// - trigger button = nasz styl, reszta UI w portalu do document.body
+//   (omija backdrop-blur trap)
+// - calendar = react-day-picker v9 z locale pl (date-fns)
+// - osobne HH/MM inputy pod kalendarzem (datetime-local nie ma czystego
+//   sposobu na ładny time)
+// - quick-actions: Dziś (today 09:00) + Wyczyść
+//
+// Emituje hidden `<input name>` z ISO string (lub "" dla pustego)
+// żeby parent <form action> dostał tę samą formę co dotychczas.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Calendar as CalendarIcon, X } from "lucide-react";
+import { DayPicker } from "react-day-picker";
+import { pl } from "date-fns/locale";
+import "react-day-picker/style.css";
 
 export interface DateTimePickerProps {
   name: string;
@@ -20,35 +31,26 @@ export interface DateTimePickerProps {
   label?: string;
 }
 
-// ISO → "YYYY-MM-DDTHH:mm" (local) for datetime-local input value.
-function isoToLocalInput(iso: string | null): string {
-  if (!iso) return "";
+function isoToDate(iso: string | null): Date | null {
+  if (!iso) return null;
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
-// Local "YYYY-MM-DDTHH:mm" → ISO. JS interprets the input as local time,
-// toISOString() emits UTC — round-trip works because our action stores
-// Date objects (timezone-independent millisecond stamps).
-function localInputToIso(local: string): string {
-  if (!local) return "";
-  const d = new Date(local);
-  return Number.isNaN(d.getTime()) ? "" : d.toISOString();
-}
-
-function formatDisplay(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString("pl-PL", {
+function formatDisplay(date: Date | null): string {
+  if (!date) return "";
+  // pl-PL: "4 maj 2026, 14:30"
+  return date.toLocaleString("pl-PL", {
     day: "numeric",
     month: "short",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
 }
 
 export function DateTimePicker({
@@ -58,74 +60,239 @@ export function DateTimePicker({
   placeholder = "Wybierz datę",
   label,
 }: DateTimePickerProps) {
-  // Local state mirrors the datetime-local input. Emit ISO via hidden
-  // input on each change so the parent <form> sees fresh value when
-  // user clicks "Zapisz".
-  const [local, setLocal] = useState<string>(() => isoToLocalInput(defaultValue));
-  const iso = localInputToIso(local);
-  const display = formatDisplay(iso);
-  const empty = !iso;
+  const [date, setDate] = useState<Date | null>(() => isoToDate(defaultValue));
+  const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState<{
+    top: number;
+    left: number;
+    placement: "below" | "above";
+  } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
 
-  // Resync if defaultValue changes externally (e.g. parent re-fetches
-  // task and passes new ISO). External-state sync is exactly the
-  // useEffect contract — Compiler's heuristic doesn't distinguish.
+  // External resync — if parent re-fetches and passes a new ISO, mirror it.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLocal(isoToLocalInput(defaultValue));
+    setDate(isoToDate(defaultValue));
   }, [defaultValue]);
 
+  const recompute = () => {
+    if (!triggerRef.current) return;
+    const r = triggerRef.current.getBoundingClientRect();
+    const margin = 8;
+    const desiredHeight = 380;
+    const spaceBelow = window.innerHeight - r.bottom - margin;
+    const spaceAbove = r.top - margin;
+    const placement: "below" | "above" =
+      spaceBelow >= 280 || spaceBelow >= spaceAbove ? "below" : "above";
+    const left = Math.min(
+      Math.max(r.left, margin),
+      window.innerWidth - 320 - margin,
+    );
+    if (placement === "below") {
+      setCoords({ top: r.bottom + 6, left, placement });
+    } else {
+      setCoords({
+        top: Math.max(margin, r.top - 6 - desiredHeight),
+        left,
+        placement,
+      });
+    }
+  };
+
+  const openPicker = () => {
+    if (disabled) return;
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    recompute();
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (popRef.current?.contains(e.target as Node)) return;
+      if (triggerRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    const onReflow = () => recompute();
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", onReflow);
+    window.addEventListener("scroll", onReflow, true);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", onReflow);
+      window.removeEventListener("scroll", onReflow, true);
+    };
+  }, [open]);
+
+  const onDaySelect = (day: Date | undefined) => {
+    if (!day) {
+      setDate(null);
+      return;
+    }
+    // Preserve current time-of-day if user already set one; otherwise 09:00.
+    const next = new Date(day);
+    if (date) {
+      next.setHours(date.getHours(), date.getMinutes(), 0, 0);
+    } else {
+      next.setHours(9, 0, 0, 0);
+    }
+    setDate(next);
+  };
+
+  const setTime = (h: number, m: number) => {
+    const base = date ?? new Date();
+    const next = new Date(base);
+    next.setHours(h, m, 0, 0);
+    setDate(next);
+  };
+
+  const setToday = () => {
+    const now = new Date();
+    now.setSeconds(0, 0);
+    setDate(now);
+  };
+
+  const clear = () => {
+    setDate(null);
+  };
+
+  const display = formatDisplay(date);
+  const hh = date ? pad2(date.getHours()) : "09";
+  const mm = date ? pad2(date.getMinutes()) : "00";
+  const isoForForm = date ? date.toISOString() : "";
+
   return (
-    <div className="relative flex items-center">
-      <CalendarIcon
-        size={14}
-        className="pointer-events-none absolute left-3 text-muted-foreground"
-        aria-hidden
-      />
-      <input
-        type="datetime-local"
-        value={local}
-        onChange={(e) => setLocal(e.target.value)}
+    <div className="relative">
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={openPicker}
         disabled={disabled}
         aria-label={label ?? placeholder}
-        // Show display label as a layered span when empty, else show
-        // native value. Native picker UI handles the calendar widget.
-        className={`h-10 w-full rounded-md border border-border bg-background pl-9 pr-10 text-[0.88rem] transition-colors hover:border-primary/60 focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${
-          empty ? "text-transparent" : "text-foreground"
+        aria-expanded={open}
+        className={`flex h-10 w-full items-center gap-2 rounded-md border bg-background px-3 text-left text-[0.88rem] transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+          open
+            ? "border-primary"
+            : "border-border hover:border-primary/60 focus-visible:border-primary focus-visible:outline-none"
         }`}
-      />
-      {/* When empty we paint the placeholder over the (transparent) input
-          text so users see "Brak daty końca" instead of dd/mm/yyyy. */}
-      {empty && !disabled && (
-        <span
+      >
+        <CalendarIcon
+          size={14}
+          className={date ? "text-foreground" : "text-muted-foreground"}
           aria-hidden
-          className="pointer-events-none absolute left-9 text-[0.88rem] text-muted-foreground"
-        >
-          {placeholder}
-        </span>
-      )}
-      {/* Read-only formatted display when value is set — covers the
-          native dd/mm/yyyy with our pl-PL formatting. Click pass-through
-          via pointer-events-none so the user can still open the picker. */}
-      {!empty && (
+        />
         <span
-          aria-hidden
-          className="pointer-events-none absolute left-9 right-10 truncate text-[0.88rem] text-foreground"
+          className={`min-w-0 flex-1 truncate ${
+            date ? "text-foreground" : "text-muted-foreground"
+          }`}
         >
-          {display}
+          {date ? display : placeholder}
         </span>
-      )}
-      {!empty && !disabled && (
-        <button
-          type="button"
-          onClick={() => setLocal("")}
-          aria-label="Wyczyść datę"
-          title="Wyczyść"
-          className="absolute right-2 grid h-6 w-6 place-items-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <X size={12} />
-        </button>
-      )}
-      <input type="hidden" name={name} value={iso} />
+        {date && !disabled && (
+          <span
+            role="button"
+            tabIndex={-1}
+            onClick={(e) => {
+              e.stopPropagation();
+              clear();
+            }}
+            aria-label="Wyczyść datę"
+            title="Wyczyść"
+            className="grid h-5 w-5 shrink-0 cursor-pointer place-items-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <X size={11} />
+          </span>
+        )}
+      </button>
+      <input type="hidden" name={name} value={isoForForm} />
+
+      {open && coords && typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={popRef}
+            style={{ position: "fixed", top: coords.top, left: coords.left, width: 320 }}
+            className="z-[80] flex flex-col overflow-hidden rounded-xl border border-border bg-popover shadow-[0_18px_40px_-12px_rgba(10,10,40,0.35)]"
+          >
+            <div className="rdp-host px-3 pt-3">
+              <DayPicker
+                mode="single"
+                selected={date ?? undefined}
+                onSelect={onDaySelect}
+                locale={pl}
+                weekStartsOn={1}
+                showOutsideDays
+                captionLayout="label"
+              />
+            </div>
+            <div className="flex items-center gap-2 border-t border-border bg-muted/40 px-3 py-2">
+              <span className="font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted-foreground">
+                Godzina
+              </span>
+              <div className="ml-auto flex items-center gap-1">
+                <input
+                  type="number"
+                  min={0}
+                  max={23}
+                  value={hh}
+                  onChange={(e) => {
+                    const v = Math.max(0, Math.min(23, Number(e.target.value) || 0));
+                    setTime(v, date?.getMinutes() ?? 0);
+                  }}
+                  aria-label="Godzina"
+                  className="h-7 w-12 rounded-md border border-border bg-background px-2 text-center font-mono text-[0.84rem] tabular-nums focus:border-primary focus:outline-none"
+                />
+                <span className="font-mono text-muted-foreground">:</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={59}
+                  value={mm}
+                  onChange={(e) => {
+                    const v = Math.max(0, Math.min(59, Number(e.target.value) || 0));
+                    setTime(date?.getHours() ?? 9, v);
+                  }}
+                  aria-label="Minuty"
+                  className="h-7 w-12 rounded-md border border-border bg-background px-2 text-center font-mono text-[0.84rem] tabular-nums focus:border-primary focus:outline-none"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-2 border-t border-border px-3 py-2">
+              <button
+                type="button"
+                onClick={setToday}
+                className="rounded-md px-2 py-1 font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                Dziś
+              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={clear}
+                  className="rounded-md px-2 py-1 font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  Wyczyść
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="rounded-md bg-primary px-3 py-1 font-mono text-[0.66rem] uppercase tracking-[0.14em] text-primary-foreground transition-opacity hover:opacity-90"
+                >
+                  Gotowe
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
