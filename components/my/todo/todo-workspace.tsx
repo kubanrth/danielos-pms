@@ -165,14 +165,10 @@ export function TodoWorkspace({
           </div>
         </header>
 
-        {/* Quick-add: MS To Do places it RIGHT under the header and
-             always-visible. We show it only for regular lists — smart
-             views have no canonical target. */}
-        {activeListId && (
-          <div className="px-8 pt-4">
-            <QuickAddItem listId={activeListId} />
-          </div>
-        )}
+        {/* F12-K16: quick-add przeniesiony WYŁĄCZNIE do prawego panelu
+             (klient zażądał MS-To-Do parity — add-task zawsze po prawej
+             stronie kiedy lista aktywna, niezależnie czy wybrano task'a).
+             Top header zostaje czysty. */}
 
         <div className="flex-1 overflow-y-auto px-8 py-4">
           {items.length === 0 ? (
@@ -198,33 +194,45 @@ export function TodoWorkspace({
         </div>
       </section>
 
-      {/* F11-11 (#1): klient zażądał MS-To-Do parity — po kliknięciu w
-          listę pokaż po prawej stronie pole dodawania zadania. Right
-          panel jest teraz ZAWSZE widoczny gdy lista jest aktywna:
-          - selectedItem present → klasyczny TodoDetailPanel
-          - else, activeListId set → quick-add prompt z dedykowanym CTA
-          - smart view → panel ukryty (smart view nie ma kanonicznego
-            targetu) */}
-      {selectedItem ? (
+      {/* F12-K16: prawy panel jest ZAWSZE widoczny gdy lista jest
+          aktywna. Trzyma sticky add-task input u góry + opcjonalny
+          TodoDetailPanel pod nim gdy task wybrany. Smart view (My Day /
+          Important / Planned) nie ma kanonicznego targetu — tam panel
+          ukryty (jak w MS To Do). */}
+      {activeListId ? (
+        <div className="flex w-[380px] shrink-0 flex-col border-l border-border bg-card/50">
+          <div className="shrink-0 border-b border-border bg-background/60 p-4 backdrop-blur-sm">
+            <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3 shadow-[0_4px_16px_-8px_rgba(10,10,40,0.08)]">
+              <span className="eyebrow text-primary">Dodaj zadanie</span>
+              <p className="text-[0.82rem] leading-[1.45] text-muted-foreground">
+                {activeListName
+                  ? `Lista: „${activeListName}"`
+                  : "Wpisz tytuł i Enter."}
+              </p>
+              <QuickAddItem listId={activeListId} variant="panel" />
+            </div>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {selectedItem ? (
+              <TodoDetailPanel
+                key={selectedItem.id}
+                item={selectedItem}
+                onClose={() => setSelectedItemId(null)}
+              />
+            ) : (
+              <div className="px-4 py-6 font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground/70">
+                klik w zadanie → szczegóły, kroki, przypomnienie
+              </div>
+            )}
+          </div>
+        </div>
+      ) : selectedItem ? (
         <div className="w-[380px] shrink-0 border-l border-border bg-card/50 overflow-y-auto">
           <TodoDetailPanel
             key={selectedItem.id}
             item={selectedItem}
             onClose={() => setSelectedItemId(null)}
           />
-        </div>
-      ) : activeListId ? (
-        <div className="w-[380px] shrink-0 border-l border-border bg-card/50 overflow-y-auto p-4">
-          <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-[0_4px_16px_-8px_rgba(10,10,40,0.1)]">
-            <span className="eyebrow text-primary">Dodaj zadanie</span>
-            <p className="font-display text-[1rem] font-semibold leading-tight tracking-[-0.01em]">
-              Co masz do zrobienia w {activeListName ? `„${activeListName}"` : "tej liście"}?
-            </p>
-            <QuickAddItem listId={activeListId} variant="panel" />
-            <p className="font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted-foreground/80">
-              klik w istniejące zadanie → szczegóły / kroki / przypomnienie
-            </p>
-          </div>
         </div>
       ) : null}
     </div>
