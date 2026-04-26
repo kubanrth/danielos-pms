@@ -397,6 +397,16 @@ model Task {
   // reminderAt <= now() AND reminderSentAt IS NULL.
   reminderAt      DateTime?
   reminderSentAt  DateTime?
+  // F11-17: recurring tasks. Template tasks have `recurrenceRule` set;
+  // cron `/api/cron/spawn-recurring` reads them daily and creates a
+  // child Task with `recurrenceParentId` pointing back at the template.
+  // Rule shape (Json): `{ freq: "daily" | "weekly" | "monthly", day?: number }`.
+  // - daily: every day
+  // - weekly: `day` = 0..6 (Sun..Sat)
+  // - monthly: `day` = 1..31 (clamped to month end)
+  recurrenceRule       Json?
+  recurrenceParentId   String?
+  recurrenceLastSpawnAt DateTime?
   rowOrder        Float     @default(0)
   version         Int       @default(1)
   createdAt       DateTime  @default(now())
@@ -422,6 +432,8 @@ model Task {
   @@index([workspaceId, deletedAt])
   @@index([milestoneId])
   @@index([reminderAt, reminderSentAt])
+  // F11-17: cron query — find tasks with recurrence not spawned today.
+  @@index([recurrenceLastSpawnAt])
 }
 
 // F8: simple in-task checklist. Separate from Task because we reorder

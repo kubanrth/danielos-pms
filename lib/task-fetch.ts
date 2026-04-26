@@ -145,6 +145,14 @@ export async function fetchTaskDetail(
       stopAt: task.stopAt ? task.stopAt.toISOString() : null,
       reminderAt: task.reminderAt ? task.reminderAt.toISOString() : null,
       reminderOffset: inferReminderOffset(task.stopAt, task.reminderAt),
+      recurrenceRule:
+        task.recurrenceRule && typeof task.recurrenceRule === "object"
+          ? (task.recurrenceRule as {
+              freq: "daily" | "weekly" | "monthly";
+              day?: number;
+            })
+          : null,
+      recurrenceParentId: task.recurrenceParentId,
     },
     milestones: task.board.milestones.map((m) => ({
       id: m.id,

@@ -22,6 +22,7 @@ import { PollSection, type PollData } from "@/components/task/poll-section";
 import { SendEmailDialog } from "@/components/task/send-email-dialog";
 import { assignTaskToMilestoneAction } from "@/app/(app)/w/[workspaceId]/b/[boardId]/milestone-actions";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
+import { RecurrencePicker } from "@/components/task/recurrence-picker";
 
 const TAG_COLORS = [
   "#EF4444",
@@ -47,6 +48,9 @@ export interface TaskDetailProps {
     stopAt: string | null;
     reminderAt: string | null;
     reminderOffset: string | null;
+    // F11-17: recurrence rule (cron spawns instances daily at 00:05 UTC).
+    recurrenceRule: { freq: "daily" | "weekly" | "monthly"; day?: number } | null;
+    recurrenceParentId: string | null;
   };
   statusColumns: { id: string; name: string; colorHex: string }[];
   milestones: { id: string; title: string; startAt: string; stopAt: string }[];
@@ -225,6 +229,23 @@ export function TaskDetail({
             </span>
           )}
         </div>
+
+        {/* F11-17 (#24): recurring tasks. Template task (rule != null)
+            spawns instances via cron daily at 00:05 UTC. Instances
+            (recurrenceParentId set) are read-only here — user changes
+            the template, not individual instances. */}
+        {!task.recurrenceParentId && (
+          <RecurrencePicker
+            taskId={task.id}
+            rule={task.recurrenceRule}
+            disabled={!canEdit}
+          />
+        )}
+        {task.recurrenceParentId && (
+          <p className="font-mono text-[0.66rem] uppercase tracking-[0.12em] text-muted-foreground">
+            🔁 instancja zadania cyklicznego — edytuj szablon żeby zmienić regułę
+          </p>
+        )}
 
         {!state?.ok && state?.error && (
           <p className="font-mono text-[0.72rem] uppercase tracking-[0.14em] text-destructive">
