@@ -42,18 +42,22 @@ export default async function SupportPage({
         description: t.description,
         status: t.status,
         priority: t.priority,
+        dueAt: t.dueAt ? t.dueAt.toISOString() : null,
+        isUrgent: t.isUrgent,
         createdAt: t.createdAt.toISOString(),
         resolvedAt: t.resolvedAt ? t.resolvedAt.toISOString() : null,
         reporter: {
           id: t.reporter.id,
           name: t.reporter.name,
           email: t.reporter.email,
+          avatarUrl: t.reporter.avatarUrl,
         },
         assignee: t.assignee
           ? {
               id: t.assignee.id,
               name: t.assignee.name,
               email: t.assignee.email,
+              avatarUrl: t.assignee.avatarUrl,
             }
           : null,
       }))}

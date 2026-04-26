@@ -569,6 +569,12 @@ model SupportTicket {
   description String                @db.Text
   status      SupportTicketStatus   @default(OPEN)
   priority    SupportTicketPriority @default(MEDIUM)
+  // F12-K11: opcjonalny deadline + flaga "NATYCHMIAST". Reporter
+  // ustawia jedno z tych (lub żadne) przy tworzeniu zgłoszenia;
+  // isUrgent=true sygnalizuje "zrób natychmiast" i UI nadpisuje
+  // wyświetlanie dueAt — pokazuje czerwony badge "NATYCHMIAST".
+  dueAt       DateTime?
+  isUrgent    Boolean               @default(false)
   createdAt   DateTime              @default(now())
   updatedAt   DateTime              @updatedAt
   resolvedAt  DateTime?
