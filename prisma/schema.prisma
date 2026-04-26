@@ -68,6 +68,8 @@ model User {
   assignedTickets    SupportTicket[]       @relation("SupportAssignee")
   // F11-21: creative briefs created by user.
   createdBriefs      CreativeBrief[]       @relation("BriefCreator")
+  // F11-22: workspace-level calendar events created by user.
+  createdEvents      WorkspaceEvent[]      @relation("EventCreator")
 
   @@index([isBanned])
   @@index([lastSeenAt])
@@ -160,6 +162,8 @@ model Workspace {
   supportTickets       SupportTicket[]
   // F11-21: creative briefs per-workspace.
   creativeBriefs       CreativeBrief[]
+  // F11-22: workspace-level calendar events.
+  events               WorkspaceEvent[]
 
   @@index([ownerId])
   @@index([deletedAt])
@@ -443,6 +447,30 @@ model Task {
   @@index([reminderAt, reminderSentAt])
   // F11-17: cron query — find tasks with recurrence not spawned today.
   @@index([recurrenceLastSpawnAt])
+}
+
+// F11-22 (#22): kalendarz na poziomie workspace — pokazuje zadania
+// + niestandardowe wydarzenia (spotkania / deadliny / off-task work).
+model WorkspaceEvent {
+  id          String   @id @default(cuid())
+  workspaceId String
+  creatorId   String
+  title       String
+  description String?
+  startAt     DateTime
+  endAt       DateTime
+  allDay      Boolean  @default(false)
+  // Hex color (#RRGGBB). Default brand purple.
+  color       String   @default("#7B68EE")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator   User      @relation("EventCreator", fields: [creatorId], references: [id])
+
+  @@index([workspaceId, deletedAt])
+  @@index([startAt])
 }
 
 // F11-21 (#25): Creative brief — strukturalny dokument projektowy

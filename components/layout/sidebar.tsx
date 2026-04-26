@@ -311,6 +311,12 @@ export function Sidebar({
                     >
                       <FileText size={11} /> Briefy
                     </Link>
+                    <Link
+                      href={`/w/${ws.id}/calendar`}
+                      className="inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-[0.78rem] font-mono uppercase tracking-[0.12em] text-muted-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-foreground"
+                    >
+                      <CalendarDays size={11} /> Kalendarz
+                    </Link>
                     {canManage(ws.role) && (
                       <Link
                         href={`/w/${ws.id}/settings`}
