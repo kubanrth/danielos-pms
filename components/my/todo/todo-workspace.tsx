@@ -1,7 +1,8 @@
 "use client";
 
-import { startTransition, useMemo, useState } from "react";
+import { startTransition, useMemo, useOptimistic, useRef, useState } from "react";
 import Link from "next/link";
+import { ExternalLink } from "lucide-react";
 import {
   CalendarDays,
   CheckCircle2,
@@ -105,17 +106,43 @@ export function TodoWorkspace({
   }, [lists]);
 
   const [selectedItemId, setSelectedItemId] = useState<string | null>(focusedItemId);
-  const selectedItem = items.find((i) => i.id === selectedItemId) ?? null;
 
-  if (selectedItemId && !items.find((i) => i.id === selectedItemId)) {
+  // F12-K18: optimistic UI dla add-task. Wcześniej user typował, naciskał
+  // Enter, czekał na revalidatePath round-trip — feel laggy. Teraz item
+  // pojawia się natychmiast w liście, server save w tle.
+  // Mergeujemy items (server) + pending (client-only) — gdy server
+  // zwróci, revalidatePath replace'uje optimistic na real.
+  const [optimisticItems, addOptimisticItem] = useOptimistic<
+    TodoItemFull[],
+    { tempId: string; content: string; listId: string; listName: string }
+  >(items, (state, pending) => [
+    ...state,
+    {
+      id: pending.tempId,
+      content: pending.content,
+      completed: false,
+      important: false,
+      myDayAt: null,
+      dueDate: null,
+      reminderAt: null,
+      notes: null,
+      listId: pending.listId,
+      listName: pending.listName,
+      steps: [],
+    },
+  ]);
+
+  const selectedItem = optimisticItems.find((i) => i.id === selectedItemId) ?? null;
+
+  if (selectedItemId && !optimisticItems.find((i) => i.id === selectedItemId)) {
     setTimeout(() => setSelectedItemId(null), 0);
   }
 
   const activeSmart = SMART_VIEWS.find((v) => v.key === smart);
   const pageTitle = activeListName ?? activeSmart?.label ?? "TO DO";
 
-  const incomplete = items.filter((i) => !i.completed);
-  const completed = items.filter((i) => i.completed);
+  const incomplete = optimisticItems.filter((i) => !i.completed);
+  const completed = optimisticItems.filter((i) => i.completed);
 
   return (
     <div className="flex h-[calc(100dvh-0px)] overflow-hidden">
@@ -228,7 +255,12 @@ export function TodoWorkspace({
                   ? `Lista: „${activeListName}"`
                   : "Wpisz tytuł i Enter."}
               </p>
-              <QuickAddItem listId={activeListId} variant="panel" />
+              <QuickAddItem
+                listId={activeListId}
+                listName={activeListName ?? ""}
+                variant="panel"
+                onOptimistic={addOptimisticItem}
+              />
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -546,11 +578,11 @@ function ItemRow({
         className="flex min-w-0 flex-1 flex-col items-start gap-0.5 text-left focus-visible:outline-none"
       >
         <span
-          className={`truncate text-[0.94rem] transition-colors ${
+          className={`block w-full truncate text-[0.94rem] transition-colors ${
             item.completed ? "text-muted-foreground line-through" : ""
           }`}
         >
-          {item.content}
+          <RenderContent content={item.content} />
         </span>
         <div className="flex flex-wrap items-center gap-2 font-mono text-[0.62rem] uppercase tracking-[0.12em] text-muted-foreground">
           {showListChip && (
@@ -624,32 +656,64 @@ function ItemRow({
 
 function QuickAddItem({
   listId,
+  listName,
   variant = "main",
+  onOptimistic,
 }: {
   listId: string;
+  listName: string;
   // F11-11: same form rendered in two places (main top header + right
   // panel). Right-panel variant has slimmer chrome since it's nested in
   // a card.
   variant?: "main" | "panel";
+  // F12-K18: callback do parent useOptimistic — input renders new item
+  // natychmiast lokalnie, server save w tle. Bez tego flow czuł się
+  // laggy (revalidatePath round-trip).
+  onOptimistic?: (pending: {
+    tempId: string;
+    content: string;
+    listId: string;
+    listName: string;
+  }) => void;
 }) {
   const [content, setContent] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const submit = () => {
+    const trimmed = content.trim();
+    if (!trimmed) return;
+    const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    // Clear input + focus IMMEDIATELY — feel of native rapid entry.
+    setContent("");
+    setTimeout(() => inputRef.current?.focus(), 0);
+
+    const fd = new FormData();
+    fd.set("listId", listId);
+    fd.set("content", trimmed);
+
+    // useOptimistic must be wrapped in startTransition.
+    startTransition(() => {
+      onOptimistic?.({ tempId, content: trimmed, listId, listName });
+      void createTodoItemAction(fd);
+    });
+  };
+
   const cls =
     variant === "panel"
       ? "flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 transition-colors focus-within:border-primary/60"
       : "flex items-center gap-3 rounded-xl border border-border bg-card px-5 py-3 shadow-[0_1px_2px_rgba(10,10,40,0.04)]";
   return (
     <form
-      action={(fd) =>
-        startTransition(async () => {
-          await createTodoItemAction(fd);
-          setContent("");
-        })
-      }
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
       className={cls}
     >
-      <input type="hidden" name="listId" value={listId} />
       <Plus size={variant === "panel" ? 13 : 15} className="text-primary/70" />
       <input
+        ref={inputRef}
         name="content"
         value={content}
         onChange={(e) => setContent(e.target.value)}
@@ -741,6 +805,68 @@ function EmptyState({
 function formatShortDate(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString("pl-PL", { day: "numeric", month: "short" });
+}
+
+// F12-K18: render content z auto-detekcją URL'i. Plain text + URL jako
+// klikalny chip pokazujący tylko hostname (zamiast 80-znakowego URL'a).
+// Klik na chip = open in new tab (stop propagation żeby nie selectowało
+// taska).
+const URL_REGEX = /(https?:\/\/[^\s]+)/g;
+
+function shortHost(url: string): string {
+  try {
+    const u = new URL(url);
+    return u.hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+function RenderContent({ content }: { content: string }) {
+  const parts = useMemo(() => {
+    const matches = [...content.matchAll(URL_REGEX)];
+    if (matches.length === 0) {
+      return [{ type: "text" as const, value: content }];
+    }
+    const out: Array<
+      { type: "text"; value: string } | { type: "link"; href: string }
+    > = [];
+    let last = 0;
+    for (const m of matches) {
+      const start = m.index ?? 0;
+      if (start > last) {
+        out.push({ type: "text", value: content.slice(last, start) });
+      }
+      out.push({ type: "link", href: m[0] });
+      last = start + m[0].length;
+    }
+    if (last < content.length) {
+      out.push({ type: "text", value: content.slice(last) });
+    }
+    return out;
+  }, [content]);
+
+  return (
+    <>
+      {parts.map((p, i) =>
+        p.type === "text" ? (
+          <span key={i}>{p.value}</span>
+        ) : (
+          <a
+            key={i}
+            href={p.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="mx-0.5 inline-flex items-center gap-1 rounded px-1.5 py-0.5 align-baseline font-mono text-[0.78em] text-primary underline-offset-2 hover:bg-primary/10 hover:underline"
+          >
+            <ExternalLink size={10} className="shrink-0" />
+            {shortHost(p.href)}
+          </a>
+        ),
+      )}
+    </>
+  );
 }
 
 // F12-K17: lista tasków przypisanych do current user w prawym panelu.
