@@ -25,6 +25,7 @@ import type { Role } from "@/lib/generated/prisma/enums";
 import { signOutAction } from "@/app/(app)/actions";
 import { CreateBoardDialog } from "@/components/workspaces/create-board-dialog";
 import { DeleteBoardDialog } from "@/components/workspaces/delete-board-dialog";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 
 export interface SidebarUser {
   id: string;
@@ -132,14 +133,17 @@ export function Sidebar({
             </div>
           )}
         </Link>
-        <button
-          type="button"
-          onClick={() => setCollapsed((v) => !v)}
-          className="grid h-7 w-7 shrink-0 place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
-          aria-label={collapsed ? "Rozwiń panel" : "Zwiń panel"}
-        >
-          {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <ThemeToggle variant="compact" />
+          <button
+            type="button"
+            onClick={() => setCollapsed((v) => !v)}
+            className="grid h-7 w-7 shrink-0 place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+            aria-label={collapsed ? "Rozwiń panel" : "Zwiń panel"}
+          >
+            {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+          </button>
+        </div>
       </div>
 
       {/* Quick actions */}

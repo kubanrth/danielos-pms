@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
+import { themeBootScript } from "@/components/layout/theme-toggle";
 
 const geistSans = Geist({
   variable: "--font-sans",
@@ -36,7 +37,12 @@ export default function RootLayout({
     <html
       lang="pl"
       className={`${geistSans.variable} ${geistMono.variable} ${jakarta.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
+      <head>
+        {/* F11-19: set `dark` class before paint to avoid FOUC. */}
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+      </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         {children}
       </body>
