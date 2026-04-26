@@ -279,7 +279,6 @@ function NewFolderForm() {
       }
       className="flex items-center gap-1 border-t border-border pt-2"
     >
-      <Plus size={12} className="text-muted-foreground shrink-0" />
       <input
         name="name"
         value={name}
@@ -289,6 +288,15 @@ function NewFolderForm() {
         placeholder="nowy folder"
         className="h-8 flex-1 rounded-md border border-transparent bg-background px-2 text-[0.82rem] outline-none placeholder:text-muted-foreground/60 focus:border-primary/40"
       />
+      <button
+        type="submit"
+        disabled={!name.trim()}
+        aria-label="Dodaj folder"
+        title="Dodaj folder (Enter)"
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <Plus size={12} />
+      </button>
     </form>
   );
 }

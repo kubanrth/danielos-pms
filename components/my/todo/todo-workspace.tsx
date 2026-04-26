@@ -334,6 +334,8 @@ function ListLink({
   );
 }
 
+// F11-X (klient): wszystkie inline-add formy mają teraz widoczny + button
+// żeby user mógł kliknąć myszką zamiast szukać Enter.
 function NewFolderForm({ placeholder }: { placeholder: string }) {
   const [name, setName] = useState("");
   return (
@@ -344,7 +346,7 @@ function NewFolderForm({ placeholder }: { placeholder: string }) {
           setName("");
         })
       }
-      className="flex items-center gap-1"
+      className="flex items-center gap-1 rounded-md transition-colors focus-within:bg-background"
     >
       <input
         name="name"
@@ -355,6 +357,15 @@ function NewFolderForm({ placeholder }: { placeholder: string }) {
         placeholder={placeholder}
         className="h-8 flex-1 rounded-md border border-transparent bg-background px-2 text-[0.82rem] outline-none placeholder:text-muted-foreground/60 focus:border-primary/40"
       />
+      <button
+        type="submit"
+        disabled={!name.trim()}
+        aria-label="Dodaj folder"
+        title="Dodaj folder (Enter)"
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <Plus size={13} />
+      </button>
     </form>
   );
 }
@@ -375,7 +386,7 @@ function NewListForm({
           setName("");
         })
       }
-      className="flex items-center gap-1"
+      className="flex items-center gap-1 rounded-md transition-colors focus-within:bg-background"
     >
       {folderId && <input type="hidden" name="folderId" value={folderId} />}
       <input
@@ -387,6 +398,15 @@ function NewListForm({
         placeholder={placeholder}
         className="h-8 flex-1 rounded-md border border-transparent bg-background px-2 text-[0.82rem] outline-none placeholder:text-muted-foreground/60 focus:border-primary/40"
       />
+      <button
+        type="submit"
+        disabled={!name.trim()}
+        aria-label="Dodaj listę"
+        title="Dodaj listę (Enter)"
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <Plus size={13} />
+      </button>
     </form>
   );
 }
@@ -618,6 +638,19 @@ function QuickAddItem({
             : "flex-1 bg-transparent py-1 text-[0.95rem] outline-none placeholder:text-muted-foreground/60"
         }
       />
+      <button
+        type="submit"
+        disabled={!content.trim()}
+        aria-label="Dodaj zadanie"
+        title="Dodaj (Enter)"
+        className={
+          variant === "panel"
+            ? "grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            : "grid h-9 w-9 shrink-0 place-items-center rounded-md bg-brand-gradient text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+        }
+      >
+        <Plus size={variant === "panel" ? 13 : 16} />
+      </button>
     </form>
   );
 }

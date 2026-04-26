@@ -119,8 +119,7 @@ export function SelectOptionsEditor({
           </li>
         ))}
       </ul>
-      <div className="flex items-center gap-1.5 rounded-md border border-dashed border-border px-2 py-1">
-        <Plus size={12} className="text-muted-foreground" />
+      <div className="flex items-center gap-1.5 rounded-md border border-dashed border-border px-2 py-1 transition-colors focus-within:border-primary/60">
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -133,6 +132,16 @@ export function SelectOptionsEditor({
           placeholder="Dodaj opcję…"
           className="flex-1 bg-transparent text-[0.82rem] outline-none placeholder:text-muted-foreground/60"
         />
+        <button
+          type="button"
+          onClick={add}
+          disabled={!draft.trim()}
+          aria-label="Dodaj opcję"
+          title="Dodaj opcję (Enter)"
+          className="grid h-5 w-5 shrink-0 place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Plus size={11} />
+        </button>
       </div>
     </div>
   );
