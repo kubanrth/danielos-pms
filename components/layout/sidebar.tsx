@@ -141,7 +141,6 @@ export function Sidebar({
           )}
         </Link>
         <div className="flex shrink-0 items-center gap-1">
-          <ThemeToggle variant="compact" />
           <button
             type="button"
             onClick={() => setCollapsed((v) => !v)}
@@ -361,6 +360,10 @@ export function Sidebar({
           pathname={pathname}
           collapsed={collapsed}
         />
+        {/* F12-K15: prominent labeled theme toggle obok 'Wyloguj' — wcześniej
+            był w nagłówku sidebar jako mała ikonka, klient nie widział że
+            istnieje. */}
+        <ThemeToggle variant="labeled" collapsed={collapsed} />
         <form action={signOutAction} className="w-full">
           <button
             type="submit"

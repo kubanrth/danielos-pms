@@ -29,8 +29,14 @@ function applyTheme(theme: Theme) {
 
 export function ThemeToggle({
   variant = "sidebar",
+  collapsed = false,
 }: {
-  variant?: "sidebar" | "compact";
+  variant?: "sidebar" | "compact" | "labeled";
+  // F12-K15: gdy variant='labeled' i collapsed=false, button pokazuje
+  // tekstowy label obok ikonki — dużo bardziej discoverable niż samą
+  // ikonkę w nagłówku sidebar'a (klient zgłosił że nie wiedział że
+  // toggle istnieje).
+  collapsed?: boolean;
 }) {
   const [theme, setTheme] = useState<Theme>("light");
   const [mounted, setMounted] = useState(false);
@@ -59,6 +65,18 @@ export function ThemeToggle({
 
   // Avoid hydration mismatch — render an inert placeholder until effect runs.
   if (!mounted) {
+    if (variant === "labeled") {
+      return (
+        <button
+          type="button"
+          aria-label="Tryb"
+          className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[0.88rem] text-muted-foreground"
+        >
+          <Sun size={15} className="shrink-0" />
+          {!collapsed && <span className="truncate">Tryb…</span>}
+        </button>
+      );
+    }
     return (
       <button
         type="button"
@@ -76,6 +94,21 @@ export function ThemeToggle({
 
   const Icon = theme === "dark" ? Sun : Moon;
   const label = theme === "dark" ? "Tryb jasny" : "Tryb ciemny";
+
+  if (variant === "labeled") {
+    return (
+      <button
+        type="button"
+        onClick={toggle}
+        aria-label={label}
+        title={label}
+        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[0.88rem] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+      >
+        <Icon size={15} className="shrink-0" />
+        {!collapsed && <span className="truncate">{label}</span>}
+      </button>
+    );
+  }
 
   return (
     <button
