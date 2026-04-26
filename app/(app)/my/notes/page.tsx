@@ -3,19 +3,28 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NotesWorkspace } from "@/components/my/notes/notes-workspace";
 
-// F9-15: 3-column Apple-Notes-style layout (fullwidth, no AppShell):
-// folders | note list | editor. URL: /my/notes?folderId=<id>&noteId=<id>
-// — so reloads keep the user's selection.
+// F9-15 + F11-23: 3-column Apple-Notes-style layout (fullwidth, no AppShell).
+// URL params:
+//   folderId  — concrete folder OR smart-folder key:
+//                  "all" | "pinned" | "recent" | "trash"
+//   noteId    — selected note
+//   q         — search query (filter title/content)
+
 export default async function MyNotesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ folderId?: string; noteId?: string }>;
+  searchParams: Promise<{
+    folderId?: string;
+    noteId?: string;
+    q?: string;
+  }>;
 }) {
   const session = await auth();
   if (!session?.user) redirect("/secure-access-portal");
   const userId = session.user.id;
   const params = await searchParams;
 
+  // F11-23: include deleted notes; we filter per-view.
   const [folders, allNotes] = await Promise.all([
     db.noteFolder.findMany({
       where: { userId },
@@ -27,16 +36,46 @@ export default async function MyNotesPage({
     }),
   ]);
 
-  // "Wszystkie" pseudo-folder: null folderId means show all notes.
-  const selectedFolder = params.folderId ?? "all";
-  const filteredNotes =
-    selectedFolder === "all"
-      ? allNotes
-      : allNotes.filter((n) => n.folderId === selectedFolder);
+  const live = allNotes.filter((n) => n.deletedAt === null);
+  const trashed = allNotes.filter((n) => n.deletedAt !== null);
 
-  // Select the first note in the filtered list if user didn't pick one.
-  const selectedNoteId =
-    params.noteId ?? filteredNotes[0]?.id ?? null;
+  // Server component — Date.now() is fine here. React Compiler's
+  // purity heuristic doesn't distinguish RSC from client components,
+  // so we suppress its warning.
+  // eslint-disable-next-line react-hooks/purity
+  const recentCutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+
+  const selectedFolder = params.folderId ?? "all";
+  const query = (params.q ?? "").trim().toLowerCase();
+
+  let filteredNotes;
+  switch (selectedFolder) {
+    case "pinned":
+      filteredNotes = live.filter((n) => n.pinned);
+      break;
+    case "recent":
+      // Last 30 days, sorted desc — iOS "Recently Edited".
+      filteredNotes = live.filter((n) => n.updatedAt.getTime() >= recentCutoff);
+      break;
+    case "trash":
+      filteredNotes = trashed;
+      break;
+    case "all":
+      filteredNotes = live;
+      break;
+    default:
+      filteredNotes = live.filter((n) => n.folderId === selectedFolder);
+  }
+
+  if (query) {
+    filteredNotes = filteredNotes.filter(
+      (n) =>
+        n.title.toLowerCase().includes(query) ||
+        n.content.toLowerCase().includes(query),
+    );
+  }
+
+  const selectedNoteId = params.noteId ?? filteredNotes[0]?.id ?? null;
   const activeNote = selectedNoteId
     ? allNotes.find((n) => n.id === selectedNoteId) ?? null
     : null;
@@ -48,21 +87,34 @@ export default async function MyNotesPage({
         notes={filteredNotes.map((n) => ({
           id: n.id,
           title: n.title,
-          snippet: n.content.slice(0, 80),
+          snippet: n.content.slice(0, 100),
           updatedAt: n.updatedAt.toISOString(),
           pinned: n.pinned,
           folderId: n.folderId,
+          isTrashed: n.deletedAt !== null,
         }))}
-        totalByFolder={countNotesByFolder(allNotes)}
+        totalByFolder={{
+          all: live.length,
+          pinned: live.filter((n) => n.pinned).length,
+          recent: live.filter((n) => n.updatedAt.getTime() >= recentCutoff).length,
+          trash: trashed.length,
+          ...countNotesByFolder(live),
+        }}
         selectedFolder={selectedFolder}
+        searchQuery={query}
         activeNote={
           activeNote
             ? {
                 id: activeNote.id,
                 title: activeNote.title,
                 content: activeNote.content,
+                contentJson: (activeNote.contentJson as
+                  | { type: "doc"; content?: unknown[] }
+                  | null
+                  | undefined) ?? null,
                 folderId: activeNote.folderId,
                 pinned: activeNote.pinned,
+                isTrashed: activeNote.deletedAt !== null,
                 updatedAt: activeNote.updatedAt.toISOString(),
               }
             : null
@@ -73,7 +125,7 @@ export default async function MyNotesPage({
 }
 
 function countNotesByFolder(notes: { folderId: string | null }[]): Record<string, number> {
-  const m: Record<string, number> = { all: notes.length, none: 0 };
+  const m: Record<string, number> = { none: 0 };
   for (const n of notes) {
     if (n.folderId === null) m.none = (m.none ?? 0) + 1;
     else m[n.folderId] = (m[n.folderId] ?? 0) + 1;

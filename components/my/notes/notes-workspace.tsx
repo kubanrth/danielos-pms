@@ -1,13 +1,17 @@
 "use client";
 
 import { startTransition, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
+  Clock,
   Folder,
   FolderOpen,
   Pin,
   PinOff,
   Plus,
+  RotateCcw,
+  Search,
   StickyNote,
   Trash2,
 } from "lucide-react";
@@ -16,10 +20,17 @@ import {
   createNoteFolderAction,
   deleteNoteAction,
   deleteNoteFolderAction,
+  emptyTrashAction,
+  permanentDeleteNoteAction,
   renameNoteFolderAction,
+  restoreNoteAction,
   togglePinNoteAction,
   updateNoteAction,
 } from "@/app/(app)/my/notes/actions";
+import {
+  RichTextEditor,
+  type RichTextDoc,
+} from "@/components/task/rich-text-editor";
 
 export interface NoteFolderRow {
   id: string;
@@ -32,31 +43,37 @@ export interface NoteListRow {
   updatedAt: string;
   pinned: boolean;
   folderId: string | null;
+  // F11-23: marker for Trash view rows.
+  isTrashed: boolean;
 }
 export interface ActiveNote {
   id: string;
   title: string;
   content: string;
+  // F11-23: Tiptap rich-text doc.
+  contentJson: RichTextDoc | null;
   folderId: string | null;
   pinned: boolean;
+  isTrashed: boolean;
   updatedAt: string;
 }
 
-// F9-15: Apple-Notes-like 3-column layout.
-// [folders] | [note list] | [editor]
-// Fullscreen, no AppShell wrapper. URL params drive folder + note
-// selection so the layout survives reloads.
+// F9-15 + F11-23 (#14): Apple-Notes-like 3-column layout with iOS parity:
+// smart folders (Pinned/Recent/Trash), search, soft delete + restore,
+// rich text via Tiptap.
 export function NotesWorkspace({
   folders,
   notes,
   totalByFolder,
   selectedFolder,
+  searchQuery,
   activeNote,
 }: {
   folders: NoteFolderRow[];
   notes: NoteListRow[];
   totalByFolder: Record<string, number>;
   selectedFolder: string;
+  searchQuery: string;
   activeNote: ActiveNote | null;
 }) {
   return (
@@ -70,6 +87,7 @@ export function NotesWorkspace({
         notes={notes}
         activeNoteId={activeNote?.id ?? null}
         selectedFolder={selectedFolder}
+        searchQuery={searchQuery}
       />
       <EditorColumn note={activeNote} folders={folders} />
     </div>
@@ -93,12 +111,27 @@ function FoldersColumn({
         <span className="eyebrow">Notatnik</span>
       </div>
 
+      {/* F11-23: smart folders (iOS parity). Pinned + Recent + Trash. */}
       <FolderLink
         href="/my/notes"
         active={selectedFolder === "all"}
         label="Wszystkie"
         count={totalByFolder.all ?? 0}
         icon={<FolderOpen size={13} className="text-primary/70" />}
+      />
+      <FolderLink
+        href="/my/notes?folderId=pinned"
+        active={selectedFolder === "pinned"}
+        label="Przypięte"
+        count={totalByFolder.pinned ?? 0}
+        icon={<Pin size={13} className="text-amber-500" />}
+      />
+      <FolderLink
+        href="/my/notes?folderId=recent"
+        active={selectedFolder === "recent"}
+        label="Ostatnie 30 dni"
+        count={totalByFolder.recent ?? 0}
+        icon={<Clock size={13} className="text-sky-500" />}
       />
 
       <div className="my-1 border-t border-border" />
@@ -112,7 +145,14 @@ function FoldersColumn({
         />
       ))}
 
-      <div className="mt-auto">
+      <div className="mt-auto flex flex-col gap-1.5">
+        <FolderLink
+          href="/my/notes?folderId=trash"
+          active={selectedFolder === "trash"}
+          label="Kosz"
+          count={totalByFolder.trash ?? 0}
+          icon={<Trash2 size={13} className="text-muted-foreground" />}
+        />
         <NewFolderForm />
       </div>
     </aside>
@@ -259,39 +299,110 @@ function NotesListColumn({
   notes,
   activeNoteId,
   selectedFolder,
+  searchQuery,
 }: {
   notes: NoteListRow[];
   activeNoteId: string | null;
   selectedFolder: string;
+  searchQuery: string;
 }) {
-  // "Add note" respects the currently active folder so users don't have
-  // to move it after create.
-  const folderId = selectedFolder === "all" ? "" : selectedFolder;
+  // F11-23: don't auto-target trash/pinned/recent for create — only
+  // concrete folders pre-fill folderId on new notes.
+  const folderId =
+    selectedFolder === "all" ||
+    selectedFolder === "pinned" ||
+    selectedFolder === "recent" ||
+    selectedFolder === "trash"
+      ? ""
+      : selectedFolder;
+  const isTrash = selectedFolder === "trash";
 
-  // Group by pinned vs. rest — matches Apple Notes grouping.
-  const pinned = notes.filter((n) => n.pinned);
-  const rest = notes.filter((n) => !n.pinned);
+  const router = useRouter();
+  const [search, setSearch] = useState(searchQuery);
+
+  // F11-23: debounced search → URL param so refreshes preserve query.
+  useEffect(() => {
+    if (search === searchQuery) return;
+    const h = setTimeout(() => {
+      const params = new URLSearchParams();
+      if (selectedFolder && selectedFolder !== "all")
+        params.set("folderId", selectedFolder);
+      if (search.trim()) params.set("q", search.trim());
+      router.replace(`/my/notes${params.toString() ? `?${params}` : ""}`);
+    }, 300);
+    return () => clearTimeout(h);
+  }, [search, searchQuery, selectedFolder, router]);
+
+  // Group by pinned vs. rest — matches Apple Notes grouping. Trash view
+  // skips the grouping (everything is "trashed").
+  const pinned = isTrash ? [] : notes.filter((n) => n.pinned);
+  const rest = isTrash ? notes : notes.filter((n) => !n.pinned);
 
   return (
     <aside className="flex w-[320px] shrink-0 flex-col overflow-hidden border-r border-border bg-background">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <span className="eyebrow">
-          {notes.length === 1 ? "1 notatka" : `${notes.length} notatek`}
-        </span>
-        <form
-          action={(fd) => startTransition(() => createNoteAction(fd))}
-          className="m-0"
-        >
-          <input type="hidden" name="folderId" value={folderId} />
-          <button
-            type="submit"
-            aria-label="Nowa notatka"
-            title="Nowa notatka (⌘N)"
-            className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <Plus size={14} />
-          </button>
-        </form>
+      <div className="flex flex-col gap-2 border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between">
+          <span className="eyebrow">
+            {isTrash
+              ? notes.length === 1
+                ? "1 w koszu"
+                : `${notes.length} w koszu`
+              : notes.length === 1
+                ? "1 notatka"
+                : `${notes.length} notatek`}
+          </span>
+          {!isTrash ? (
+            <form
+              action={(fd) => startTransition(() => createNoteAction(fd))}
+              className="m-0"
+            >
+              <input type="hidden" name="folderId" value={folderId} />
+              <button
+                type="submit"
+                aria-label="Nowa notatka"
+                title="Nowa notatka"
+                className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <Plus size={14} />
+              </button>
+            </form>
+          ) : (
+            notes.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!confirm("Usunąć wszystkie z kosza? Nie da się tego cofnąć.")) return;
+                  startTransition(() => emptyTrashAction());
+                }}
+                className="font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:text-destructive"
+              >
+                Opróżnij
+              </button>
+            )
+          )}
+        </div>
+
+        {/* F11-23: search bar (Apple Notes parity). Filtruje po title +
+            content (snippet). Debounced 300ms → URL param. */}
+        <div className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 transition-colors focus-within:border-primary/60">
+          <Search size={11} className="text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Szukaj…"
+            className="flex-1 bg-transparent text-[0.82rem] outline-none placeholder:text-muted-foreground/60"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              aria-label="Wyczyść"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              ×
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -384,25 +495,29 @@ function EditorColumn({
 
 function NoteEditor({ note, folders }: { note: ActiveNote; folders: NoteFolderRow[] }) {
   const [title, setTitle] = useState(note.title);
-  const [content, setContent] = useState(note.content);
+  const [doc, setDoc] = useState<RichTextDoc | null>(note.contentJson);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const isTrashed = note.isTrashed;
 
   // Autosave with debounce — matches Apple Notes (edits persist as you
-  // type, no explicit Save button).
+  // type, no explicit Save button). Trashed notes are read-only.
   useEffect(() => {
-    if (title === note.title && content === note.content) return;
+    if (isTrashed) return;
+    const docStr = doc ? JSON.stringify(doc) : "";
+    const initialDocStr = note.contentJson ? JSON.stringify(note.contentJson) : "";
+    if (title === note.title && docStr === initialDocStr) return;
     const h = setTimeout(() => {
       const fd = new FormData();
       fd.set("id", note.id);
       fd.set("title", title);
-      fd.set("content", content);
+      if (doc) fd.set("contentJson", JSON.stringify(doc));
       startTransition(async () => {
         await updateNoteAction(fd);
         setSavedAt(new Date().toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" }));
       });
     }, 500);
     return () => clearTimeout(h);
-  }, [title, content, note.id, note.title, note.content]);
+  }, [title, doc, note.id, note.title, note.contentJson, isTrashed]);
 
   return (
     <section className="flex flex-1 flex-col overflow-hidden bg-background">
@@ -410,68 +525,109 @@ function NoteEditor({ note, folders }: { note: ActiveNote; folders: NoteFolderRo
         <span className="font-mono text-[0.58rem] uppercase tracking-[0.14em] text-muted-foreground">
           {formatLongDateTime(note.updatedAt)}
         </span>
-        {savedAt && (
+        {savedAt && !isTrashed && (
           <span className="font-mono text-[0.58rem] uppercase tracking-[0.14em] text-primary">
             zapisano {savedAt}
           </span>
         )}
+        {isTrashed && (
+          <span className="font-mono text-[0.58rem] uppercase tracking-[0.14em] text-destructive">
+            🗑 w koszu — przywróć żeby edytować
+          </span>
+        )}
 
         <div className="ml-auto flex items-center gap-1">
-          <form
-            action={(fd) => startTransition(() => togglePinNoteAction(fd))}
-            className="m-0"
-          >
-            <input type="hidden" name="id" value={note.id} />
-            <input type="hidden" name="next" value={note.pinned ? "false" : "true"} />
-            <button
-              type="submit"
-              aria-label={note.pinned ? "Odepnij" : "Przypnij"}
-              title={note.pinned ? "Odepnij" : "Przypnij"}
-              className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:text-amber-500 data-[on=true]:text-amber-500"
-              data-on={note.pinned ? "true" : "false"}
-            >
-              {note.pinned ? <Pin size={14} /> : <PinOff size={14} />}
-            </button>
-          </form>
+          {isTrashed ? (
+            <>
+              <form
+                action={(fd) => startTransition(() => restoreNoteAction(fd))}
+                className="m-0"
+              >
+                <input type="hidden" name="id" value={note.id} />
+                <button
+                  type="submit"
+                  aria-label="Przywróć"
+                  title="Przywróć z kosza"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-3 font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
+                >
+                  <RotateCcw size={13} /> Przywróć
+                </button>
+              </form>
+              <form
+                action={(fd) => startTransition(() => permanentDeleteNoteAction(fd))}
+                className="m-0"
+              >
+                <input type="hidden" name="id" value={note.id} />
+                <button
+                  type="submit"
+                  aria-label="Usuń trwale"
+                  title="Usuń na zawsze"
+                  className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </form>
+            </>
+          ) : (
+            <>
+              <form
+                action={(fd) => startTransition(() => togglePinNoteAction(fd))}
+                className="m-0"
+              >
+                <input type="hidden" name="id" value={note.id} />
+                <input
+                  type="hidden"
+                  name="next"
+                  value={note.pinned ? "false" : "true"}
+                />
+                <button
+                  type="submit"
+                  aria-label={note.pinned ? "Odepnij" : "Przypnij"}
+                  title={note.pinned ? "Odepnij" : "Przypnij"}
+                  className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:text-amber-500 data-[on=true]:text-amber-500"
+                  data-on={note.pinned ? "true" : "false"}
+                >
+                  {note.pinned ? <Pin size={14} /> : <PinOff size={14} />}
+                </button>
+              </form>
 
-          <form action={(fd) => startTransition(() => deleteNoteAction(fd))} className="m-0">
-            <input type="hidden" name="id" value={note.id} />
-            <button
-              type="submit"
-              aria-label="Usuń notatkę"
-              title="Usuń notatkę"
-              className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-            >
-              <Trash2 size={14} />
-            </button>
-          </form>
+              <form
+                action={(fd) => startTransition(() => deleteNoteAction(fd))}
+                className="m-0"
+              >
+                <input type="hidden" name="id" value={note.id} />
+                <button
+                  type="submit"
+                  aria-label="Usuń (do kosza)"
+                  title="Przenieś do kosza"
+                  className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </form>
 
-          <select
-            value={note.folderId ?? ""}
-            onChange={(e) => {
-              const fd = new FormData();
-              fd.set("id", note.id);
-              fd.set("folderId", e.target.value);
-              // We reuse updateNoteAction's signature by posting to the
-              // dedicated move action via a submit trick.
-              const form = document.createElement("form");
-              form.action = "";
-              // Fallback: just call moveNoteAction directly below.
-              void form;
-              startTransition(async () => {
-                const { moveNoteAction } = await import("@/app/(app)/my/notes/actions");
-                await moveNoteAction(fd);
-              });
-            }}
-            className="h-8 rounded-md border border-border bg-background px-2 font-mono text-[0.68rem] uppercase tracking-[0.12em] outline-none focus:border-primary"
-          >
-            <option value="">— brak folderu —</option>
-            {folders.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.name}
-              </option>
-            ))}
-          </select>
+              <select
+                value={note.folderId ?? ""}
+                onChange={(e) => {
+                  const fd = new FormData();
+                  fd.set("id", note.id);
+                  fd.set("folderId", e.target.value);
+                  startTransition(async () => {
+                    const { moveNoteAction } = await import("@/app/(app)/my/notes/actions");
+                    await moveNoteAction(fd);
+                  });
+                }}
+                className="h-8 rounded-md border border-border bg-background px-2 font-mono text-[0.68rem] uppercase tracking-[0.12em] outline-none focus:border-primary"
+              >
+                <option value="">— brak folderu —</option>
+                {folders.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
         </div>
       </header>
 
@@ -481,15 +637,20 @@ function NoteEditor({ note, folders }: { note: ActiveNote; folders: NoteFolderRo
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Tytuł"
           maxLength={200}
+          readOnly={isTrashed}
           className="w-full border-0 bg-transparent pb-2 font-display text-[2rem] font-bold leading-tight tracking-[-0.02em] outline-none placeholder:text-muted-foreground/40"
         />
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="Zacznij pisać…"
-          maxLength={50_000}
-          className="w-full flex-1 resize-none border-0 bg-transparent text-[1rem] leading-[1.6] outline-none placeholder:text-muted-foreground/40"
-        />
+        {/* F11-23: Tiptap rich-text editor (StarterKit + headings + lists +
+            checklists). Reuses the editor from task descriptions. */}
+        <div className="flex-1">
+          <RichTextEditor
+            initial={doc}
+            readOnly={isTrashed}
+            placeholder="Zacznij pisać…"
+            variant="display"
+            onChange={(d) => setDoc(d)}
+          />
+        </div>
       </div>
     </section>
   );

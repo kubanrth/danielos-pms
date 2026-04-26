@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { Prisma } from "@/lib/generated/prisma/client";
 
 // F9-15: private per-user Notes module (Apple-Notes parity). All
 // actions scope by session user — the module is intentionally
@@ -108,6 +109,9 @@ const updateNoteSchema = z.object({
   id: z.string().min(1),
   title: z.string().max(200).optional(),
   content: z.string().max(50_000).optional(),
+  // F11-23: Tiptap JSON for rich text. Plain `content` kept as
+  // search-friendly snippet (derived from JSON on save).
+  contentJson: z.string().max(100_000).optional().or(z.literal("")),
 });
 
 export async function updateNoteAction(formData: FormData) {
@@ -117,17 +121,50 @@ export async function updateNoteAction(formData: FormData) {
     id: formData.get("id"),
     title: formData.get("title") ?? undefined,
     content: formData.get("content") ?? undefined,
+    contentJson: formData.get("contentJson") ?? undefined,
   });
   if (!parsed.success) return;
-  const data: { title?: string; content?: string } = {};
+  const data: Prisma.NoteUncheckedUpdateManyInput = {};
   if (typeof parsed.data.title === "string") data.title = parsed.data.title;
   if (typeof parsed.data.content === "string") data.content = parsed.data.content;
+  if (parsed.data.contentJson !== undefined && parsed.data.contentJson !== "") {
+    try {
+      const parsedDoc = JSON.parse(parsed.data.contentJson);
+      if (parsedDoc && typeof parsedDoc === "object") {
+        data.contentJson = parsedDoc as Prisma.InputJsonValue;
+        // Derive plain text snippet from doc — used for search + list preview.
+        const plain = extractPlainText(parsedDoc).slice(0, 50_000);
+        data.content = plain;
+      }
+    } catch {
+      /* malformed JSON — skip */
+    }
+  }
   if (Object.keys(data).length === 0) return;
   await db.note.updateMany({
     where: { id: parsed.data.id, userId },
     data,
   });
   revalidatePath("/my/notes");
+}
+
+// Walk a Tiptap doc collecting all `text` leaves into a single string.
+// Newlines between block-level nodes so the snippet stays readable.
+function extractPlainText(node: unknown): string {
+  if (!node || typeof node !== "object") return "";
+  const n = node as { type?: string; text?: string; content?: unknown[] };
+  if (typeof n.text === "string") return n.text;
+  const blockTypes = new Set([
+    "paragraph", "heading", "blockquote", "listItem", "codeBlock", "bulletList", "orderedList",
+  ]);
+  let out = "";
+  if (Array.isArray(n.content)) {
+    for (const child of n.content) {
+      out += extractPlainText(child);
+      if (n.type && blockTypes.has(n.type)) out += " ";
+    }
+  }
+  return out;
 }
 
 const moveNoteSchema = z.object({
@@ -161,12 +198,49 @@ export async function moveNoteAction(formData: FormData) {
 
 const deleteNoteSchema = z.object({ id: z.string().min(1) });
 
+// F11-23 (#14): soft delete — moves note to Kosz. iOS Notes parity.
+// Permanent delete is via emptyTrashAction or restoreNoteAction → delete.
 export async function deleteNoteAction(formData: FormData) {
   const userId = await currentUserId();
   if (!userId) return;
   const parsed = deleteNoteSchema.safeParse({ id: formData.get("id") });
   if (!parsed.success) return;
-  await db.note.deleteMany({ where: { id: parsed.data.id, userId } });
+  await db.note.updateMany({
+    where: { id: parsed.data.id, userId, deletedAt: null },
+    data: { deletedAt: new Date() },
+  });
+  revalidatePath("/my/notes");
+}
+
+export async function restoreNoteAction(formData: FormData) {
+  const userId = await currentUserId();
+  if (!userId) return;
+  const parsed = deleteNoteSchema.safeParse({ id: formData.get("id") });
+  if (!parsed.success) return;
+  await db.note.updateMany({
+    where: { id: parsed.data.id, userId },
+    data: { deletedAt: null },
+  });
+  revalidatePath("/my/notes");
+}
+
+export async function permanentDeleteNoteAction(formData: FormData) {
+  const userId = await currentUserId();
+  if (!userId) return;
+  const parsed = deleteNoteSchema.safeParse({ id: formData.get("id") });
+  if (!parsed.success) return;
+  await db.note.deleteMany({
+    where: { id: parsed.data.id, userId, deletedAt: { not: null } },
+  });
+  revalidatePath("/my/notes");
+}
+
+export async function emptyTrashAction() {
+  const userId = await currentUserId();
+  if (!userId) return;
+  await db.note.deleteMany({
+    where: { userId, deletedAt: { not: null } },
+  });
   revalidatePath("/my/notes");
 }
 
