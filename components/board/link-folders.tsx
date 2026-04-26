@@ -4,7 +4,6 @@ import { startTransition, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
-  ExternalLink,
   FolderOpen,
   Pencil,
   Plus,
@@ -401,7 +400,7 @@ function CellInput({
   initial: string;
   canManage: boolean;
 }) {
-  // Auto-linkify obvious URLs in read-only cells, edit-in-place for admins.
+  // Read-only mode (non-admin): URLs zawsze klikalne.
   if (!canManage) {
     if (initial.length === 0) return <MutedDash />;
     return isUrl(initial) ? (
@@ -417,45 +416,109 @@ function CellInput({
       <span className="truncate">{initial}</span>
     );
   }
-  // F11-3 (#9): edit mode — render the input AND a follow-link icon
-  // when the cell holds a URL. Admin can paste/edit, then click → to
-  // open in a new tab. Solves "wklejony link nie działa" complaint.
+  return <AdminCell rowId={rowId} columnId={columnId} initial={initial} />;
+}
+
+// F12-K2: admin cell w trybie dual-mode (view + edit).
+// Klient zażądał żeby URL'e były same w sobie klikalne (bez osobnej
+// ikony). Strategia jak w Notion/Airtable:
+// - default = view mode: URL renderuje się jako klikalny <a>
+// - dwuklik na komórkę albo hover-pencil → tryb edycji
+// - pusta komórka = klik = tryb edycji
+// - w edit mode: autoFocus input, blur zapisuje, Esc anuluje
+function AdminCell({
+  rowId,
+  columnId,
+  initial,
+}: {
+  rowId: string;
+  columnId: string;
+  initial: string;
+}) {
+  const [editing, setEditing] = useState(false);
+
+  if (editing) {
+    return (
+      <form
+        action={setLinkFolderCellAction}
+        onSubmit={() => setEditing(false)}
+        className="m-0 flex items-center"
+      >
+        <input type="hidden" name="rowId" value={rowId} />
+        <input type="hidden" name="columnId" value={columnId} />
+        <input
+          name="value"
+          type="text"
+          defaultValue={initial}
+          autoFocus
+          onBlur={(e) => {
+            if (e.currentTarget.value === initial) {
+              setEditing(false);
+              return;
+            }
+            (e.currentTarget.form as HTMLFormElement).requestSubmit();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              (e.currentTarget as HTMLInputElement).blur();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              setEditing(false);
+            }
+          }}
+          placeholder="—"
+          className="w-full bg-transparent text-[0.88rem] outline-none placeholder:text-muted-foreground/40"
+        />
+      </form>
+    );
+  }
+
+  // Empty cell — full-width clickable affordance to enter edit mode.
+  if (initial.length === 0) {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="block w-full text-left font-mono text-[0.7rem] text-muted-foreground/40 transition-colors hover:text-foreground"
+      >
+        — kliknij aby dodać —
+      </button>
+    );
+  }
+
+  // View mode: URL → klikalny <a>, non-URL → tekst z onDoubleClick.
+  // Pencil icon hovered po prawej zawsze pozwala wejść w edycję bez
+  // dwukliku. Klik w sam <a> nawiguje, klik w pusty obszar (dzięki
+  // onDoubleClick na wrapperze) wchodzi w edit.
   return (
-    <form action={setLinkFolderCellAction} className="m-0 flex items-center gap-1">
-      <input type="hidden" name="rowId" value={rowId} />
-      <input type="hidden" name="columnId" value={columnId} />
-      <input
-        name="value"
-        type="text"
-        defaultValue={initial}
-        onBlur={(e) => {
-          if (e.currentTarget.value === initial) return;
-          (e.currentTarget.form as HTMLFormElement).requestSubmit();
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            (e.currentTarget as HTMLInputElement).blur();
-          }
-        }}
-        placeholder="—"
-        className="flex-1 min-w-0 bg-transparent text-[0.88rem] outline-none placeholder:text-muted-foreground/40 focus-visible:text-foreground"
-      />
-      {isUrl(initial) && (
+    <div
+      className="group flex items-center gap-1"
+      onDoubleClick={() => setEditing(true)}
+    >
+      {isUrl(initial) ? (
         <a
           href={initial}
           target="_blank"
           rel="noopener noreferrer"
-          aria-label="Otwórz link"
-          title="Otwórz link"
-          onClick={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-          className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="flex-1 truncate text-primary underline underline-offset-2"
+          title={initial}
         >
-          <ExternalLink size={11} />
+          {initial}
         </a>
+      ) : (
+        <span className="flex-1 truncate">{initial}</span>
       )}
-    </form>
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        aria-label="Edytuj"
+        title="Edytuj (lub dwuklik)"
+        className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+      >
+        <Pencil size={11} />
+      </button>
+    </div>
   );
 }
 
