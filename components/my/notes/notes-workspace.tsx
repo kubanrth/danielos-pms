@@ -614,26 +614,10 @@ function NoteEditor({ note, folders }: { note: ActiveNote; folders: NoteFolderRo
                 </button>
               </form>
 
-              <select
-                value={note.folderId ?? ""}
-                onChange={(e) => {
-                  const fd = new FormData();
-                  fd.set("id", note.id);
-                  fd.set("folderId", e.target.value);
-                  startTransition(async () => {
-                    const { moveNoteAction } = await import("@/app/(app)/my/notes/actions");
-                    await moveNoteAction(fd);
-                  });
-                }}
-                className="h-8 rounded-md border border-border bg-background px-2 font-mono text-[0.68rem] uppercase tracking-[0.12em] outline-none focus:border-primary"
-              >
-                <option value="">— brak folderu —</option>
-                {folders.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.name}
-                  </option>
-                ))}
-              </select>
+              {/* F12-K19: folder-picker dropdown removed na żądanie klienta —
+                  wyglądał jak filter w prawym górnym rogu, mylący. Move-to-
+                  folder dalej możliwy przez folder list w lewej kolumnie
+                  (drag) jeśli kiedyś wrócimy. */}
             </>
           )}
         </div>

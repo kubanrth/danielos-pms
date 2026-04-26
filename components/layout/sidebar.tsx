@@ -224,7 +224,13 @@ export function Sidebar({
         <div className="flex flex-col gap-0.5">
           {workspaces.map((ws) => {
             const expanded = expandedIds.has(ws.id);
-            const isActive = ws.id === activeWorkspaceId;
+            const isInWorkspace = ws.id === activeWorkspaceId;
+            // F12-K19: workspace row highlighted ONLY gdy jesteś na
+            // workspace overview / sub-link (Wiki/Support/itd.). Gdy
+            // jesteś na konkretnej tablicy → highlight idzie do tej
+            // tablicy, workspace traci accent (zostaje rozwinięty).
+            const onBoardInWs = pathname.startsWith(`/w/${ws.id}/b/`);
+            const isActive = isInWorkspace && !onBoardInWs;
             return (
               <div key={ws.id} className="flex flex-col">
                 <div
@@ -277,57 +283,76 @@ export function Sidebar({
                         brak tablic
                       </span>
                     )}
-                    {ws.boards.map((b) => (
-                      <div
-                        key={b.id}
-                        className="group flex items-center gap-1 rounded-sm"
-                      >
-                        <Link
-                          href={`/w/${ws.id}/b/${b.id}/table`}
-                          className="min-w-0 flex-1 truncate rounded-sm px-2 py-1 text-[0.82rem] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+                    {ws.boards.map((b) => {
+                      // F12-K19: aktywna tablica = pathname zaczyna się
+                      // od /w/<wid>/b/<bid> (czyli table/kanban/roadmap/
+                      // gantt/whiteboard/v/* dla tej tablicy).
+                      const boardActive = pathname.startsWith(
+                        `/w/${ws.id}/b/${b.id}`,
+                      );
+                      return (
+                        <div
+                          key={b.id}
+                          data-active={boardActive ? "true" : "false"}
+                          className="group relative flex items-center gap-1 rounded-sm data-[active=true]:bg-sidebar-accent"
                         >
-                          {b.name}
-                        </Link>
-                        {canManage(ws.role) && (
-                          <DeleteBoardDialog
-                            workspaceId={ws.id}
-                            boardId={b.id}
-                            boardName={b.name}
-                          />
-                        )}
-                      </div>
-                    ))}
-                    <Link
+                          {boardActive && (
+                            <span
+                              aria-hidden
+                              className="absolute -left-[18px] top-1 bottom-1 w-[2px] bg-primary"
+                            />
+                          )}
+                          <Link
+                            href={`/w/${ws.id}/b/${b.id}/table`}
+                            className={`min-w-0 flex-1 truncate rounded-sm px-2 py-1 text-[0.82rem] transition-colors hover:bg-sidebar-accent hover:text-foreground ${
+                              boardActive
+                                ? "font-semibold text-foreground"
+                                : "text-muted-foreground"
+                            }`}
+                          >
+                            {b.name}
+                          </Link>
+                          {canManage(ws.role) && (
+                            <DeleteBoardDialog
+                              workspaceId={ws.id}
+                              boardId={b.id}
+                              boardName={b.name}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                    <WsSubLink
                       href={`/w/${ws.id}/wiki`}
-                      className="inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-[0.78rem] font-mono uppercase tracking-[0.12em] text-muted-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-foreground"
-                    >
-                      <BookOpen size={11} /> Wiki
-                    </Link>
-                    <Link
+                      icon={<BookOpen size={11} />}
+                      label="Wiki"
+                      active={pathname.startsWith(`/w/${ws.id}/wiki`)}
+                    />
+                    <WsSubLink
                       href={`/w/${ws.id}/support`}
-                      className="inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-[0.78rem] font-mono uppercase tracking-[0.12em] text-muted-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-foreground"
-                    >
-                      <LifeBuoy size={11} /> Support
-                    </Link>
-                    <Link
+                      icon={<LifeBuoy size={11} />}
+                      label="Support"
+                      active={pathname.startsWith(`/w/${ws.id}/support`)}
+                    />
+                    <WsSubLink
                       href={`/w/${ws.id}/briefs`}
-                      className="inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-[0.78rem] font-mono uppercase tracking-[0.12em] text-muted-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-foreground"
-                    >
-                      <FileText size={11} /> Creative Board
-                    </Link>
-                    <Link
+                      icon={<FileText size={11} />}
+                      label="Creative Board"
+                      active={pathname.startsWith(`/w/${ws.id}/briefs`)}
+                    />
+                    <WsSubLink
                       href={`/w/${ws.id}/calendar`}
-                      className="inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-[0.78rem] font-mono uppercase tracking-[0.12em] text-muted-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-foreground"
-                    >
-                      <CalendarDays size={11} /> Kalendarz
-                    </Link>
+                      icon={<CalendarDays size={11} />}
+                      label="Kalendarz"
+                      active={pathname.startsWith(`/w/${ws.id}/calendar`)}
+                    />
                     {canManage(ws.role) && (
-                      <Link
+                      <WsSubLink
                         href={`/w/${ws.id}/settings`}
-                        className="inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-[0.78rem] font-mono uppercase tracking-[0.12em] text-muted-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-foreground"
-                      >
-                        <Settings size={11} /> Ustawienia
-                      </Link>
+                        icon={<Settings size={11} />}
+                        label="Ustawienia"
+                        active={pathname.startsWith(`/w/${ws.id}/settings`)}
+                      />
                     )}
                   </div>
                 )}
@@ -375,6 +400,38 @@ export function Sidebar({
         </form>
       </div>
     </aside>
+  );
+}
+
+// F12-K19: workspace pod-link (Wiki/Support/Creative Board/Kalendarz/
+// Ustawienia) — taki sam wygląd co dotąd, ale z active state'em żeby
+// klient widział na czym aktualnie jest. Active = żywy text-foreground
+// + sidebar-accent tło + lewy primary marker.
+function WsSubLink({
+  href,
+  icon,
+  label,
+  active,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  label: string;
+  active: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      data-active={active ? "true" : "false"}
+      className="group relative inline-flex items-center gap-1.5 rounded-sm px-2 py-1 font-mono text-[0.78rem] uppercase tracking-[0.12em] text-muted-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:font-semibold data-[active=true]:text-foreground"
+    >
+      {active && (
+        <span
+          aria-hidden
+          className="absolute -left-[18px] top-1 bottom-1 w-[2px] bg-primary"
+        />
+      )}
+      {icon} {label}
+    </Link>
   );
 }
 
