@@ -5,10 +5,14 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { Role } from "@/lib/generated/prisma/enums";
 import {
+  addBoardMemberSchema,
   cancelInviteSchema,
+  changeBoardRoleSchema,
   changeRoleSchema,
   inviteSchema,
+  removeBoardMemberSchema,
   removeMemberSchema,
+  setBoardVisibilitySchema,
 } from "@/lib/schemas/invitation";
 import { requireWorkspaceAction } from "@/lib/workspace-guard";
 import { writeAudit } from "@/lib/audit";
@@ -40,9 +44,14 @@ export async function inviteMemberAction(
   const limit = await checkLimit("workspace.invite", workspaceId);
   if (!limit.ok) return { ok: false, error: limit.error };
 
+  // F12-K8: optional board scope. Empty string from the UI toggle means
+  // "workspace-wide invite" — Zod sees min(1).optional() so we strip the
+  // empty string before parsing.
+  const rawBoardId = String(formData.get("boardId") ?? "").trim();
   const parsed = inviteSchema.safeParse({
     email: formData.get("email"),
     role: formData.get("role"),
+    boardId: rawBoardId === "" ? undefined : rawBoardId,
   });
 
   if (!parsed.success) {
@@ -60,17 +69,57 @@ export async function inviteMemberAction(
   });
   if (!workspace) return { ok: false, error: "Przestrzeń nie istnieje." };
 
-  // If user is already a member, bail early.
+  // F12-K8: if board-scope, validate the board belongs to this workspace.
+  let board: { id: string; name: string } | null = null;
+  if (parsed.data.boardId) {
+    board = await db.board.findFirst({
+      where: { id: parsed.data.boardId, workspaceId, deletedAt: null },
+      select: { id: true, name: true },
+    });
+    if (!board) {
+      return { ok: false, fieldErrors: { email: "Nieprawidłowa tablica." } };
+    }
+  }
+
+  // If user is already a member of the workspace, the invite handling
+  // diverges by scope. For workspace invites we bail early — the user
+  // already has full access. For board invites we add them directly to
+  // BoardMembership without an email round-trip (faster + no token to
+  // share for an existing teammate).
   const existingUser = await db.user.findUnique({
     where: { email: parsed.data.email },
-    select: { id: true },
+    select: { id: true, name: true },
   });
   if (existingUser) {
     const existingMembership = await db.workspaceMembership.findUnique({
       where: { workspaceId_userId: { workspaceId, userId: existingUser.id } },
     });
     if (existingMembership) {
-      return { ok: false, fieldErrors: { email: "Ten użytkownik już jest członkiem." } };
+      if (!parsed.data.boardId) {
+        return { ok: false, fieldErrors: { email: "Ten użytkownik już jest członkiem." } };
+      }
+      // Board scope + existing workspace member → add to board directly.
+      await db.boardMembership.upsert({
+        where: {
+          boardId_userId: { boardId: parsed.data.boardId, userId: existingUser.id },
+        },
+        update: { role: parsed.data.role },
+        create: {
+          boardId: parsed.data.boardId,
+          userId: existingUser.id,
+          role: parsed.data.role,
+        },
+      });
+      await writeAudit({
+        workspaceId,
+        objectType: "Board",
+        objectId: parsed.data.boardId,
+        actorId: ctx.userId,
+        action: "board.memberAdded",
+        diff: { userId: existingUser.id, role: parsed.data.role },
+      });
+      revalidatePath(`/w/${workspaceId}/members`);
+      return { ok: true, inviteUrl: "", emailed: false };
     }
   }
 
@@ -80,9 +129,17 @@ export async function inviteMemberAction(
   // Upsert pending invite (email is unique within workspace).
   const invitation = await db.invitation.upsert({
     where: { workspaceId_email: { workspaceId, email: parsed.data.email } },
-    update: { token, role: parsed.data.role, expiresAt, inviterId: ctx.userId, acceptedAt: null },
+    update: {
+      token,
+      role: parsed.data.role,
+      boardId: parsed.data.boardId ?? null,
+      expiresAt,
+      inviterId: ctx.userId,
+      acceptedAt: null,
+    },
     create: {
       workspaceId,
+      boardId: parsed.data.boardId ?? null,
       email: parsed.data.email,
       role: parsed.data.role,
       token,
@@ -97,20 +154,23 @@ export async function inviteMemberAction(
 
   await writeAudit({
     workspaceId,
-    objectType: "Workspace",
-    objectId: workspaceId,
+    objectType: board ? "Board" : "Workspace",
+    objectId: board ? board.id : workspaceId,
     actorId: ctx.userId,
-    action: "workspace.memberInvited",
-    diff: { email: invitation.email, role: invitation.role },
+    action: board ? "board.memberInvited" : "workspace.memberInvited",
+    diff: { email: invitation.email, role: invitation.role, boardId: board?.id ?? null },
   });
 
+  const scopeLabel = board ? `tablicy "${escapeHtml(board.name)}"` : "przestrzeni roboczej";
   const res = await sendEmail({
     to: invitation.email,
-    subject: `Zaproszenie do ${workspace.name} · DANIELOS PMS`,
+    subject: board
+      ? `Zaproszenie do tablicy ${board.name} · DANIELOS PMS`
+      : `Zaproszenie do ${workspace.name} · DANIELOS PMS`,
     html: `
       <div style="font-family:system-ui,sans-serif;max-width:520px">
         <h1 style="font-weight:600">Jesteś zaproszona/y do ${escapeHtml(workspace.name)}</h1>
-        <p>Kliknij, żeby dołączyć do przestrzeni roboczej.</p>
+        <p>Kliknij, żeby dołączyć do ${scopeLabel}.</p>
         <p><a href="${inviteUrl}" style="display:inline-block;background:#b94a3d;color:#fff;padding:12px 20px;text-decoration:none;border-radius:4px">Akceptuj zaproszenie</a></p>
         <p style="color:#666;font-size:12px">Link wygasa w ciągu 14 dni.</p>
       </div>
@@ -119,6 +179,147 @@ export async function inviteMemberAction(
 
   revalidatePath(`/w/${workspaceId}/members`);
   return { ok: true, inviteUrl, emailed: res.sent };
+}
+
+// F12-K8: add an existing workspace user directly to a board (no email).
+// Used by the per-board members table when admin picks from a member list.
+export async function addBoardMemberAction(formData: FormData) {
+  const workspaceId = String(formData.get("workspaceId") ?? "");
+  const parsed = addBoardMemberSchema.safeParse({
+    boardId: formData.get("boardId"),
+    userId: formData.get("userId"),
+    role: formData.get("role"),
+  });
+  if (!parsed.success) return;
+  const ctx = await requireWorkspaceAction(workspaceId, "board.manageMembers");
+
+  const board = await db.board.findFirst({
+    where: { id: parsed.data.boardId, workspaceId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!board) return;
+  const target = await db.workspaceMembership.findUnique({
+    where: { workspaceId_userId: { workspaceId, userId: parsed.data.userId } },
+    select: { userId: true },
+  });
+  if (!target) return; // Must be a workspace member first.
+
+  await db.boardMembership.upsert({
+    where: {
+      boardId_userId: { boardId: parsed.data.boardId, userId: parsed.data.userId },
+    },
+    update: { role: parsed.data.role },
+    create: {
+      boardId: parsed.data.boardId,
+      userId: parsed.data.userId,
+      role: parsed.data.role,
+    },
+  });
+  await writeAudit({
+    workspaceId,
+    objectType: "Board",
+    objectId: parsed.data.boardId,
+    actorId: ctx.userId,
+    action: "board.memberAdded",
+    diff: { userId: parsed.data.userId, role: parsed.data.role },
+  });
+  revalidatePath(`/w/${workspaceId}/members`);
+  // Filtered board lists must refresh too — this user just got access.
+  revalidatePath(`/w/[workspaceId]/b/[boardId]`, "layout");
+  revalidatePath(`/w/${workspaceId}`);
+}
+
+// F12-K8: change a user's role on a specific board.
+export async function changeBoardRoleAction(formData: FormData) {
+  const workspaceId = String(formData.get("workspaceId") ?? "");
+  const parsed = changeBoardRoleSchema.safeParse({
+    membershipId: formData.get("membershipId"),
+    role: formData.get("role"),
+  });
+  if (!parsed.success) return;
+  const ctx = await requireWorkspaceAction(workspaceId, "board.manageMembers");
+
+  const membership = await db.boardMembership.findUnique({
+    where: { id: parsed.data.membershipId },
+    include: { board: { select: { workspaceId: true, id: true } } },
+  });
+  if (!membership || membership.board.workspaceId !== workspaceId) return;
+
+  await db.boardMembership.update({
+    where: { id: parsed.data.membershipId },
+    data: { role: parsed.data.role },
+  });
+  await writeAudit({
+    workspaceId,
+    objectType: "Board",
+    objectId: membership.board.id,
+    actorId: ctx.userId,
+    action: "board.roleChanged",
+    diff: { membershipId: parsed.data.membershipId, role: parsed.data.role },
+  });
+  revalidatePath(`/w/${workspaceId}/members`);
+}
+
+// F12-K8: remove a user from a board (workspace membership unchanged).
+export async function removeBoardMemberAction(formData: FormData) {
+  const workspaceId = String(formData.get("workspaceId") ?? "");
+  const parsed = removeBoardMemberSchema.safeParse({
+    membershipId: formData.get("membershipId"),
+  });
+  if (!parsed.success) return;
+  const ctx = await requireWorkspaceAction(workspaceId, "board.manageMembers");
+
+  const membership = await db.boardMembership.findUnique({
+    where: { id: parsed.data.membershipId },
+    include: { board: { select: { workspaceId: true, id: true } } },
+  });
+  if (!membership || membership.board.workspaceId !== workspaceId) return;
+
+  await db.boardMembership.delete({ where: { id: parsed.data.membershipId } });
+  await writeAudit({
+    workspaceId,
+    objectType: "Board",
+    objectId: membership.board.id,
+    actorId: ctx.userId,
+    action: "board.memberRemoved",
+    diff: { membershipId: parsed.data.membershipId },
+  });
+  revalidatePath(`/w/${workspaceId}/members`);
+  revalidatePath(`/w/[workspaceId]/b/[boardId]`, "layout");
+  revalidatePath(`/w/${workspaceId}`);
+}
+
+// F12-K8: flip board visibility between PUBLIC and PRIVATE.
+export async function setBoardVisibilityAction(formData: FormData) {
+  const workspaceId = String(formData.get("workspaceId") ?? "");
+  const parsed = setBoardVisibilitySchema.safeParse({
+    boardId: formData.get("boardId"),
+    visibility: formData.get("visibility"),
+  });
+  if (!parsed.success) return;
+  const ctx = await requireWorkspaceAction(workspaceId, "board.manageMembers");
+
+  const board = await db.board.findFirst({
+    where: { id: parsed.data.boardId, workspaceId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!board) return;
+
+  await db.board.update({
+    where: { id: parsed.data.boardId },
+    data: { visibility: parsed.data.visibility },
+  });
+  await writeAudit({
+    workspaceId,
+    objectType: "Board",
+    objectId: parsed.data.boardId,
+    actorId: ctx.userId,
+    action: "board.visibilityChanged",
+    diff: { visibility: parsed.data.visibility },
+  });
+  revalidatePath(`/w/${workspaceId}/members`);
+  revalidatePath(`/w/[workspaceId]/b/[boardId]`, "layout");
+  revalidatePath(`/w/${workspaceId}`);
 }
 
 export async function cancelInviteAction(formData: FormData) {

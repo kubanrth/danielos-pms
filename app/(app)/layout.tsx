@@ -22,10 +22,22 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       include: {
         workspace: {
           include: {
+            // F12-K8: filter boards user can actually see. Workspace
+            // ADMIN sees all (handled below — fetch unrestricted then
+            // gate per role). For MEMBER/VIEWER: only PUBLIC boards or
+            // ones they have explicit BoardMembership on.
             boards: {
               where: { deletedAt: null },
               orderBy: { createdAt: "asc" },
-              select: { id: true, name: true },
+              select: {
+                id: true,
+                name: true,
+                visibility: true,
+                memberships: {
+                  where: { userId: session.user.id },
+                  select: { id: true },
+                },
+              },
             },
           },
         },
@@ -54,17 +66,26 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ]);
   if (!user) redirect("/secure-access-portal");
 
-  const workspaces: SidebarWorkspace[] = memberships.map((m) => ({
-    id: m.workspace.id,
-    name: m.workspace.name,
-    slug: m.workspace.slug,
-    role: m.role,
-    boards: m.workspace.boards,
-    // Map lowercase ViewName → uppercase ViewType expected by sidebar.
-    enabledViews: parseEnabledViews(m.workspace.enabledViews).map((v) =>
-      v.toUpperCase(),
-    ) as SidebarWorkspace["enabledViews"],
-  }));
+  const workspaces: SidebarWorkspace[] = memberships.map((m) => {
+    // F12-K8: per-board visibility filter. ADMINs bypass; everyone else
+    // sees PUBLIC boards + boards where they have an explicit membership.
+    const visibleBoards = m.workspace.boards.filter((b) => {
+      if (m.role === "ADMIN") return true;
+      if (b.visibility === "PUBLIC") return true;
+      return b.memberships.length > 0;
+    });
+    return {
+      id: m.workspace.id,
+      name: m.workspace.name,
+      slug: m.workspace.slug,
+      role: m.role,
+      boards: visibleBoards.map((b) => ({ id: b.id, name: b.name })),
+      // Map lowercase ViewName → uppercase ViewType expected by sidebar.
+      enabledViews: parseEnabledViews(m.workspace.enabledViews).map((v) =>
+        v.toUpperCase(),
+      ) as SidebarWorkspace["enabledViews"],
+    };
+  });
 
   return (
     <div className="flex min-h-dvh">

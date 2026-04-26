@@ -11,6 +11,7 @@ export function PendingInviteRow({
   role,
   inviteUrl,
   expiresAt,
+  boardName,
 }: {
   workspaceId: string;
   invitationId: string;
@@ -18,6 +19,9 @@ export function PendingInviteRow({
   role: string;
   inviteUrl: string;
   expiresAt: Date;
+  // F12-K8: when set, this is a board-scope invite — show the board
+  // name instead of just the role so admin sees what they invited to.
+  boardName?: string | null;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -49,7 +53,14 @@ export function PendingInviteRow({
           {email}
         </span>
         <span className="font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground">
-          {role.toLowerCase()} · wygasa za {daysLeft} dni
+          {role.toLowerCase()}
+          {boardName && (
+            <>
+              {" "}· tablica{" "}
+              <span className="text-primary">{boardName}</span>
+            </>
+          )}{" "}
+          · wygasa za {daysLeft} dni
         </span>
       </div>
       <div className="flex items-center gap-2">

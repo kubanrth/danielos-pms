@@ -4,6 +4,29 @@ import { Role } from "@/lib/generated/prisma/enums";
 export const inviteSchema = z.object({
   email: z.string().trim().toLowerCase().email("Nieprawidłowy email."),
   role: z.nativeEnum(Role).default(Role.MEMBER),
+  // F12-K8: optional board scope. Empty / undefined = workspace-wide invite.
+  boardId: z.string().min(1).optional(),
+});
+
+// F12-K8: directly add an existing workspace member to a board (skip email).
+export const addBoardMemberSchema = z.object({
+  boardId: z.string().min(1),
+  userId: z.string().min(1),
+  role: z.nativeEnum(Role).default(Role.MEMBER),
+});
+
+export const removeBoardMemberSchema = z.object({
+  membershipId: z.string().min(1),
+});
+
+export const changeBoardRoleSchema = z.object({
+  membershipId: z.string().min(1),
+  role: z.nativeEnum(Role),
+});
+
+export const setBoardVisibilitySchema = z.object({
+  boardId: z.string().min(1),
+  visibility: z.enum(["PUBLIC", "PRIVATE"]),
 });
 
 export const changeRoleSchema = z.object({

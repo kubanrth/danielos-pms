@@ -32,7 +32,9 @@ export type Action =
   | "reminder.manage"
   | "wiki.read"
   | "wiki.edit"
-  | "integrations.manage";
+  | "integrations.manage"
+  // F12-K8: per-board membership management. Workspace ADMIN-only.
+  | "board.manageMembers";
 
 const MATRIX: Record<Role, Set<Action>> = {
   ADMIN: new Set<Action>([
@@ -68,6 +70,7 @@ const MATRIX: Record<Role, Set<Action>> = {
     "wiki.read",
     "wiki.edit",
     "integrations.manage",
+    "board.manageMembers",
   ]),
   MEMBER: new Set<Action>([
     "board.create",

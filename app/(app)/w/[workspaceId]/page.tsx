@@ -23,8 +23,22 @@ export default async function WorkspaceOverviewPage({
       select: { enabledViews: true },
     }),
     db.workspaceMembership.count({ where: { workspaceId } }),
+    // F12-K8: filter boards by visibility. Workspace ADMIN sees all;
+    // MEMBER/VIEWER sees only PUBLIC boards or those they have an
+    // explicit membership on. Done at query time so we don't fetch
+    // tasks for boards we won't render.
     db.board.findMany({
-      where: { workspaceId, deletedAt: null },
+      where:
+        ctx.role === "ADMIN"
+          ? { workspaceId, deletedAt: null }
+          : {
+              workspaceId,
+              deletedAt: null,
+              OR: [
+                { visibility: "PUBLIC" },
+                { memberships: { some: { userId: ctx.userId } } },
+              ],
+            },
       orderBy: { createdAt: "asc" },
       include: {
         statusColumns: { orderBy: { order: "asc" } },

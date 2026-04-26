@@ -35,7 +35,10 @@ export async function acceptInviteAction(
 
   const invitation = await db.invitation.findUnique({
     where: { token: parsed.data.token },
-    include: { workspace: { select: { id: true, name: true, deletedAt: true } } },
+    include: {
+      workspace: { select: { id: true, name: true, deletedAt: true } },
+      board: { select: { id: true } },
+    },
   });
 
   if (!invitation || invitation.workspace.deletedAt) {
@@ -79,32 +82,65 @@ export async function acceptInviteAction(
     userId = newUser.id;
   }
 
-  // Create membership + mark invite accepted.
-  await db.$transaction([
-    db.workspaceMembership.upsert({
-      where: {
-        workspaceId_userId: { workspaceId: invitation.workspaceId, userId },
-      },
-      update: { role: invitation.role },
-      create: {
-        workspaceId: invitation.workspaceId,
-        userId,
-        role: invitation.role,
-      },
-    }),
-    db.invitation.update({
+  // F12-K8: invitation.boardId distinguishes scope.
+  // - workspace scope (boardId null): upsert WorkspaceMembership with the
+  //   invited role. No board membership.
+  // - board scope (boardId set): ensure baseline workspace membership
+  //   exists (MEMBER if newly created — they need at least workspace
+  //   access to navigate), then upsert BoardMembership with the invited
+  //   role. Re-using same role for workspace would over-grant access for
+  //   board-only invites; baseline MEMBER + restrictive board ACL gates
+  //   the actual reach.
+  await db.$transaction(async (tx) => {
+    if (invitation.boardId) {
+      await tx.workspaceMembership.upsert({
+        where: { workspaceId_userId: { workspaceId: invitation.workspaceId, userId } },
+        // Don't downgrade an existing higher role on subsequent board
+        // invites — only ensure they exist as workspace member.
+        update: {},
+        create: {
+          workspaceId: invitation.workspaceId,
+          userId,
+          role: "MEMBER",
+        },
+      });
+      await tx.boardMembership.upsert({
+        where: { boardId_userId: { boardId: invitation.boardId, userId } },
+        update: { role: invitation.role },
+        create: {
+          boardId: invitation.boardId,
+          userId,
+          role: invitation.role,
+        },
+      });
+    } else {
+      await tx.workspaceMembership.upsert({
+        where: { workspaceId_userId: { workspaceId: invitation.workspaceId, userId } },
+        update: { role: invitation.role },
+        create: {
+          workspaceId: invitation.workspaceId,
+          userId,
+          role: invitation.role,
+        },
+      });
+    }
+    await tx.invitation.update({
       where: { id: invitation.id },
       data: { acceptedAt: new Date() },
-    }),
-  ]);
+    });
+  });
 
   await writeAudit({
     workspaceId: invitation.workspaceId,
-    objectType: "Workspace",
-    objectId: invitation.workspaceId,
+    objectType: invitation.boardId ? "Board" : "Workspace",
+    objectId: invitation.boardId ?? invitation.workspaceId,
     actorId: userId,
-    action: "workspace.inviteAccepted",
-    diff: { email: invitation.email, role: invitation.role },
+    action: invitation.boardId ? "board.inviteAccepted" : "workspace.inviteAccepted",
+    diff: {
+      email: invitation.email,
+      role: invitation.role,
+      boardId: invitation.boardId ?? null,
+    },
   });
 
   // Sign in — if already logged in as same email, skip. Otherwise perform fresh sign-in.

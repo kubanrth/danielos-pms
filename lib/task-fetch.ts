@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { requireWorkspaceMembership } from "@/lib/workspace-guard";
+import { requireWorkspaceMembership, userCanAccessBoard } from "@/lib/workspace-guard";
 import { can } from "@/lib/permissions";
 import { createSignedDownloadUrl, isImageMime } from "@/lib/storage";
 import type { TaskDetailProps } from "@/components/task/task-detail";
@@ -71,6 +71,11 @@ export async function fetchTaskDetail(
     },
   });
   if (!task) notFound();
+
+  // F12-K8: also gate by per-board access. Without this, a workspace
+  // MEMBER who knows a task ID on a PRIVATE board (e.g. shared link
+  // before they were removed) could still load the task page.
+  if (!(await userCanAccessBoard(task.boardId, ctx.userId, ctx.role))) notFound();
 
   const [members, tags, comments, auditEntries, attachmentRows] = await Promise.all([
     db.workspaceMembership.findMany({

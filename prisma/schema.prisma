@@ -36,6 +36,8 @@ model User {
   accounts           Account[]
   sessions           Session[]
   memberships        WorkspaceMembership[]
+  // F12-K8: per-board access list. Independent of workspace membership.
+  boardMemberships   BoardMembership[]
   invitationsSent    Invitation[]          @relation("InvitationInviter")
   createdWorkspaces  Workspace[]           @relation("WorkspaceOwner")
   createdBoards      Board[]               @relation("BoardCreator")
@@ -58,8 +60,8 @@ model User {
   todoItems          TodoItem[]
   noteFolders        NoteFolder[]
   notes              Note[]
-  createdReminders   PersonalReminder[] @relation("ReminderCreator")
-  receivedReminders  PersonalReminder[] @relation("ReminderRecipient")
+  createdReminders   PersonalReminder[]    @relation("ReminderCreator")
+  receivedReminders  PersonalReminder[]    @relation("ReminderRecipient")
   pollVotes          TaskPollVote[]
   authoredPolls      TaskPoll[]            @relation("PollAuthor")
   editedWikiPages    WikiPage[]            @relation("WikiEditor")
@@ -186,6 +188,10 @@ model WorkspaceMembership {
 model Invitation {
   id          String    @id @default(cuid())
   workspaceId String
+  // F12-K8: optional board scope. When non-null, redeeming the invite
+  // creates BoardMembership for that board (in addition to a workspace
+  // membership if the user isn't already a member). Null = workspace-only.
+  boardId     String?
   email       String
   role        Role      @default(MEMBER)
   token       String    @unique
@@ -195,10 +201,15 @@ model Invitation {
   createdAt   DateTime  @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  board     Board?    @relation(fields: [boardId], references: [id], onDelete: Cascade)
   inviter   User      @relation("InvitationInviter", fields: [inviterId], references: [id])
 
+  // One pending invite per email/workspace — re-inviting same email
+  // updates the existing row (incl. flipping scope between workspace
+  // and board). Avoids ambiguous duplicate invites.
   @@unique([workspaceId, email])
   @@index([token])
+  @@index([boardId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -213,18 +224,29 @@ enum ViewType {
   WHITEBOARD
 }
 
+// F12-K8: per-board visibility. PUBLIC = open to everyone in the workspace
+// (legacy default — every existing board migrates to PUBLIC). PRIVATE =
+// only workspace ADMINs + explicit BoardMembership entries can access.
+enum Visibility {
+  PUBLIC
+  PRIVATE
+}
+
 model Board {
-  id          String    @id @default(cuid())
+  id          String     @id @default(cuid())
   workspaceId String
   name        String
   description String?
   creatorId   String
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  visibility  Visibility @default(PUBLIC)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
   deletedAt   DateTime?
 
-  workspace     Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  creator       User            @relation("BoardCreator", fields: [creatorId], references: [id])
+  workspace     Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator       User              @relation("BoardCreator", fields: [creatorId], references: [id])
+  memberships   BoardMembership[]
+  invitations   Invitation[]
   views         BoardView[]
   statusColumns StatusColumn[]
   customColumns TableColumn[]
@@ -236,6 +258,24 @@ model Board {
 
   @@index([workspaceId])
   @@index([deletedAt])
+}
+
+// F12-K8: per-board access list. Only consulted when Board.visibility =
+// PRIVATE. Workspace ADMINs bypass this regardless. Role here is
+// duplicated from WorkspaceMembership so a user can have a different
+// (typically lower) role per board than they have at workspace level.
+model BoardMembership {
+  id       String   @id @default(cuid())
+  boardId  String
+  userId   String
+  role     Role     @default(MEMBER)
+  joinedAt DateTime @default(now())
+
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([boardId, userId])
+  @@index([userId])
 }
 
 // F8: removed @@unique([boardId, type]) — a board may now have multiple
@@ -293,7 +333,7 @@ model LinkFolder {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  board   Board                @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  board   Board              @relation(fields: [boardId], references: [id], onDelete: Cascade)
   columns LinkFolderColumn[]
   rows    LinkFolderRow[]
 
@@ -307,7 +347,7 @@ model LinkFolderColumn {
   order     Int      @default(0)
   createdAt DateTime @default(now())
 
-  folder LinkFolder             @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  folder LinkFolder            @relation(fields: [folderId], references: [id], onDelete: Cascade)
   cells  LinkFolderCellValue[]
 
   @@index([folderId, order])
@@ -320,7 +360,7 @@ model LinkFolderRow {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  folder LinkFolder             @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  folder LinkFolder            @relation(fields: [folderId], references: [id], onDelete: Cascade)
   cells  LinkFolderCellValue[]
 
   @@index([folderId, order])
@@ -332,7 +372,7 @@ model LinkFolderCellValue {
   valueText String?
   updatedAt DateTime @updatedAt
 
-  row    LinkFolderRow    @relation(fields: [rowId],    references: [id], onDelete: Cascade)
+  row    LinkFolderRow    @relation(fields: [rowId], references: [id], onDelete: Cascade)
   column LinkFolderColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
 
   @@id([rowId, columnId])
@@ -355,7 +395,7 @@ model TableColumn {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  board  Board              @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  board  Board             @relation(fields: [boardId], references: [id], onDelete: Cascade)
   values TaskCustomValue[]
 
   @@index([boardId, order])
@@ -395,21 +435,21 @@ model StatusColumn {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model Task {
-  id              String    @id @default(cuid())
-  workspaceId     String
-  boardId         String
-  statusColumnId  String?
-  milestoneId     String?
-  creatorId       String
-  title           String
-  descriptionJson Json?
-  startAt         DateTime?
-  stopAt          DateTime?
+  id                    String    @id @default(cuid())
+  workspaceId           String
+  boardId               String
+  statusColumnId        String?
+  milestoneId           String?
+  creatorId             String
+  title                 String
+  descriptionJson       Json?
+  startAt               DateTime?
+  stopAt                DateTime?
   // F8: user-configured reminder offset resolved to absolute timestamp
   // at save-time. Cron job `/api/cron/send-reminders` sweeps rows where
   // reminderAt <= now() AND reminderSentAt IS NULL.
-  reminderAt      DateTime?
-  reminderSentAt  DateTime?
+  reminderAt            DateTime?
+  reminderSentAt        DateTime?
   // F11-17: recurring tasks. Template tasks have `recurrenceRule` set;
   // cron `/api/cron/spawn-recurring` reads them daily and creates a
   // child Task with `recurrenceParentId` pointing back at the template.
@@ -417,28 +457,28 @@ model Task {
   // - daily: every day
   // - weekly: `day` = 0..6 (Sun..Sat)
   // - monthly: `day` = 1..31 (clamped to month end)
-  recurrenceRule       Json?
-  recurrenceParentId   String?
+  recurrenceRule        Json?
+  recurrenceParentId    String?
   recurrenceLastSpawnAt DateTime?
-  rowOrder        Float     @default(0)
-  version         Int       @default(1)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  deletedAt       DateTime?
+  rowOrder              Float     @default(0)
+  version               Int       @default(1)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  deletedAt             DateTime?
 
   workspace    Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   board        Board                 @relation(fields: [boardId], references: [id], onDelete: Cascade)
   statusColumn StatusColumn?         @relation(fields: [statusColumnId], references: [id])
   milestone    Milestone?            @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
   creator      User                  @relation("TaskCreator", fields: [creatorId], references: [id])
-  assignees     TaskAssignee[]
-  tags          TaskTag[]
-  comments      Comment[]
-  attachments   Attachment[]
-  nodeLinks     ProcessNodeTaskLink[]
-  subtasks      Subtask[]
-  poll          TaskPoll?
-  customValues  TaskCustomValue[]
+  assignees    TaskAssignee[]
+  tags         TaskTag[]
+  comments     Comment[]
+  attachments  Attachment[]
+  nodeLinks    ProcessNodeTaskLink[]
+  subtasks     Subtask[]
+  poll         TaskPoll?
+  customValues TaskCustomValue[]
 
   @@index([boardId, statusColumnId, rowOrder])
   @@index([boardId, updatedAt(sort: Desc)])
@@ -452,18 +492,18 @@ model Task {
 // F11-22 (#22): kalendarz na poziomie workspace — pokazuje zadania
 // + niestandardowe wydarzenia (spotkania / deadliny / off-task work).
 model WorkspaceEvent {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   workspaceId String
   creatorId   String
   title       String
   description String?
   startAt     DateTime
   endAt       DateTime
-  allDay      Boolean  @default(false)
+  allDay      Boolean   @default(false)
   // Hex color (#RRGGBB). Default brand purple.
-  color       String   @default("#7B68EE")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  color       String    @default("#7B68EE")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -815,9 +855,9 @@ model ProcessCanvas {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  board     Board?        @relation(fields: [boardId], references: [id], onDelete: Cascade)
-  creator   User          @relation("CanvasCreator", fields: [creatorId], references: [id])
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  board     Board?          @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  creator   User            @relation("CanvasCreator", fields: [creatorId], references: [id])
   nodes     ProcessNode[]
   edges     ProcessEdge[]
   // F10-W: pen-tool strokes captured by the user (Mural-style drawing).
@@ -1022,19 +1062,19 @@ model NoteFolder {
 }
 
 model Note {
-  id        String   @id @default(cuid())
-  userId    String
-  folderId  String?
-  title     String   @default("Nowa notatka")
-  content   String   @default("")
+  id          String    @id @default(cuid())
+  userId      String
+  folderId    String?
+  title       String    @default("Nowa notatka")
+  content     String    @default("")
   // F11-23 (#14): rich text content (Tiptap JSON). `content` plain
   // text retained as fallback + search-friendly snippet source.
   contentJson Json?
-  pinned    Boolean  @default(false)
+  pinned      Boolean   @default(false)
   // F11-23: soft delete — moves note to Kosz, recoverable.
-  deletedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   folder NoteFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
@@ -1063,7 +1103,7 @@ model PersonalReminder {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  creator   User @relation("ReminderCreator",   fields: [creatorId],   references: [id], onDelete: Cascade)
+  creator   User @relation("ReminderCreator", fields: [creatorId], references: [id], onDelete: Cascade)
   recipient User @relation("ReminderRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
 
   @@index([recipientId, dismissedAt, dueAt])
