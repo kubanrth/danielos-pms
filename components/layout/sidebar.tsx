@@ -108,7 +108,12 @@ export function Sidebar({
   return (
     <aside
       data-collapsed={collapsed ? "true" : "false"}
-      className="group/sidebar flex h-dvh flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground data-[collapsed=true]:w-[68px] data-[collapsed=false]:w-[248px] transition-[width] duration-200"
+      // F12-K9: sticky top-0 + self-start trzymają sidebar pinned do
+      // góry viewportu kiedy długa strona scrolluje. h-dvh sprawia że
+      // sidebar zawsze ma dokładnie wysokość viewportu (jego własny
+      // overflow-y na .nav scrollu wewnątrz). overflow-hidden zapobiega
+      // przeciekaniu zawartości poza widok kiedy collapse anim jest mid.
+      className="group/sidebar sticky top-0 self-start flex h-dvh flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground data-[collapsed=true]:w-[68px] data-[collapsed=false]:w-[248px] transition-[width] duration-200"
     >
       {/* Top: profile + collapse toggle */}
       <div className="flex items-center justify-between gap-2 border-b border-sidebar-border px-3 py-3">
