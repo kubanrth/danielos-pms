@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useEffect, useState } from "react";
+import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Bell, X } from "lucide-react";
 import { dismissReminderAction } from "@/app/(app)/my/reminders/actions";
@@ -15,44 +15,64 @@ export interface DuePopup {
 
 // F9-16 + F11-12 (#2): stacked floating popups in the top-right corner
 // for every reminder that's due + not yet dismissed by the recipient.
-// Rendered once globally from the (app) layout. Poll'uje /api/reminders/due
-// co 60s żeby user widział popup nawet bez refresh'a (np. ustawił reminder
-// na za 5 minut i siedzi na innej karcie).
+// Rendered once globally from the (app) layout.
+//
+// F12-K20: timing rebuilt — wcześniej był jeden setInterval co 60s, więc
+// reminder ustawiony na 'za 30s' nie pokazywał się przed kolejnym pollem
+// (do 60s opóźnienia). Teraz:
+//   - Initial poll natychmiast po mount (bez 60s grace period)
+//   - Periodic poll co 20s (kompromis między battery a responsywnością)
+//   - Visibility-change listener — gdy user wraca na taba, poll od razu
+//   - Custom event `reminder:created` z innych miejsc apki triggeruje
+//     manual refresh (createReminderAction po zapisie dispatch'uje go)
 export function ReminderPopups({ initial }: { initial: DuePopup[] }) {
   // Client-side mirror so "dismiss" hides the card immediately — we
   // don't need to await the server round-trip to remove it visually.
   const [list, setList] = useState<DuePopup[]>(initial);
+  const cancelledRef = useRef(false);
 
   useEffect(() => {
     setList(initial);
   }, [initial]);
 
-  // Periodic poll for newly-due reminders. Merge by id so dismissed
-  // popups stay hidden until next page load (we filter dismissedAt on
-  // server, so they're already excluded).
-  useEffect(() => {
-    let cancelled = false;
-    const tick = async () => {
-      try {
-        const res = await fetch("/api/reminders/due", { cache: "no-store" });
-        if (!res.ok) return;
-        const data: { items: DuePopup[] } = await res.json();
-        if (cancelled) return;
-        // Replace state with fresh list — server is source of truth.
-        // Local optimistic dismisses are temporary; if the server still
-        // returns them, they reappear (means dismiss action didn't reach
-        // the DB). Safer than diverging.
-        setList(data.items);
-      } catch {
-        /* swallow — net hiccup */
-      }
-    };
-    const id = setInterval(tick, 60_000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
+  const refetch = useCallback(async () => {
+    try {
+      const res = await fetch("/api/reminders/due", { cache: "no-store" });
+      if (!res.ok) return;
+      const data: { items: DuePopup[] } = await res.json();
+      if (cancelledRef.current) return;
+      // Replace state with fresh list — server is source of truth.
+      setList(data.items);
+    } catch {
+      /* swallow — net hiccup */
+    }
   }, []);
+
+  useEffect(() => {
+    cancelledRef.current = false;
+    // Immediate poll po mount żeby świeże remindery pojawiły się bez
+    // czekania na pierwsze interval-tick.
+    void refetch();
+    const id = setInterval(refetch, 20_000);
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void refetch();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    // Custom event hook — wszystko w apce co tworzy/edytuje reminder
+    // może wywołać `window.dispatchEvent(new Event('reminder:created'))`
+    // żeby popups wyrównały się natychmiast (bez czekania na 20s tick).
+    const onReminderCreated = () => void refetch();
+    window.addEventListener("reminder:created", onReminderCreated);
+
+    return () => {
+      cancelledRef.current = true;
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("reminder:created", onReminderCreated);
+    };
+  }, [refetch]);
 
   if (list.length === 0) return null;
 

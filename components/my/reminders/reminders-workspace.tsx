@@ -106,6 +106,12 @@ function NewReminderForm({
       action={(fd) =>
         startTransition(async () => {
           await createReminderAction(fd);
+          // F12-K20: trigger natychmiastowy popup refresh (zamiast
+          // czekać na 20s tick w ReminderPopups). Custom event łapie
+          // global listener zamontowany w app layoutu.
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event("reminder:created"));
+          }
           setOpen(false);
           setTitle("");
           setBody("");
@@ -288,54 +294,60 @@ function ReminderRowCard({
         </div>
       </div>
 
-      {/* Recipient-only dismiss */}
-      {isOwnRecipient && !dismissed && (
-        <form
-          action={(fd) => startTransition(() => dismissReminderAction(fd))}
-          className="m-0"
-        >
-          <input type="hidden" name="id" value={reminder.id} />
-          <button
-            type="submit"
-            aria-label="Schowaj"
-            title="Schowaj (nie usuwa — twórca nadal widzi)"
-            className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+      {/* F12-K20: actions teraz z widocznymi labelami zamiast samych
+          ikon — klient zgłosił że 'brak edycji/usuwania', bo małe
+          ikonki h-8 w-8 były niedostrzegalne. Każdy button ma teraz
+          tekst + ikonę, tło bg-background z border, kolorowany hover. */}
+      <div className="flex shrink-0 items-center gap-1.5">
+        {/* Recipient-only dismiss */}
+        {isOwnRecipient && !dismissed && (
+          <form
+            action={(fd) => startTransition(() => dismissReminderAction(fd))}
+            className="m-0"
           >
-            <BellOff size={14} />
-          </button>
-        </form>
-      )}
+            <input type="hidden" name="id" value={reminder.id} />
+            <button
+              type="submit"
+              aria-label="Schowaj"
+              title="Schowaj (nie usuwa — twórca nadal widzi)"
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-3 font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
+            >
+              <BellOff size={12} /> Schowaj
+            </button>
+          </form>
+        )}
 
-      {/* Creator-only edit (F11-13) */}
-      {isOwnCreator && (
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          aria-label="Edytuj przypomnienie"
-          title="Edytuj przypomnienie"
-          className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <Pencil size={14} />
-        </button>
-      )}
-
-      {/* Creator-only delete */}
-      {isOwnCreator && (
-        <form
-          action={(fd) => startTransition(() => deleteReminderAction(fd))}
-          className="m-0"
-        >
-          <input type="hidden" name="id" value={reminder.id} />
+        {/* Creator-only edit (F11-13) */}
+        {isOwnCreator && (
           <button
-            type="submit"
-            aria-label="Usuń przypomnienie"
-            title="Usuń przypomnienie"
-            className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+            type="button"
+            onClick={() => setEditing(true)}
+            aria-label="Edytuj przypomnienie"
+            title="Edytuj przypomnienie"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-3 font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
           >
-            <Trash2 size={14} />
+            <Pencil size={12} /> Edytuj
           </button>
-        </form>
-      )}
+        )}
+
+        {/* Creator-only delete */}
+        {isOwnCreator && (
+          <form
+            action={(fd) => startTransition(() => deleteReminderAction(fd))}
+            className="m-0"
+          >
+            <input type="hidden" name="id" value={reminder.id} />
+            <button
+              type="submit"
+              aria-label="Usuń przypomnienie"
+              title="Usuń przypomnienie"
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-3 font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-destructive/60 hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 size={12} /> Usuń
+            </button>
+          </form>
+        )}
+      </div>
     </li>
   );
 }
@@ -371,6 +383,9 @@ function EditReminderForm({
       action={(fd) =>
         startTransition(async () => {
           await updateReminderAction(fd);
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event("reminder:created"));
+          }
           onClose();
         })
       }
@@ -443,6 +458,15 @@ function EditReminderForm({
 
 // F11-14 (#4): rich recipient picker with member avatars + searchable
 // list. Replaces the plain <select> the klient called "nieczytelny".
+// F12-K20: RecipientPicker przeprojektowany — klient zgłosił że dropdown
+// był nieczytelny. Zmiany:
+//   - Trigger jest większy (h-10), z eyebrow 'Komu' wewnątrz lewej strony,
+//     wyraźnym ChevronDown po prawej
+//   - Selected pokazuje większy avatar + name + email (jeśli inny niż self)
+//   - Popover w-[320px] (było 260) z grupowaniem: 'Ty' u góry,
+//     separator, 'Członkowie workspace'ów' poniżej
+//   - Search input ma ikonę i większy padding
+//   - Każdy item h-10 z większym avatarem, lepiej separated
 function RecipientPicker({
   value,
   onChange,
@@ -456,37 +480,62 @@ function RecipientPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const all = [
-    { id: currentUserId, name: "Ja (sobie)", email: "" },
-    ...members.filter((m) => m.id !== currentUserId).map((m) => ({
+  const self = { id: currentUserId, name: "Ty (sobie)", email: "", isSelf: true };
+  const otherMembers = members
+    .filter((m) => m.id !== currentUserId)
+    .map((m) => ({
       id: m.id,
       name: m.name ?? m.email,
-      email: m.email,
-    })),
-  ];
-  const selected = all.find((m) => m.id === value) ?? all[0];
-  const filtered = query.trim()
-    ? all.filter(
+      email: m.name ? m.email : "",
+      isSelf: false,
+    }));
+
+  const all = [self, ...otherMembers];
+  const selected = all.find((m) => m.id === value) ?? self;
+
+  const q = query.trim().toLowerCase();
+  const filteredOthers = q
+    ? otherMembers.filter(
         (m) =>
-          m.name.toLowerCase().includes(query.toLowerCase()) ||
-          m.email.toLowerCase().includes(query.toLowerCase()),
+          m.name.toLowerCase().includes(q) ||
+          m.email.toLowerCase().includes(q),
       )
-    : all;
+    : otherMembers;
+  const showSelf = !q || self.name.toLowerCase().includes(q);
+
   return (
     <div className="relative">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex h-9 min-w-[180px] items-center gap-2 rounded-md border border-border bg-background px-2 text-left text-[0.84rem] outline-none transition-colors hover:border-primary/60 focus-visible:border-primary"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="inline-flex h-10 w-[240px] items-center gap-2 rounded-md border border-border bg-background px-3 text-left transition-colors hover:border-primary/60 focus-visible:border-primary focus-visible:outline-none"
       >
         <span
-          className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-gradient font-display text-[0.56rem] font-bold text-white"
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand-gradient font-display text-[0.62rem] font-bold text-white"
           aria-hidden
         >
           {selected.name.slice(0, 2).toUpperCase()}
         </span>
-        <span className="flex-1 truncate">{selected.name}</span>
-        <span className="font-mono text-[0.6rem] uppercase text-muted-foreground">▾</span>
+        <span className="flex min-w-0 flex-1 flex-col leading-tight">
+          <span className="truncate text-[0.86rem] font-medium">
+            {selected.name}
+          </span>
+          {selected.email && (
+            <span className="truncate font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted-foreground">
+              {selected.email}
+            </span>
+          )}
+        </span>
+        <span
+          className="ml-1 grid h-5 w-5 shrink-0 place-items-center text-muted-foreground"
+          aria-hidden
+        >
+          <svg width="10" height="6" viewBox="0 0 10 6" fill="none">
+            <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
       </button>
       {open && (
         <>
@@ -496,55 +545,99 @@ function RecipientPicker({
             onClick={() => setOpen(false)}
             className="fixed inset-0 z-40 cursor-default"
           />
-          <div className="absolute left-0 top-[calc(100%+4px)] z-50 w-[260px] rounded-lg border border-border bg-popover p-2 shadow-[0_18px_40px_-12px_rgba(10,10,40,0.3)]">
-            <input
-              autoFocus
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Szukaj członka…"
-              className="mb-1 h-8 w-full rounded-md border border-border bg-background px-2 text-[0.82rem] outline-none focus:border-primary/60"
-            />
-            <ul className="max-h-60 overflow-y-auto">
-              {filtered.length === 0 && (
-                <li className="px-2 py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.12em] text-muted-foreground/70">
+          <div className="absolute left-0 top-[calc(100%+6px)] z-50 flex w-[320px] flex-col overflow-hidden rounded-xl border border-border bg-popover shadow-[0_18px_40px_-12px_rgba(10,10,40,0.3)]">
+            <div className="border-b border-border p-2">
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Szukaj osoby…"
+                className="h-9 w-full rounded-md border border-border bg-background px-3 text-[0.86rem] outline-none focus:border-primary/60"
+              />
+            </div>
+            <ul className="max-h-72 overflow-y-auto p-1">
+              {showSelf && (
+                <>
+                  <li className="px-2 pt-1.5 pb-1 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground/80">
+                    Ty
+                  </li>
+                  <li>
+                    <RecipientItem
+                      member={self}
+                      active={value === self.id}
+                      onPick={(id) => {
+                        onChange(id);
+                        setOpen(false);
+                        setQuery("");
+                      }}
+                    />
+                  </li>
+                </>
+              )}
+              {filteredOthers.length > 0 && (
+                <>
+                  <li className="mt-1 px-2 pt-1.5 pb-1 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground/80">
+                    Członkowie workspace&apos;ów
+                  </li>
+                  {filteredOthers.map((m) => (
+                    <li key={m.id}>
+                      <RecipientItem
+                        member={m}
+                        active={value === m.id}
+                        onPick={(id) => {
+                          onChange(id);
+                          setOpen(false);
+                          setQuery("");
+                        }}
+                      />
+                    </li>
+                  ))}
+                </>
+              )}
+              {!showSelf && filteredOthers.length === 0 && (
+                <li className="px-3 py-3 font-mono text-[0.62rem] uppercase tracking-[0.12em] text-muted-foreground/70">
                   brak dopasowań
                 </li>
               )}
-              {filtered.map((m) => (
-                <li key={m.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onChange(m.id);
-                      setOpen(false);
-                      setQuery("");
-                    }}
-                    className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[0.82rem] transition-colors hover:bg-accent ${
-                      m.id === value ? "bg-accent" : ""
-                    }`}
-                  >
-                    <span
-                      className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-gradient font-display text-[0.6rem] font-bold text-white"
-                      aria-hidden
-                    >
-                      {m.name.slice(0, 2).toUpperCase()}
-                    </span>
-                    <div className="flex min-w-0 flex-1 flex-col">
-                      <span className="truncate">{m.name}</span>
-                      {m.email && (
-                        <span className="truncate font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted-foreground">
-                          {m.email}
-                        </span>
-                      )}
-                    </div>
-                    {m.id === value && <span className="text-primary">✓</span>}
-                  </button>
-                </li>
-              ))}
             </ul>
           </div>
         </>
       )}
     </div>
+  );
+}
+
+function RecipientItem({
+  member,
+  active,
+  onPick,
+}: {
+  member: { id: string; name: string; email: string; isSelf: boolean };
+  active: boolean;
+  onPick: (id: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onPick(member.id)}
+      data-active={active ? "true" : "false"}
+      className="flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left text-[0.86rem] transition-colors hover:bg-accent data-[active=true]:bg-primary/10 data-[active=true]:text-foreground"
+    >
+      <span
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-gradient font-display text-[0.62rem] font-bold text-white"
+        aria-hidden
+      >
+        {member.name.slice(0, 2).toUpperCase()}
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col leading-tight">
+        <span className="truncate font-medium">{member.name}</span>
+        {member.email && (
+          <span className="truncate font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted-foreground">
+            {member.email}
+          </span>
+        )}
+      </div>
+      {active && <span className="font-mono text-[0.62rem] text-primary">✓</span>}
+    </button>
   );
 }
