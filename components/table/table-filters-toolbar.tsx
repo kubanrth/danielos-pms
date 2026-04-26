@@ -37,10 +37,20 @@ export interface ToolbarColumnRef {
   statusOptions?: { id: string; label: string; color: string }[];
 }
 
+// F12-K10: opcjonalne presety grupowania (Data dodania / Data startu /
+// Data zakończenia / Tagi A→Z) renderowane jako osobna sekcja nad listą
+// kolumn w GroupPicker'ze. Empty / undefined = brak sekcji (wstecz-
+// kompatybilne z wszelkimi miejscami które kiedyś używały toolbar'a).
+export interface GroupPreset {
+  id: string;
+  label: string;
+}
+
 export function TableFiltersToolbar({
   workspaceId,
   boardId,
   columns,
+  groupPresets,
   filters,
   sort,
   groupBy,
@@ -50,6 +60,7 @@ export function TableFiltersToolbar({
   workspaceId: string;
   boardId: string;
   columns: ToolbarColumnRef[];
+  groupPresets?: GroupPreset[];
   filters: TableFilter[];
   sort: TableSort | null;
   groupBy: string | null;
@@ -105,6 +116,7 @@ export function TableFiltersToolbar({
       />
       <GroupPicker
         columns={columns}
+        presets={groupPresets}
         groupBy={groupBy}
         onChange={(next) => persist({ filters, sort, groupBy: next })}
       />
@@ -412,15 +424,23 @@ function SortPicker({
 
 function GroupPicker({
   columns,
+  presets,
   groupBy,
   onChange,
 }: {
   columns: ToolbarColumnRef[];
+  // F12-K10: gotowe presety bucketingu (np. "Data dodania", "Tagi A→Z")
+  // pokazane nad listą kolumn jako odzielna sekcja.
+  presets?: GroupPreset[];
   groupBy: string | null;
   onChange: (next: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const current = groupBy ? columns.find((c) => c.id === groupBy) : null;
+  // F12-K10: aktywny groupBy może być id presetu (`preset:*`) — najpierw
+  // szukamy w presetach, potem w listingu kolumn.
+  const current = groupBy
+    ? presets?.find((p) => p.id === groupBy) ?? columns.find((c) => c.id === groupBy)
+    : null;
   // Only allow grouping on bucket-like fields — grouping by free text
   // would create one bucket per row.
   // F11-9 (#18): klient zgłosił że grupowanie nie obejmuje wszystkich
@@ -429,6 +449,7 @@ function GroupPicker({
   // dużo bucketów (każda unikalna wartość = osobny), ale to świadoma
   // decyzja użytkownika.
   const groupable = columns;
+  const hasPresets = (presets?.length ?? 0) > 0;
   return (
     <Popover open={open} onClose={() => setOpen(false)} trigger={
       <button
@@ -440,11 +461,8 @@ function GroupPicker({
         {current ? `Grupuj · ${current.label}` : "Grupuj"}
       </button>
     }>
-      <div className="w-56 p-1">
-        <div className="px-2 pb-1 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground/80">
-          Grupuj według kolumny
-        </div>
-        <ul className="max-h-60 overflow-y-auto">
+      <div className="w-60 p-1">
+        <ul className="max-h-72 overflow-y-auto">
           <li>
             <button
               type="button"
@@ -459,6 +477,36 @@ function GroupPicker({
               <span>Brak</span>
               {groupBy === null && <span className="text-primary">✓</span>}
             </button>
+          </li>
+
+          {hasPresets && (
+            <>
+              <li className="mt-1.5 px-2 pb-1 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground/80">
+                Presety
+              </li>
+              {presets!.map((p) => (
+                <li key={p.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange(p.id);
+                      setOpen(false);
+                    }}
+                    className={`flex w-full justify-between rounded-md px-2 py-1 text-left text-[0.82rem] transition-colors hover:bg-accent ${
+                      groupBy === p.id ? "text-foreground" : "text-muted-foreground"
+                    }`}
+                  >
+                    <span className="truncate">{p.label}</span>
+                    {groupBy === p.id && <span className="text-primary">✓</span>}
+                  </button>
+                </li>
+              ))}
+              <li className="mx-2 my-1 h-px bg-border/60" aria-hidden />
+            </>
+          )}
+
+          <li className={`px-2 ${hasPresets ? "" : "mt-1.5"} pb-1 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground/80`}>
+            Według kolumny
           </li>
           {groupable.map((c) => (
             <li key={c.id}>

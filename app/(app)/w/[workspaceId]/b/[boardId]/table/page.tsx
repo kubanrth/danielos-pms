@@ -141,6 +141,7 @@ export default async function BoardTablePage({
           statusColumnId: t.statusColumnId,
           startAt: t.startAt ? t.startAt.toISOString() : null,
           stopAt: t.stopAt ? t.stopAt.toISOString() : null,
+          createdAt: t.createdAt.toISOString(),
           assignees: t.assignees.map((a) => ({
             id: a.userId,
             name: a.user.name,

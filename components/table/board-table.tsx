@@ -52,6 +52,7 @@ import {
   type TableSort,
 } from "@/lib/table-filters";
 import { saveTableFiltersAction } from "@/app/(app)/w/[workspaceId]/b/[boardId]/actions";
+import { GROUP_PRESETS, bucketForPreset } from "@/lib/group-presets";
 import {
   useAssignHotkey,
   type AssignMember,
@@ -63,6 +64,9 @@ export interface BoardTableTask {
   statusColumnId: string | null;
   startAt: string | null;
   stopAt: string | null;
+  // F12-K10: needed by preset grouping "Data dodania". Server `createdAt`
+  // jest zawsze ustawiony (default(now)) — typujemy non-null.
+  createdAt: string;
   assignees: {
     id: string;
     name: string | null;
@@ -572,6 +576,38 @@ export function BoardTable({
   const groupedRows: { key: string; label: string; color?: string; rows: typeof filteredSorted }[] = (() => {
     if (!groupBy) return [{ key: "_all", label: "", rows: filteredSorted }];
 
+    // F12-K10: preset path. Każdy preset ma własną logikę bucketingu
+    // (semantyczne buckety czasowe / pierwszy tag alfabetycznie). Buckety
+    // sortowane po `order` z descriptora zamiast Map insertion order
+    // żeby kolejność była stabilna niezależnie od sort'u rzędów.
+    if (groupBy.startsWith("preset:")) {
+      type PresetEntry = {
+        rows: typeof filteredSorted;
+        label: string;
+        color?: string;
+        order: number;
+      };
+      const presetBuckets = new Map<string, PresetEntry>();
+      for (const t of filteredSorted) {
+        const desc = bucketForPreset(groupBy, t);
+        const existing = presetBuckets.get(desc.key);
+        if (existing) {
+          existing.rows.push(t);
+        } else {
+          presetBuckets.set(desc.key, {
+            rows: [t],
+            label: desc.label,
+            color: desc.color,
+            order: desc.order,
+          });
+        }
+      }
+      return Array.from(presetBuckets.entries())
+        .map(([key, v]) => ({ key, label: v.label, color: v.color, rows: v.rows, order: v.order }))
+        .sort((a, b) => a.order - b.order)
+        .map(({ order: _order, ...rest }) => rest);
+    }
+
     const buckets = new Map<string, typeof filteredSorted>();
     for (const t of filteredSorted) {
       const raw =
@@ -655,6 +691,7 @@ export function BoardTable({
           workspaceId={workspaceId}
           boardId={boardId}
           columns={toolbarColumns}
+          groupPresets={GROUP_PRESETS.map((p) => ({ id: p.id, label: p.label }))}
           filters={filters}
           sort={tableSort}
           groupBy={groupBy}
