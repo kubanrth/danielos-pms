@@ -290,32 +290,22 @@ export function TaskDetail({
         canEdit={canEdit}
       />
 
-      {/* Milestone — instant select (MenuChange fires the action) */}
-      <section className="flex flex-col gap-3">
-        <span className="eyebrow">Milestone</span>
-        <form action={assignTaskToMilestoneAction} className="m-0 flex items-center gap-2">
-          <input type="hidden" name="taskId" value={task.id} />
-          <select
-            name="milestoneId"
-            defaultValue={task.milestoneId ?? ""}
-            disabled={!canEdit}
-            onChange={(e) => e.currentTarget.form?.requestSubmit()}
-            className="h-9 min-w-[220px] appearance-none rounded-md border border-border bg-background px-3 font-mono text-[0.82rem] uppercase tracking-[0.12em] outline-none focus:border-primary"
-          >
-            <option value="">— brak —</option>
-            {milestones.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.title}
-              </option>
-            ))}
-          </select>
-          {milestones.length === 0 && (
-            <span className="font-mono text-[0.64rem] uppercase tracking-[0.12em] text-muted-foreground">
-              utwórz milestone w roadmapie
-            </span>
-          )}
-        </form>
-      </section>
+      {/* Milestone — instant select (onChange fires the action).
+          F12-K21: controlled value + router.refresh po akcji. Wcześniej
+          select miał `defaultValue` (uncontrolled) + React 19 form-reset,
+          przez co po server-save select wracał do oryginalnego value
+          jeśli intercepted modal route nie zrewalidował się na czas. */}
+      <MilestoneSection
+        // F12-K21: key bound to milestoneId — gdy server zwraca nową
+        // wartość, komponent remountuje się i state startuje od fresh
+        // currentMilestoneId. Eliminuje wszelkie potential stale-state
+        // sync issues bez wywoływania setState w render body.
+        key={`ms-${task.milestoneId ?? "none"}`}
+        taskId={task.id}
+        currentMilestoneId={task.milestoneId}
+        milestones={milestones}
+        canEdit={canEdit}
+      />
 
       {/* Assignees */}
       <section className="flex flex-col gap-3">
@@ -395,6 +385,62 @@ export function TaskDetail({
       {/* Activity log */}
       <ActivityLog entries={activity} />
     </div>
+  );
+}
+
+// F12-K21: milestone picker — controlled select. Lokalny state startuje
+// od `currentMilestoneId` (key na poziomie parent'a wymusza remount
+// przy zmianie propa, więc state zawsze świeży). Po onChange optymizujemy
+// UI od razu, server save w tle, router.refresh() wymusza świeże props
+// dla intercepted modal route'u.
+function MilestoneSection({
+  taskId,
+  currentMilestoneId,
+  milestones,
+  canEdit,
+}: {
+  taskId: string;
+  currentMilestoneId: string | null;
+  milestones: { id: string; title: string; startAt: string; stopAt: string }[];
+  canEdit: boolean;
+}) {
+  const router = useRouter();
+  const [value, setValue] = useState<string>(currentMilestoneId ?? "");
+
+  return (
+    <section className="flex flex-col gap-3">
+      <span className="eyebrow">Milestone</span>
+      <div className="flex items-center gap-2">
+        <select
+          value={value}
+          disabled={!canEdit}
+          onChange={(e) => {
+            const next = e.target.value;
+            setValue(next); // optimistic — UI nie czeka na server
+            const fd = new FormData();
+            fd.set("taskId", taskId);
+            fd.set("milestoneId", next);
+            startTransition(async () => {
+              await assignTaskToMilestoneAction(fd);
+              router.refresh();
+            });
+          }}
+          className="h-9 min-w-[220px] appearance-none rounded-md border border-border bg-background px-3 font-mono text-[0.82rem] uppercase tracking-[0.12em] outline-none focus:border-primary disabled:opacity-60"
+        >
+          <option value="">— brak —</option>
+          {milestones.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.title}
+            </option>
+          ))}
+        </select>
+        {milestones.length === 0 && (
+          <span className="font-mono text-[0.64rem] uppercase tracking-[0.12em] text-muted-foreground">
+            utwórz milestone w roadmapie
+          </span>
+        )}
+      </div>
+    </section>
   );
 }
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { startTransition } from "react";
-import { AtSign, Check, Vote } from "lucide-react";
+import { AtSign, Check, UserPlus, Vote } from "lucide-react";
 import {
   useAssignHotkey,
   type AssignMember,
@@ -26,6 +26,8 @@ export interface InboxNotification {
     snippet?: string;
     boardName?: string;
     question?: string;
+    // F12-K21: task.assigned typ — actor który przypisał current usera.
+    actorName?: string | null;
   };
   // F9-13: server pre-computes the assigneeIds for the task this
   // notification refers to, so the hotkey popup can mark them as
@@ -120,6 +122,8 @@ function NotificationRow({
 }) {
   const { payload, type, unread, assigneeIds } = notification;
   const isPoll = type === "poll.created";
+  // F12-K21: render notyfikacji o przypisaniu do task'a.
+  const isAssigned = type === "task.assigned";
   const href =
     payload.workspaceId && payload.taskId
       ? `/w/${payload.workspaceId}/t/${payload.taskId}`
@@ -147,6 +151,19 @@ function NotificationRow({
         <span className="font-semibold text-foreground">{payload.taskTitle ?? "?"}</span>.{" "}
         <span className="text-primary">Przejdź do głosowania →</span>
       </>
+    ) : isAssigned ? (
+      <>
+        <span className="font-semibold text-foreground">{payload.actorName ?? "Ktoś"}</span>
+        {" przypisał(a) Cię do zadania "}
+        <span className="font-semibold text-foreground">{payload.taskTitle ?? "?"}</span>
+        {payload.boardName && (
+          <>
+            {" na tablicy "}
+            <span className="font-semibold text-foreground">{payload.boardName}</span>
+          </>
+        )}
+        .
+      </>
     ) : (
       <span className="text-muted-foreground">{type}</span>
     );
@@ -166,11 +183,21 @@ function NotificationRow({
     >
       <span
         className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${
-          isPoll ? "bg-amber-500/10 text-amber-500" : "bg-primary/10 text-primary"
+          isPoll
+            ? "bg-amber-500/10 text-amber-500"
+            : isAssigned
+              ? "bg-emerald-500/10 text-emerald-500"
+              : "bg-primary/10 text-primary"
         }`}
         aria-hidden
       >
-        {isPoll ? <Vote size={14} /> : <AtSign size={14} />}
+        {isPoll ? (
+          <Vote size={14} />
+        ) : isAssigned ? (
+          <UserPlus size={14} />
+        ) : (
+          <AtSign size={14} />
+        )}
       </span>
       <Link href={href} className="flex min-w-0 flex-1 flex-col gap-0.5 focus-visible:outline-none">
         <span className="truncate text-[0.92rem] leading-tight text-muted-foreground group-hover:text-foreground">

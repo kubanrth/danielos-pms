@@ -72,6 +72,17 @@ export function StatusPicker({
   const computeCoords = () => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) return null;
+    // F12-K21: jeśli trigger jest poza viewportem (user scrolluje
+    // tabelę lub stronę), zwracamy null — caller zamknie picker
+    // zamiast pozwolić mu utknąć przy górze viewportu.
+    if (
+      rect.bottom < 0 ||
+      rect.top > window.innerHeight ||
+      rect.right < 0 ||
+      rect.left > window.innerWidth
+    ) {
+      return null;
+    }
     const POP_WIDTH = 280;
     const GAP = 4;
     const PAD = 12;
@@ -114,7 +125,13 @@ export function StatusPicker({
     };
     const onReflow = () => {
       const c = computeCoords();
-      if (c) setCoords(c);
+      if (c) {
+        setCoords(c);
+      } else {
+        // F12-K21: trigger wyjechał z viewportu — zamykamy zamiast
+        // zostawiać picker oddzielony od triggera.
+        close();
+      }
     };
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onKey);

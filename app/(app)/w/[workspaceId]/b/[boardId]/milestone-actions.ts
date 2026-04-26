@@ -244,5 +244,9 @@ export async function assignTaskToMilestoneAction(formData: FormData) {
   });
 
   revalidatePath(`/w/${task.workspaceId}/t/${task.id}`);
+  // F12-K21: layout-level revalidate żeby objąć intercepted modal route
+  // (@modal/(.)t/[taskId]) — bez tego task page w modalu zostaje stale
+  // i select milestone'a wraca do starej wartości po sekundzie.
+  revalidatePath(`/w/[workspaceId]/b/[boardId]`, "layout");
   revalidate(updated.workspaceId, updated.boardId);
 }

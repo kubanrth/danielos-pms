@@ -429,6 +429,36 @@ export async function toggleAssigneeAction(formData: FormData) {
     await db.taskAssignee.create({
       data: { taskId: parsed.data.taskId, userId: parsed.data.userId },
     });
+    // F12-K21: notyfikacja w inbox'ie dla osoby przypisanej. Skip jeśli
+    // user przypisał sam siebie (no point notyfikować). Klient zgłosił
+    // 'mimo tego ze jestem przypisany do kilku zadan to nic mi sie w
+    // panelu powiadomien nie pokazuje' — wcześniej assign nie tworzył
+    // żadnej Notification (tylko mention'y i poll'e to robiły).
+    if (parsed.data.userId !== ctx.userId) {
+      const board = await db.board.findUnique({
+        where: { id: task.boardId },
+        select: { name: true },
+      });
+      const actor = await db.user.findUnique({
+        where: { id: ctx.userId },
+        select: { name: true, email: true },
+      });
+      await db.notification.create({
+        data: {
+          userId: parsed.data.userId,
+          type: "task.assigned",
+          payload: {
+            workspaceId: task.workspaceId,
+            taskId: task.id,
+            taskTitle: task.title,
+            boardId: task.boardId,
+            boardName: board?.name ?? null,
+            actorId: ctx.userId,
+            actorName: actor?.name ?? actor?.email ?? null,
+          } as Prisma.InputJsonValue,
+        },
+      });
+    }
   }
 
   await writeAudit({

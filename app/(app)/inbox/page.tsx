@@ -26,6 +26,18 @@ interface PollCreatedPayload {
   authorName?: string | null;
 }
 
+// F12-K21: task.assigned payload type — emitowane przez toggleAssigneeAction
+// gdy ktoś przypisuje current usera do task'a.
+interface TaskAssignedPayload {
+  workspaceId?: string;
+  taskId?: string;
+  taskTitle?: string;
+  boardId?: string;
+  boardName?: string | null;
+  actorId?: string;
+  actorName?: string | null;
+}
+
 async function loadNotifications(userId: string) {
   return db.notification.findMany({
     where: { userId },
@@ -87,7 +99,9 @@ export default async function InboxPage() {
   );
 
   const toRow = (n: (typeof notifications)[number]): InboxNotification => {
-    const payload = (n.payload ?? {}) as MentionPayload & PollCreatedPayload;
+    const payload = (n.payload ?? {}) as MentionPayload &
+      PollCreatedPayload &
+      TaskAssignedPayload;
     return {
       id: n.id,
       type: n.type,
@@ -99,8 +113,9 @@ export default async function InboxPage() {
         taskTitle: payload.taskTitle,
         authorName: payload.authorName,
         snippet: payload.snippet,
-        boardName: payload.boardName,
+        boardName: payload.boardName ?? undefined,
         question: payload.question,
+        actorName: payload.actorName,
       },
       assigneeIds: payload.taskId
         ? assigneesByTask.get(payload.taskId) ?? []
