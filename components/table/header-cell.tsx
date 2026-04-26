@@ -10,6 +10,7 @@
 // disabled for them.
 
 import { startTransition, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowDownAZ,
   ArrowUpZA,
@@ -285,7 +286,13 @@ function HeaderContextMenu({
       document.removeEventListener("keydown", onKey);
     };
   }, [onClose]);
-  return (
+  // Portal to document.body so the menu's `position: fixed` is anchored
+  // to the viewport. Without this, ancestor th cells with `backdrop-blur`
+  // create a containing block (filter property → forms a containing
+  // block for fixed descendants) and the menu opens at completely wrong
+  // coordinates — invisible or under other UI.
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div
       ref={ref}
       style={{ left: x, top: y, position: "fixed" }}
@@ -342,7 +349,8 @@ function HeaderContextMenu({
           destructive
         />
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }
 

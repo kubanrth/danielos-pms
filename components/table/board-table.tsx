@@ -715,7 +715,8 @@ export function BoardTable({
       <div className="overflow-x-auto">
         <table
           ref={tableRef}
-          className="w-full text-[0.88rem]"
+          className="text-[0.88rem]"
+          style={{ tableLayout: "fixed", width: "max-content", minWidth: "100%" }}
           onKeyDown={(e) => {
             if (!activeCell) return;
             // Only intercept arrow keys / Enter when a CELL (td) is the
