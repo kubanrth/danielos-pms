@@ -106,7 +106,7 @@ export function TableHeaderCell({
 
   return (
     <span
-      className="flex items-center gap-1.5"
+      className="flex w-full items-center gap-1.5"
       onDoubleClick={startRename}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -137,7 +137,18 @@ export function TableHeaderCell({
         <span className="truncate">{label}</span>
       )}
 
-      {/* Affordance hint that the header is clickable to open menu. */}
+      {isPinned && (
+        <Pin
+          size={10}
+          className="shrink-0 rotate-45 text-primary"
+          aria-label="Przypięta"
+        />
+      )}
+
+      {/* Always-visible menu trigger. Used to be opacity-0/hover-only but
+          users couldn't find it — the column menu (sort, filter, pin, hide,
+          rename, …) is the primary affordance for this header so it needs
+          to be discoverable on first sight. */}
       <button
         type="button"
         onClick={(e) => {
@@ -146,9 +157,9 @@ export function TableHeaderCell({
           setMenu({ x: r.left, y: r.bottom + 2 });
         }}
         aria-label="Menu kolumny"
-        className="ml-auto grid h-4 w-4 shrink-0 place-items-center rounded-sm text-muted-foreground/60 opacity-0 transition-opacity hover:text-foreground group-hover/th:opacity-100"
+        className="ml-auto grid h-5 w-5 shrink-0 place-items-center rounded-sm text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
       >
-        <ChevronDown size={9} />
+        <ChevronDown size={11} />
       </button>
 
       {menu && (
