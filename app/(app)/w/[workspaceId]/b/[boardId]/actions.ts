@@ -727,6 +727,8 @@ export async function saveTableColumnPrefsAction(formData: FormData) {
       hidden: z.array(z.string()).optional(),
       // F10-X: per-column persisted pixel widths (TanStack columnSizing)
       widths: z.record(z.string(), z.number().min(40).max(1200)).optional(),
+      // F12-K3: pinned columns (left side) by columnId
+      pinned: z.array(z.string()).optional(),
     })
     .safeParse(config);
   if (!shape.success) return;
@@ -745,6 +747,7 @@ export async function saveTableColumnPrefsAction(formData: FormData) {
     ...(shape.data.columnOrder !== undefined ? { columnOrder: shape.data.columnOrder } : {}),
     ...(shape.data.hidden !== undefined ? { hidden: shape.data.hidden } : {}),
     ...(shape.data.widths !== undefined ? { widths: shape.data.widths } : {}),
+    ...(shape.data.pinned !== undefined ? { pinned: shape.data.pinned } : {}),
   };
 
   if (existing) {

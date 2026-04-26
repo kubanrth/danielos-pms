@@ -68,11 +68,15 @@ export default async function BoardTablePage({
     sort?: unknown;
     groupBy?: unknown;
     widths?: unknown;
+    pinned?: unknown;
   };
   const initialWidths =
     tableConfig.widths && typeof tableConfig.widths === "object"
       ? (tableConfig.widths as Record<string, number>)
       : undefined;
+  const initialPinned = Array.isArray(tableConfig.pinned)
+    ? (tableConfig.pinned as string[])
+    : undefined;
   // We trust the shape was validated on write — reads still guard
   // arrays/null because legacy rows or hand-edited configs may differ.
   const initialFilters = Array.isArray(tableConfig.filters)
@@ -152,6 +156,7 @@ export default async function BoardTablePage({
         initialSort={initialSort}
         initialGroupBy={initialGroupBy}
         initialWidths={initialWidths}
+        initialPinned={initialPinned}
         customColumns={board.customColumns.map((c) => ({
           id: c.id,
           name: c.name,

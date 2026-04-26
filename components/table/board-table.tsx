@@ -10,6 +10,7 @@ import {
   getSortedRowModel,
   useReactTable,
   type ColumnOrderState,
+  type ColumnPinningState,
   type ColumnSizingState,
   type RowSelectionState,
   type SortingState,
@@ -129,6 +130,7 @@ export function BoardTable({
   initialSort,
   initialGroupBy,
   initialWidths,
+  initialPinned,
   customColumns,
   members,
 }: {
@@ -146,6 +148,10 @@ export function BoardTable({
   initialGroupBy?: string | null;
   // F10-X: persisted per-column pixel widths.
   initialWidths?: Record<string, number>;
+  // F12-K3: persisted left-pinned columns. `undefined` means legacy board
+  // with no preference saved — fall back to the historical "first column
+  // always frozen" default. `[]` is an explicit user choice to unpin.
+  initialPinned?: string[];
   customColumns: CustomTableColumn[];
   // F9-13: needed for the `M` assign hotkey.
   members: AssignMember[];
@@ -233,6 +239,34 @@ export function BoardTable({
       if (persistTimer.current) clearTimeout(persistTimer.current);
     };
   }, [columnSizing, workspaceId, boardId, canManagePrefs]);
+
+  // F12-K3: column pinning. Legacy boards without a saved `pinned` array
+  // keep the historical "first column auto-frozen" behaviour by pinning
+  // whichever column ends up first in column order. Explicit empty array
+  // means user unpinned everything — respect that.
+  const [columnPinning, setColumnPinning] = useState<ColumnPinningState>(() => {
+    if (initialPinned !== undefined) return { left: initialPinned, right: [] };
+    const hidden = new Set(initialHiddenColumns ?? []);
+    const firstVisible = (initialColumnOrder ?? DEFAULT_COLUMN_ORDER).find(
+      (id) => !hidden.has(id),
+    );
+    return { left: firstVisible ? [firstVisible] : [], right: [] };
+  });
+  const pinningDirty = useRef(false);
+  useEffect(() => {
+    if (!canManagePrefs) return;
+    if (!pinningDirty.current) {
+      pinningDirty.current = true;
+      return;
+    }
+    const fd = new FormData();
+    fd.set("workspaceId", workspaceId);
+    fd.set("boardId", boardId);
+    fd.set("config", JSON.stringify({ pinned: columnPinning.left ?? [] }));
+    startTransition(() => {
+      saveTableColumnPrefsAction(fd);
+    });
+  }, [columnPinning, workspaceId, boardId, canManagePrefs]);
 
   // F10-B: filter / sort / group state. Persisted on BoardView.configJson
   // by the toolbar's onChange — we apply them client-side over `tasks`
@@ -498,14 +532,16 @@ export function BoardTable({
   const table = useReactTable({
     data: filteredSorted,
     columns,
-    state: { sorting, columnOrder, columnVisibility, columnSizing, rowSelection },
+    state: { sorting, columnOrder, columnVisibility, columnSizing, columnPinning, rowSelection },
     onSortingChange: setSorting,
     onColumnOrderChange: setColumnOrder,
     onColumnVisibilityChange: setColumnVisibility,
     onColumnSizingChange: setColumnSizing,
+    onColumnPinningChange: setColumnPinning,
     onRowSelectionChange: setRowSelection,
     getRowId: (row) => row.id,
     enableColumnResizing: true,
+    enableColumnPinning: true,
     columnResizeMode: "onChange",
     enableRowSelection: canEdit,
     getCoreRowModel: getCoreRowModel(),
@@ -737,154 +773,166 @@ export function BoardTable({
           }}
         >
           <thead>
-            {table.getHeaderGroups().map((hg) => (
-              <tr key={hg.id} className="border-b border-border bg-muted/40">
-                {canEdit && (
-                  <th className="sticky left-0 top-0 z-30 h-10 w-10 bg-muted/95 px-2 shadow-[1px_0_0_0_var(--border)] backdrop-blur-sm">
-                    <input
-                      type="checkbox"
-                      aria-label="Zaznacz wszystkie wiersze"
-                      checked={
-                        table.getRowModel().rows.length > 0 &&
-                        table.getRowModel().rows.every((r) => rowSelection[r.id])
-                      }
-                      onChange={(e) => {
-                        if (e.currentTarget.checked) {
-                          const next: RowSelectionState = {};
-                          for (const r of table.getRowModel().rows) next[r.id] = true;
-                          setRowSelection(next);
-                        } else {
-                          setRowSelection({});
+            {table.getHeaderGroups().map((hg) => {
+              // F12-K3: render pinned headers first so the DOM order
+              // matches visual order. Sticky offset = checkbox width +
+              // cumulative width of preceding pinned columns.
+              const leftHeaders = hg.headers.filter(
+                (h) => h.column.getIsPinned() === "left",
+              );
+              const centerHeaders = hg.headers.filter(
+                (h) => !h.column.getIsPinned(),
+              );
+              const checkboxOffset = canEdit ? 40 : 0;
+              return (
+                <tr key={hg.id} className="border-b border-border bg-muted/40">
+                  {canEdit && (
+                    <th className="sticky left-0 top-0 z-30 h-10 w-10 bg-muted/95 px-2 shadow-[1px_0_0_0_var(--border)] backdrop-blur-sm">
+                      <input
+                        type="checkbox"
+                        aria-label="Zaznacz wszystkie wiersze"
+                        checked={
+                          table.getRowModel().rows.length > 0 &&
+                          table.getRowModel().rows.every((r) => rowSelection[r.id])
                         }
-                      }}
-                      className="h-3.5 w-3.5 cursor-pointer accent-[var(--primary)]"
-                    />
-                  </th>
-                )}
-                {hg.headers.map((header, hIdx) => {
-                  const canResize = header.column.getCanResize();
-                  const isResizing = header.column.getIsResizing();
-                  const colId = header.column.id;
-                  const isCustom = colId.startsWith("custom:");
-                  const customCol = isCustom
-                    ? customColumns.find((c) => `custom:${c.id}` === colId)
-                    : null;
-                  const headerLabel =
-                    typeof header.column.columnDef.header === "string"
-                      ? header.column.columnDef.header
-                      : colId;
-                  const sortDir =
-                    tableSort?.columnId ===
-                    (isCustom ? colId.replace(/^custom:/, "") : colId)
-                      ? tableSort.dir
-                      : false;
-                  // F10-X T2.4: freeze the first visible data column.
-                  // When checkbox column is rendered the status cell
-                  // sticks at left-[40px] so both stay visible during
-                  // horizontal scroll.
-                  const isFrozen = hIdx === 0;
-                  const frozenLeft = canEdit ? "40px" : "0px";
-                  return (
-                    <th
-                      key={header.id}
-                      className={`group/th relative sticky top-0 h-10 px-4 text-left font-mono text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground ${
-                        isFrozen
-                          ? "z-20 bg-muted/95 shadow-[1px_0_0_0_var(--border)] backdrop-blur-sm"
-                          : ""
-                      }`}
-                      style={{
-                        width: header.getSize(),
-                        ...(isFrozen ? { left: frozenLeft } : {}),
-                      }}
-                    >
-                      <TableHeaderCell
-                        columnId={colId}
-                        label={headerLabel}
-                        fieldType={customCol?.type}
-                        canManagePrefs={canManagePrefs}
-                        isSorted={sortDir as false | "asc" | "desc"}
-                        onSort={(dir) => {
-                          if (dir === null) {
-                            setTableSort(null);
-                            persistFilters({ filters, sort: null, groupBy });
+                        onChange={(e) => {
+                          if (e.currentTarget.checked) {
+                            const next: RowSelectionState = {};
+                            for (const r of table.getRowModel().rows) next[r.id] = true;
+                            setRowSelection(next);
                           } else {
+                            setRowSelection({});
+                          }
+                        }}
+                        className="h-3.5 w-3.5 cursor-pointer accent-[var(--primary)]"
+                      />
+                    </th>
+                  )}
+                  {[...leftHeaders, ...centerHeaders].map((header) => {
+                    const canResize = header.column.getCanResize();
+                    const isResizing = header.column.getIsResizing();
+                    const colId = header.column.id;
+                    const isCustom = colId.startsWith("custom:");
+                    const customCol = isCustom
+                      ? customColumns.find((c) => `custom:${c.id}` === colId)
+                      : null;
+                    const headerLabel =
+                      typeof header.column.columnDef.header === "string"
+                        ? header.column.columnDef.header
+                        : colId;
+                    const sortDir =
+                      tableSort?.columnId ===
+                      (isCustom ? colId.replace(/^custom:/, "") : colId)
+                        ? tableSort.dir
+                        : false;
+                    const isPinned = header.column.getIsPinned() === "left";
+                    const pinnedLeft = isPinned
+                      ? checkboxOffset + header.column.getStart("left")
+                      : null;
+                    return (
+                      <th
+                        key={header.id}
+                        className={`group/th relative sticky top-0 h-10 px-4 text-left font-mono text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground ${
+                          isPinned
+                            ? "z-20 bg-muted/95 shadow-[1px_0_0_0_var(--border)] backdrop-blur-sm"
+                            : ""
+                        }`}
+                        style={{
+                          width: header.getSize(),
+                          ...(isPinned && pinnedLeft !== null ? { left: `${pinnedLeft}px` } : {}),
+                        }}
+                      >
+                        <TableHeaderCell
+                          columnId={colId}
+                          label={headerLabel}
+                          fieldType={customCol?.type}
+                          canManagePrefs={canManagePrefs}
+                          isSorted={sortDir as false | "asc" | "desc"}
+                          isPinned={isPinned}
+                          onTogglePin={() => header.column.pin(isPinned ? false : "left")}
+                          onSort={(dir) => {
+                            if (dir === null) {
+                              setTableSort(null);
+                              persistFilters({ filters, sort: null, groupBy });
+                            } else {
+                              const targetId = isCustom
+                                ? colId.replace(/^custom:/, "")
+                                : colId;
+                              const kind: TableSort["kind"] = customCol
+                                ? customCol.type
+                                : colId === "title"
+                                  ? "BUILTIN_TITLE"
+                                  : colId === "statusColumnId"
+                                    ? "BUILTIN_STATUS"
+                                    : "BUILTIN_DATE";
+                              const next: TableSort = { columnId: targetId, kind, dir };
+                              setTableSort(next);
+                              persistFilters({ filters, sort: next, groupBy });
+                            }
+                          }}
+                          onFilter={() => {
+                            // Add an empty filter for this column so the
+                            // toolbar chip pops up ready for value input.
                             const targetId = isCustom
                               ? colId.replace(/^custom:/, "")
                               : colId;
-                            const kind: TableSort["kind"] = customCol
+                            const kind: TableFilter["kind"] = customCol
                               ? customCol.type
                               : colId === "title"
                                 ? "BUILTIN_TITLE"
                                 : colId === "statusColumnId"
                                   ? "BUILTIN_STATUS"
                                   : "BUILTIN_DATE";
-                            const next: TableSort = { columnId: targetId, kind, dir };
-                            setTableSort(next);
-                            persistFilters({ filters, sort: next, groupBy });
-                          }
-                        }}
-                        onFilter={() => {
-                          // Add an empty filter for this column so the
-                          // toolbar chip pops up ready for value input.
-                          const targetId = isCustom
-                            ? colId.replace(/^custom:/, "")
-                            : colId;
-                          const kind: TableFilter["kind"] = customCol
-                            ? customCol.type
-                            : colId === "title"
-                              ? "BUILTIN_TITLE"
-                              : colId === "statusColumnId"
-                                ? "BUILTIN_STATUS"
-                                : "BUILTIN_DATE";
-                          const newFilter: TableFilter = {
-                            columnId: targetId,
-                            kind,
-                            op:
-                              kind === "BUILTIN_STATUS" || kind === "SINGLE_SELECT"
-                                ? "equals"
-                                : kind === "NUMBER" || kind === "RATING"
+                            const newFilter: TableFilter = {
+                              columnId: targetId,
+                              kind,
+                              op:
+                                kind === "BUILTIN_STATUS" || kind === "SINGLE_SELECT"
                                   ? "equals"
-                                  : kind === "CHECKBOX"
-                                    ? "isChecked"
-                                    : "contains",
-                            value: "",
-                          };
-                          const nextFilters = [...filters, newFilter];
-                          setFilters(nextFilters);
-                          persistFilters({ filters: nextFilters, sort: tableSort, groupBy });
-                        }}
-                        onHide={() => {
-                          const next = { ...columnVisibility, [colId]: false };
-                          setColumnVisibility(next);
-                          const hidden = Object.entries(next)
-                            .filter(([, v]) => !v)
-                            .map(([id]) => id);
-                          persistPrefs({ hidden, columnOrder });
-                        }}
-                      />
-                      {canResize && canManagePrefs && (
-                        <div
-                          onMouseDown={header.getResizeHandler()}
-                          onTouchStart={header.getResizeHandler()}
-                          onDoubleClick={() => header.column.resetSize()}
-                          role="separator"
-                          aria-orientation="vertical"
-                          aria-label="Zmień szerokość kolumny"
-                          className={`absolute right-0 top-0 z-10 h-full w-1.5 cursor-col-resize select-none touch-none transition-colors ${
-                            isResizing ? "bg-primary" : "bg-transparent hover:bg-primary/40"
-                          }`}
+                                  : kind === "NUMBER" || kind === "RATING"
+                                    ? "equals"
+                                    : kind === "CHECKBOX"
+                                      ? "isChecked"
+                                      : "contains",
+                              value: "",
+                            };
+                            const nextFilters = [...filters, newFilter];
+                            setFilters(nextFilters);
+                            persistFilters({ filters: nextFilters, sort: tableSort, groupBy });
+                          }}
+                          onHide={() => {
+                            const next = { ...columnVisibility, [colId]: false };
+                            setColumnVisibility(next);
+                            const hidden = Object.entries(next)
+                              .filter(([, v]) => !v)
+                              .map(([id]) => id);
+                            persistPrefs({ hidden, columnOrder });
+                          }}
                         />
-                      )}
+                        {canResize && canManagePrefs && (
+                          <div
+                            onMouseDown={header.getResizeHandler()}
+                            onTouchStart={header.getResizeHandler()}
+                            onDoubleClick={() => header.column.resetSize()}
+                            role="separator"
+                            aria-orientation="vertical"
+                            aria-label="Zmień szerokość kolumny"
+                            className={`absolute right-0 top-0 z-10 h-full w-1.5 cursor-col-resize select-none touch-none transition-colors ${
+                              isResizing ? "bg-primary" : "bg-transparent hover:bg-primary/40"
+                            }`}
+                          />
+                        )}
+                      </th>
+                    );
+                  })}
+                  {canManagePrefs && (
+                    <th className="sticky top-0 h-10 w-12 px-2 text-left font-mono text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      <AddColumnButton workspaceId={workspaceId} boardId={boardId} />
                     </th>
-                  );
-                })}
-                {canManagePrefs && (
-                  <th className="sticky top-0 h-10 w-12 px-2 text-left font-mono text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                    <AddColumnButton workspaceId={workspaceId} boardId={boardId} />
-                  </th>
-                )}
-              </tr>
-            ))}
+                  )}
+                </tr>
+              );
+            })}
           </thead>
           <tbody>
             {table.getRowModel().rows.length === 0 ? (
@@ -958,35 +1006,53 @@ export function BoardTable({
                               />
                             </td>
                           )}
-                          {row.getVisibleCells().map((cell, cIdx) => {
-                            const isFrozen = cIdx === 0;
+                          {(() => {
+                            // F12-K3: same pinned-first reorder as headers
+                            // so DOM cells line up with the visible columns.
+                            const allCells = row.getVisibleCells();
+                            const leftCells = allCells.filter(
+                              (c) => c.column.getIsPinned() === "left",
+                            );
+                            const centerCells = allCells.filter(
+                              (c) => !c.column.getIsPinned(),
+                            );
+                            const orderedCells = [...leftCells, ...centerCells];
+                            const checkboxOffset = canEdit ? 40 : 0;
                             const visibleRowIdx = filteredSorted.findIndex(
                               (t) => t.id === row.original.id,
                             );
-                            const isActive =
-                              activeCell?.row === visibleRowIdx && activeCell?.col === cIdx;
-                            return (
-                              <td
-                                key={cell.id}
-                                data-cell="1"
-                                data-row={visibleRowIdx}
-                                data-col={cIdx}
-                                tabIndex={0}
-                                onFocus={() => setActiveCell({ row: visibleRowIdx, col: cIdx })}
-                                className={`px-4 py-2.5 align-middle outline-none ${
-                                  isFrozen
-                                    ? "sticky z-10 bg-card shadow-[1px_0_0_0_var(--border)]"
-                                    : ""
-                                } ${isActive ? "ring-2 ring-inset ring-primary/60" : ""}`}
-                                style={{
-                                  width: cell.column.getSize(),
-                                  ...(isFrozen ? { left: canEdit ? "40px" : "0px" } : {}),
-                                }}
-                              >
-                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                              </td>
-                            );
-                          })}
+                            return orderedCells.map((cell, cIdx) => {
+                              const isPinned = cell.column.getIsPinned() === "left";
+                              const pinnedLeft = isPinned
+                                ? checkboxOffset + cell.column.getStart("left")
+                                : null;
+                              const isActive =
+                                activeCell?.row === visibleRowIdx && activeCell?.col === cIdx;
+                              return (
+                                <td
+                                  key={cell.id}
+                                  data-cell="1"
+                                  data-row={visibleRowIdx}
+                                  data-col={cIdx}
+                                  tabIndex={0}
+                                  onFocus={() => setActiveCell({ row: visibleRowIdx, col: cIdx })}
+                                  className={`px-4 py-2.5 align-middle outline-none ${
+                                    isPinned
+                                      ? "sticky z-10 bg-card shadow-[1px_0_0_0_var(--border)]"
+                                      : ""
+                                  } ${isActive ? "ring-2 ring-inset ring-primary/60" : ""}`}
+                                  style={{
+                                    width: cell.column.getSize(),
+                                    ...(isPinned && pinnedLeft !== null
+                                      ? { left: `${pinnedLeft}px` }
+                                      : {}),
+                                  }}
+                                >
+                                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                </td>
+                              );
+                            });
+                          })()}
                           {canManagePrefs && <td className="w-12" />}
                         </tr>
                       );

@@ -18,6 +18,8 @@ import {
   EyeOff,
   Filter,
   Pencil,
+  Pin,
+  PinOff,
   Trash2,
   Type as TypeIcon,
 } from "lucide-react";
@@ -52,6 +54,9 @@ export interface HeaderCellProps {
   onSort: (dir: "asc" | "desc" | null) => void;
   onFilter: () => void;
   onHide: () => void;
+  // F12-K3: pin/unpin a column to the left side of the table.
+  isPinned?: boolean;
+  onTogglePin?: () => void;
   // Custom-only callbacks; absent for built-ins.
   onChangeType?: () => void;
 }
@@ -65,6 +70,8 @@ export function TableHeaderCell({
   onSort,
   onFilter,
   onHide,
+  isPinned,
+  onTogglePin,
   onChangeType,
 }: HeaderCellProps) {
   const isCustom = columnId.startsWith("custom:");
@@ -150,6 +157,7 @@ export function TableHeaderCell({
           y={menu.y}
           isCustom={isCustom}
           isSorted={isSorted}
+          isPinned={!!isPinned}
           canManagePrefs={canManagePrefs}
           onClose={() => setMenu(null)}
           onSort={(dir) => {
@@ -164,6 +172,14 @@ export function TableHeaderCell({
             onHide();
             setMenu(null);
           }}
+          onTogglePin={
+            onTogglePin
+              ? () => {
+                  onTogglePin();
+                  setMenu(null);
+                }
+              : null
+          }
           onRename={
             isCustom
               ? () => {
@@ -215,11 +231,13 @@ function HeaderContextMenu({
   y,
   isCustom,
   isSorted,
+  isPinned,
   canManagePrefs,
   onClose,
   onSort,
   onFilter,
   onHide,
+  onTogglePin,
   onRename,
   onChangeType,
   onDelete,
@@ -229,11 +247,13 @@ function HeaderContextMenu({
   y: number;
   isCustom: boolean;
   isSorted: false | "asc" | "desc";
+  isPinned: boolean;
   canManagePrefs: boolean;
   onClose: () => void;
   onSort: (dir: "asc" | "desc" | null) => void;
   onFilter: () => void;
   onHide: () => void;
+  onTogglePin: (() => void) | null;
   onRename: (() => void) | null;
   onChangeType: (() => void) | null;
   onDelete: (() => void) | null;
@@ -274,6 +294,14 @@ function HeaderContextMenu({
       />
       <Separator />
       <MenuItem icon={<Filter size={12} />} label="Filtruj tę kolumnę" onClick={onFilter} />
+      {onTogglePin && canManagePrefs && (
+        <MenuItem
+          icon={isPinned ? <PinOff size={12} /> : <Pin size={12} />}
+          label={isPinned ? "Odepnij kolumnę" : "Przypnij kolumnę"}
+          onClick={onTogglePin}
+          active={isPinned}
+        />
+      )}
       {canManagePrefs && (
         <MenuItem icon={<EyeOff size={12} />} label="Ukryj kolumnę" onClick={onHide} />
       )}
