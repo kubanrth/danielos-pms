@@ -66,6 +66,8 @@ model User {
   // F11-20: support tickets (zgłoszenia w ramach workspace).
   reportedTickets    SupportTicket[]       @relation("SupportReporter")
   assignedTickets    SupportTicket[]       @relation("SupportAssignee")
+  // F11-21: creative briefs created by user.
+  createdBriefs      CreativeBrief[]       @relation("BriefCreator")
 
   @@index([isBanned])
   @@index([lastSeenAt])
@@ -156,6 +158,8 @@ model Workspace {
   firefliesIntegration FirefliesIntegration?
   // F11-20: support tickets per-workspace.
   supportTickets       SupportTicket[]
+  // F11-21: creative briefs per-workspace.
+  creativeBriefs       CreativeBrief[]
 
   @@index([ownerId])
   @@index([deletedAt])
@@ -439,6 +443,36 @@ model Task {
   @@index([reminderAt, reminderSentAt])
   // F11-17: cron query — find tasks with recurrence not spawned today.
   @@index([recurrenceLastSpawnAt])
+}
+
+// F11-21 (#25): Creative brief — strukturalny dokument projektowy
+// (przykład z ClickUp). Tiptap doc z prefilled template'em sekcji
+// (Cele / Grupa docelowa / Deliverables / Brand / Referencje / Timeline).
+enum CreativeBriefStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  ARCHIVED
+}
+
+model CreativeBrief {
+  id          String              @id @default(cuid())
+  workspaceId String
+  creatorId   String
+  title       String
+  contentJson Json?
+  status      CreativeBriefStatus @default(DRAFT)
+  emoji       String?
+  headerColor String?             @default("#7B68EE")
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  deletedAt   DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator   User      @relation("BriefCreator", fields: [creatorId], references: [id])
+
+  @@index([workspaceId, deletedAt])
+  @@index([creatorId])
 }
 
 // F11-20 (#23): support tickets — internal helpdesk. Każdy member
