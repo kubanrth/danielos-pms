@@ -558,7 +558,9 @@ function AddKanbanColumnButton({
 }) {
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState<{
-    top: number;
+    placement: "below" | "above";
+    top?: number;
+    bottom?: number;
     left: number;
     maxHeight: number;
   } | null>(null);
@@ -574,21 +576,28 @@ function AddKanbanColumnButton({
     setCoords(null);
   };
 
-  // Pozycjonowanie popover — auto-flip nad/pod trigger jeśli mało miejsca,
-  // clamp left do viewport. 1:1 z AddColumnButton w board-table.tsx.
+  // F12-K1 fix v2: pozycjonowanie z kotwicami CSS top/bottom zamiast
+  // obliczania top dla above-mode. Wcześniej `top = rect.top - GAP - maxHeight`
+  // przy huge spaceAbove dawało top = PAGE_PAD i popover unosił się daleko
+  // od trigger'a (visual disconnect). Teraz:
+  // - below: top = rect.bottom + GAP (anchor górnej krawędzi)
+  // - above: bottom = innerHeight - rect.top + GAP (anchor DOLNEJ krawędzi)
+  // Plus maxHeight cap = 420 — nasze content (~280px) nie potrzebuje więcej.
   const computeCoords = () => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) return null;
     const POP_WIDTH = 320;
+    const POP_MAX_HEIGHT = 420;
     const GAP = 6;
     const PAGE_PAD = 16;
     const spaceBelow = window.innerHeight - rect.bottom - GAP - PAGE_PAD;
     const spaceAbove = rect.top - GAP - PAGE_PAD;
     const wantBelow = spaceBelow >= 280 || spaceBelow >= spaceAbove;
-    const maxHeight = Math.max(220, wantBelow ? spaceBelow : spaceAbove);
-    const top = wantBelow ? rect.bottom + GAP : Math.max(PAGE_PAD, rect.top - GAP - maxHeight);
+    const maxHeight = Math.min(POP_MAX_HEIGHT, Math.max(220, wantBelow ? spaceBelow : spaceAbove));
     const left = Math.max(8, Math.min(window.innerWidth - POP_WIDTH - 8, rect.left));
-    return { top, left, maxHeight };
+    return wantBelow
+      ? { placement: "below" as const, top: rect.bottom + GAP, left, maxHeight }
+      : { placement: "above" as const, bottom: window.innerHeight - rect.top + GAP, left, maxHeight };
   };
 
   const openWithCoords = () => {
@@ -643,16 +652,19 @@ function AddKanbanColumnButton({
 
   return (
     <>
+      {/* F12-K1 fix: self-start + fixed height żeby trigger NIE stretch'ował
+          się do wysokości pełnej kolumny (~600px). Przy stretched triggerze
+          popover anchorował się do całej wysokości i wylądował daleko od
+          klikniętego buttona. Teraz button = ~52px wysokości u góry kolumny,
+          popover pojawia się tuż pod nim. */}
       <button
         ref={triggerRef}
         type="button"
         onClick={() => (open ? closeReset() : openWithCoords())}
         aria-label="Dodaj kolumnę"
-        className="grid w-[300px] shrink-0 place-items-center rounded-xl border border-dashed border-border bg-muted/20 p-3 font-mono text-[0.7rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/40 hover:text-foreground"
+        className="inline-flex h-[52px] w-[300px] shrink-0 self-start items-center justify-center gap-1.5 rounded-xl border border-dashed border-border bg-muted/20 px-3 font-mono text-[0.7rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/40 hover:text-foreground"
       >
-        <span className="inline-flex items-center gap-1.5">
-          <Plus size={13} /> Dodaj kolumnę
-        </span>
+        <Plus size={13} /> Dodaj kolumnę
       </button>
       {open && coords && typeof document !== "undefined" &&
         createPortal(
@@ -660,7 +672,9 @@ function AddKanbanColumnButton({
             ref={popRef}
             style={{
               position: "fixed",
-              top: coords.top,
+              ...(coords.placement === "below"
+                ? { top: coords.top }
+                : { bottom: coords.bottom }),
               left: coords.left,
               width: 320,
               maxHeight: coords.maxHeight,
