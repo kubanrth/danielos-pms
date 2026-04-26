@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { startTransition, useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
+import { Plus } from "lucide-react";
+import { createTaskAction } from "@/app/(app)/w/[workspaceId]/t/actions";
 import {
   DndContext,
   DragOverlay,
@@ -264,7 +266,7 @@ function Column({
   column,
   tasks,
   workspaceId,
-  boardId: _boardId,
+  boardId,
   getHotkeyProps,
 }: {
   id: string;
@@ -279,6 +281,11 @@ function Column({
 }) {
   const color = column?.colorHex ?? "#94A3B8";
   const name = column?.name ?? "Bez statusu";
+  // F11-10: inline add — Trello-style "+ Nowe zadanie" pinned at bottom
+  // of every column. Stays in edit mode so user can fire many in a row.
+  // Bez statusu column doesn't get the inline-add (no statusColumnId
+  // for the server action to use).
+  const canAddInline = id !== NO_STATUS;
 
   return (
     <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
@@ -313,8 +320,99 @@ function Column({
             )}
           </div>
         </ColumnDropZone>
+        {canAddInline && (
+          <InlineAddTask
+            workspaceId={workspaceId}
+            boardId={boardId}
+            statusColumnId={id}
+          />
+        )}
       </div>
     </SortableContext>
+  );
+}
+
+// F11-10: inline +Nowe zadanie under each column. Click expands input;
+// Enter creates and re-focuses for the next task; Esc collapses.
+function InlineAddTask({
+  workspaceId,
+  boardId,
+  statusColumnId,
+}: {
+  workspaceId: string;
+  boardId: string;
+  statusColumnId: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState("");
+  const submit = () => {
+    const trimmed = title.trim();
+    if (!trimmed) {
+      setEditing(false);
+      return;
+    }
+    const fd = new FormData();
+    fd.set("workspaceId", workspaceId);
+    fd.set("boardId", boardId);
+    fd.set("title", trimmed);
+    fd.set("statusColumnId", statusColumnId);
+    startTransition(async () => {
+      await createTaskAction(null, fd);
+      setTitle("");
+      // stay in edit mode — Trello pattern, fire many in a row.
+    });
+  };
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="inline-flex h-7 items-center gap-1.5 rounded-md border border-dashed border-border bg-background/40 px-2 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
+      >
+        <Plus size={11} /> Nowe zadanie
+      </button>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-1.5 rounded-md border border-primary/40 bg-background p-2">
+      <input
+        autoFocus
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            submit();
+          } else if (e.key === "Escape") {
+            setTitle("");
+            setEditing(false);
+          }
+        }}
+        maxLength={200}
+        placeholder="Tytuł zadania…"
+        className="w-full bg-transparent text-[0.86rem] outline-none placeholder:text-muted-foreground/50"
+      />
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setTitle("");
+            setEditing(false);
+          }}
+          className="font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground"
+        >
+          Anuluj
+        </button>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={!title.trim()}
+          className="inline-flex h-6 items-center rounded-md bg-primary px-2.5 font-mono text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          Dodaj
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -400,7 +498,10 @@ function CardShell({
       <Link
         href={`/w/${workspaceId}/t/${task.id}`}
         onPointerDown={(e) => e.stopPropagation()}
-        className="font-display text-[0.95rem] font-semibold leading-tight tracking-[-0.01em] transition-colors hover:text-primary"
+        // F11-7: long titles must wrap inside the card; previously they
+        // overflowed the 300px column. break-words handles long single
+        // tokens (URLs, IDs) that would otherwise stretch the card.
+        className="font-display text-[0.95rem] font-semibold leading-tight tracking-[-0.01em] whitespace-normal break-words transition-colors hover:text-primary"
       >
         {task.title}
       </Link>

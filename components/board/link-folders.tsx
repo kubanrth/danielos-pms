@@ -4,6 +4,7 @@ import { startTransition, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
+  ExternalLink,
   FolderOpen,
   Pencil,
   Plus,
@@ -353,6 +354,9 @@ function ColumnHeader({
 
 function NewColumnForm({ folderId }: { folderId: string }) {
   const [name, setName] = useState("");
+  // F11-4 (#10): submit on Enter or button click; explicit button
+  // makes the affordance obvious. Previously users typed and didn't
+  // realise they had to hit Enter.
   return (
     <form
       action={(fd) =>
@@ -361,19 +365,27 @@ function NewColumnForm({ folderId }: { folderId: string }) {
           setName("");
         })
       }
-      className="flex items-center gap-1"
+      className="flex items-center gap-1 rounded-sm border border-dashed border-border px-1.5 py-0.5 transition-colors focus-within:border-primary/60"
     >
       <input type="hidden" name="folderId" value={folderId} />
-      <Plus size={11} className="text-muted-foreground shrink-0" />
       <input
         name="name"
         value={name}
         onChange={(e) => setName(e.target.value)}
         required
         maxLength={80}
-        placeholder="dodaj kolumnę"
+        placeholder="+ dodaj kolumnę"
         className="flex-1 min-w-0 bg-transparent font-mono text-[0.62rem] uppercase tracking-[0.14em] outline-none placeholder:text-muted-foreground/60"
       />
+      <button
+        type="submit"
+        disabled={!name.trim()}
+        aria-label="Dodaj kolumnę"
+        title="Dodaj kolumnę (Enter)"
+        className="grid h-5 w-5 shrink-0 place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <Plus size={11} />
+      </button>
     </form>
   );
 }
@@ -405,8 +417,11 @@ function CellInput({
       <span className="truncate">{initial}</span>
     );
   }
+  // F11-3 (#9): edit mode — render the input AND a follow-link icon
+  // when the cell holds a URL. Admin can paste/edit, then click → to
+  // open in a new tab. Solves "wklejony link nie działa" complaint.
   return (
-    <form action={setLinkFolderCellAction} className="m-0">
+    <form action={setLinkFolderCellAction} className="m-0 flex items-center gap-1">
       <input type="hidden" name="rowId" value={rowId} />
       <input type="hidden" name="columnId" value={columnId} />
       <input
@@ -424,8 +439,22 @@ function CellInput({
           }
         }}
         placeholder="—"
-        className="w-full bg-transparent text-[0.88rem] outline-none placeholder:text-muted-foreground/40 focus-visible:text-foreground"
+        className="flex-1 min-w-0 bg-transparent text-[0.88rem] outline-none placeholder:text-muted-foreground/40 focus-visible:text-foreground"
       />
+      {isUrl(initial) && (
+        <a
+          href={initial}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Otwórz link"
+          title="Otwórz link"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <ExternalLink size={11} />
+        </a>
+      )}
     </form>
   );
 }

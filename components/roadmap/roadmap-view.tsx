@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, LineChart, Workflow } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import {
   assignTaskToMilestoneAction,
   deleteMilestoneAction,
@@ -52,7 +52,13 @@ export function RoadmapView({
   canDelete: boolean;
   initialMode?: Mode;
 }) {
-  const [mode, setMode] = useState<Mode>(initialMode);
+  // F11-7 (#13): klient zażądał usunięcia trybu "Oś czasu" (gantt
+  // robi to lepiej). Tryb pinujemy na "markers" — toggle ukryty
+  // poniżej, mode state zostaje na wypadek gdyby ktoś chciał
+  // wrócić do timeline w przyszłości.
+  const [mode] = useState<Mode>("markers");
+  const _initialMode = initialMode;
+  void _initialMode;
   const [dialog, setDialog] = useState<
     | { mode: "create" }
     | { mode: "edit"; milestone: MilestoneItem }
@@ -86,21 +92,8 @@ export function RoadmapView({
           <span className="font-mono text-[0.7rem] uppercase tracking-[0.14em] text-muted-foreground">
             {milestones.length} {plPlural(milestones.length, "milestone", "milestone’y", "milestone’ów")}
           </span>
-          {/* Mode toggle — pill group. Keeps the list view regardless. */}
-          <div className="inline-flex items-center gap-0.5 rounded-full border border-border bg-card p-0.5 shadow-sm">
-            <ModeButton
-              active={mode === "timeline"}
-              onClick={() => setMode("timeline")}
-              icon={<LineChart size={12} />}
-              label="Oś czasu"
-            />
-            <ModeButton
-              active={mode === "markers"}
-              onClick={() => setMode("markers")}
-              icon={<Workflow size={12} />}
-              label="Wizualizacja"
-            />
-          </div>
+          {/* F11-7: tryb "Oś czasu" usunięty — Gantt to robi. Zostaje tylko
+              "Wizualizacja" jako default; mode toggle ukryty. */}
         </div>
         {canCreate && (
           <button
@@ -277,29 +270,6 @@ export function RoadmapView({
   );
 }
 
-function ModeButton({
-  active,
-  onClick,
-  icon,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      data-active={active ? "true" : "false"}
-      className="inline-flex h-7 items-center gap-1.5 rounded-full px-3 font-mono text-[0.66rem] uppercase tracking-[0.12em] text-muted-foreground transition-colors data-[active=true]:bg-primary data-[active=true]:text-primary-foreground hover:text-foreground data-[active=true]:hover:text-primary-foreground"
-    >
-      {icon} {label}
-    </button>
-  );
-}
-
 function TimelineTrack({
   range,
   milestones,
@@ -466,8 +436,10 @@ function MilestoneNode({
   const workspaceId = params?.workspaceId ?? "";
   return (
     <div className="flex w-[180px] shrink-0 flex-col items-center gap-2 px-2">
-      {/* Title above */}
-      <div className="flex flex-col items-center gap-0.5 text-center min-h-[44px]">
+      {/* F11-2 (#8): title block fixed-height — wcześniej min-h pozwalało
+          rosnąć przy 2 liniach, przez co dot przesuwał się w dół a strzałka
+          (paddingTop fixed) zostawała w starym miejscu → rozjazd. */}
+      <div className="flex h-[44px] flex-col items-center justify-center gap-0.5 overflow-hidden text-center">
         <span className="font-display text-[0.92rem] font-semibold leading-tight tracking-[-0.01em] line-clamp-2">
           {milestone.title}
         </span>
@@ -524,11 +496,14 @@ function MilestoneNode({
 // Flow arrow between two milestone nodes — simple SVG chevron at node-
 // center-height so cała linia łączy je ładnie.
 function FlowArrow() {
+  // F11-2 (#8): arrow Y-center pinned to dot center.
+  // dot center = 44 (title block) + 8 (gap-2) + 24 (half of h-12 dot) = 76px.
+  // svg is 24px tall with line at y=12, so paddingTop = 76 - 12 = 64.
   return (
     <div
       className="flex shrink-0 items-center"
       aria-hidden
-      style={{ height: 140, paddingTop: 56 /* aligns with dot center */ }}
+      style={{ paddingTop: 64 }}
     >
       <svg width="60" height="24" viewBox="0 0 60 24" fill="none">
         <defs>

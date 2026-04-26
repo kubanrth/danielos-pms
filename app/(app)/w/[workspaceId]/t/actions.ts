@@ -66,6 +66,7 @@ export async function createTaskAction(
     workspaceId: formData.get("workspaceId"),
     boardId: formData.get("boardId"),
     title: formData.get("title"),
+    statusColumnId: formData.get("statusColumnId") || undefined,
   });
 
   if (!parsed.success) {
@@ -81,16 +82,28 @@ export async function createTaskAction(
   const limit = await checkLimit("task.create", ctx.userId);
   if (!limit.ok) return { ok: false, error: limit.error };
 
-  // Use the first status column as default (Do zrobienia).
-  const firstColumn = await db.statusColumn.findFirst({
-    where: { boardId: parsed.data.boardId },
-    orderBy: { order: "asc" },
-  });
+  // F11-10: prefer explicit status column from caller (Kanban inline-add),
+  // fall back to board's first column for the legacy modal flow.
+  let pickedColumn: { id: string } | null = null;
+  if (parsed.data.statusColumnId) {
+    const explicit = await db.statusColumn.findFirst({
+      where: { id: parsed.data.statusColumnId, boardId: parsed.data.boardId },
+      select: { id: true },
+    });
+    if (explicit) pickedColumn = explicit;
+  }
+  if (!pickedColumn) {
+    pickedColumn = await db.statusColumn.findFirst({
+      where: { boardId: parsed.data.boardId },
+      orderBy: { order: "asc" },
+      select: { id: true },
+    });
+  }
 
   // Compute next rowOrder — last-in-column + 1 (or 1 if empty).
-  const lastTask = firstColumn
+  const lastTask = pickedColumn
     ? await db.task.findFirst({
-        where: { statusColumnId: firstColumn.id, deletedAt: null },
+        where: { statusColumnId: pickedColumn.id, deletedAt: null },
         orderBy: { rowOrder: "desc" },
       })
     : null;
@@ -99,7 +112,7 @@ export async function createTaskAction(
     data: {
       workspaceId: parsed.data.workspaceId,
       boardId: parsed.data.boardId,
-      statusColumnId: firstColumn?.id,
+      statusColumnId: pickedColumn?.id,
       creatorId: ctx.userId,
       title: parsed.data.title,
       rowOrder: (lastTask?.rowOrder ?? 0) + 1,

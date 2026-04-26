@@ -4,6 +4,9 @@ export const createTaskSchema = z.object({
   workspaceId: z.string().min(1),
   boardId: z.string().min(1),
   title: z.string().trim().min(1, "Tytuł jest wymagany.").max(200),
+  // F11-10: optional explicit status column (Kanban inline-add). When
+  // omitted, server falls back to the board's first column.
+  statusColumnId: z.string().min(1).optional(),
 });
 
 // Loose ProseMirror doc shape. We don't deeply validate content nodes —

@@ -103,9 +103,13 @@ const DEFAULT_COLUMN_ORDER: string[] = [
   "stopAt",
 ];
 
+// F11-6 (#12): klient zażądał możliwości ukrywania defaultowych kolumn
+// (Status, Tytuł). Wcześniej `required: true` zablokowało eye-toggle.
+// Teraz wszystkie kolumny mogą być ukryte; tworzą się automatycznie
+// jak board jest świeży.
 const COLUMN_DEFS: ColumnDef[] = [
-  { id: "statusColumnId", label: "Status", required: true },
-  { id: "title", label: "Tytuł", required: true },
+  { id: "statusColumnId", label: "Status" },
+  { id: "title", label: "Tytuł" },
   { id: "assignees", label: "Osoby" },
   { id: "tags", label: "Tagi" },
   { id: "startAt", label: "Start" },

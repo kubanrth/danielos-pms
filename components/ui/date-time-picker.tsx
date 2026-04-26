@@ -76,34 +76,36 @@ export function DateTimePicker({
   return (
     <div className="flex flex-col gap-1.5">
       <Popover.Root open={open} onOpenChange={setOpen}>
-        <Popover.Trigger
-          disabled={disabled}
-          aria-label={label ?? placeholder}
-          id={fieldId}
-          className="inline-flex h-10 w-full items-center justify-between gap-2 rounded-md border border-border bg-background px-3 text-left text-[0.88rem] transition-colors hover:border-primary/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60 data-[popup-open]:border-primary"
-        >
-          <span className="flex items-center gap-2 truncate">
-            <CalendarIcon size={14} className="shrink-0 text-muted-foreground" />
-            <span className={display ? "" : "text-muted-foreground"}>
-              {display || placeholder}
+        {/* F11-8 (#17): wcześniej był <button> w <button> (invalid HTML),
+            przez co clear-X mógł nie działać konsystentnie. Teraz X jest
+            siblingiem trigger'a; klient zgłaszał "nie da się ustawić daty"
+            i to pewnie efekt tej zagnieżdżonej struktury. */}
+        <div className="relative">
+          <Popover.Trigger
+            disabled={disabled}
+            aria-label={label ?? placeholder}
+            id={fieldId}
+            className="inline-flex h-10 w-full items-center justify-between gap-2 rounded-md border border-border bg-background px-3 pr-10 text-left text-[0.88rem] transition-colors hover:border-primary/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60 data-[popup-open]:border-primary"
+          >
+            <span className="flex items-center gap-2 truncate">
+              <CalendarIcon size={14} className="shrink-0 text-muted-foreground" />
+              <span className={display ? "" : "text-muted-foreground"}>
+                {display || placeholder}
+              </span>
             </span>
-          </span>
+          </Popover.Trigger>
           {date && !disabled && (
             <button
               type="button"
               aria-label="Wyczyść datę"
               title="Wyczyść"
-              onClick={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                setDate(null);
-              }}
-              className="grid h-6 w-6 place-items-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              onClick={() => setDate(null)}
+              className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
               <X size={12} />
             </button>
           )}
-        </Popover.Trigger>
+        </div>
         <Popover.Portal>
           <Popover.Positioner sideOffset={6}>
             <Popover.Popup className="z-[70] rounded-lg border border-border bg-popover p-3 shadow-[0_12px_32px_-12px_rgba(0,0,0,0.22)]">
@@ -158,6 +160,18 @@ export function DateTimePicker({
                   </div>
                 </div>
                 <div className="ml-auto flex items-center gap-1">
+                  {date && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDate(null);
+                        setOpen(false);
+                      }}
+                      className="h-8 rounded-md border border-border bg-background px-3 font-mono text-[0.68rem] uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive"
+                    >
+                      Wyczyść
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {

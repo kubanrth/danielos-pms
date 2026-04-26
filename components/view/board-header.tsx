@@ -36,32 +36,36 @@ export function BoardHeader({
   defaultViewIds?: Partial<Record<ViewName, string>>;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <h2 className="font-display text-[1.5rem] font-bold leading-[1.15] tracking-[-0.02em]">
-          {board.name}
-        </h2>
-        {board.description && (
-          <p className="text-[0.9rem] leading-[1.55] text-muted-foreground">
-            {board.description}
-          </p>
-        )}
-        {extra}
-        <div className="flex flex-wrap items-center">
-          <ViewSwitcher
-            workspaceId={workspaceId}
-            boardId={boardId}
-            active={active}
-            activeViewId={activeViewId}
-            enabled={enabledViews}
-            customViews={customViews}
-            canManage={canManageViews}
-            defaultViewIds={defaultViewIds}
-          />
-          {createViewButton}
+    // F11-5: extra (link folders) now spans full width — previously
+    // shared row with title/viewswitcher → narrower than the table below.
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <h2 className="font-display text-[1.5rem] font-bold leading-[1.15] tracking-[-0.02em]">
+            {board.name}
+          </h2>
+          {board.description && (
+            <p className="text-[0.9rem] leading-[1.55] text-muted-foreground">
+              {board.description}
+            </p>
+          )}
+          <div className="flex flex-wrap items-center">
+            <ViewSwitcher
+              workspaceId={workspaceId}
+              boardId={boardId}
+              active={active}
+              activeViewId={activeViewId}
+              enabled={enabledViews}
+              customViews={customViews}
+              canManage={canManageViews}
+              defaultViewIds={defaultViewIds}
+            />
+            {createViewButton}
+          </div>
         </div>
+        {actions && <div className="flex items-center gap-2">{actions}</div>}
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
+      {extra && <div className="w-full">{extra}</div>}
     </div>
   );
 }

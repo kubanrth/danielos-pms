@@ -423,9 +423,12 @@ function GroupPicker({
   const current = groupBy ? columns.find((c) => c.id === groupBy) : null;
   // Only allow grouping on bucket-like fields — grouping by free text
   // would create one bucket per row.
-  const groupable = columns.filter((c) =>
-    ["SINGLE_SELECT", "BUILTIN_STATUS", "CHECKBOX", "USER", "RATING"].includes(c.kind),
-  );
+  // F11-9 (#18): klient zgłosił że grupowanie nie obejmuje wszystkich
+  // kolumn — wcześniej był whitelist na bucket-like fields. Teraz każda
+  // kolumna jest groupable; długie wartości (TEXT/LONG_TEXT) tworzą
+  // dużo bucketów (każda unikalna wartość = osobny), ale to świadoma
+  // decyzja użytkownika.
+  const groupable = columns;
   return (
     <Popover open={open} onClose={() => setOpen(false)} trigger={
       <button
