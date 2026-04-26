@@ -40,6 +40,21 @@ export interface TodoListNode {
   folderId: string | null;
 }
 
+// F12-K17: assigned workspace task pokazywany w prawym panelu obok
+// add-task. Klient chce widzieć jakie projektowe taski ma na karku
+// kiedy planuje sobie listę.
+export interface AssignedTaskRef {
+  id: string;
+  title: string;
+  workspaceId: string;
+  workspaceName: string;
+  boardId: string;
+  boardName: string;
+  statusName: string | null;
+  statusColor: string | null;
+  stopAt: string | null;
+}
+
 // MS-To-Do-like labels / icons for the three smart views.
 const SMART_VIEWS: { key: SmartView; label: string; icon: typeof Sun; accent: string }[] = [
   { key: "my-day", label: "Mój dzień", icon: Sun, accent: "text-amber-500" },
@@ -60,6 +75,7 @@ export function TodoWorkspace({
   smart,
   items,
   focusedItemId,
+  assignedTasks,
 }: {
   folders: TodoFolderNode[];
   lists: TodoListNode[];
@@ -68,6 +84,9 @@ export function TodoWorkspace({
   smart: SmartView | null;
   items: TodoItemFull[];
   focusedItemId: string | null;
+  // F12-K17: workspace tasks gdzie current user jest przypisany.
+  // Empty gdy lista nie aktywna albo user nie ma żadnych assigned.
+  assignedTasks: AssignedTaskRef[];
 }) {
   // Only render top-level folders — ignore any legacy nested rows.
   const rootFolders = useMemo(
@@ -220,9 +239,7 @@ export function TodoWorkspace({
                 onClose={() => setSelectedItemId(null)}
               />
             ) : (
-              <div className="px-4 py-6 font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground/70">
-                klik w zadanie → szczegóły, kroki, przypomnienie
-              </div>
+              <AssignedTasksPanel tasks={assignedTasks} />
             )}
           </div>
         </div>
@@ -724,4 +741,72 @@ function EmptyState({
 function formatShortDate(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString("pl-PL", { day: "numeric", month: "short" });
+}
+
+// F12-K17: lista tasków przypisanych do current user w prawym panelu.
+// Każdy task linkuje do swojego workspace'u + boardu. Empty state =
+// hint że nic nie ma.
+function AssignedTasksPanel({ tasks }: { tasks: AssignedTaskRef[] }) {
+  if (tasks.length === 0) {
+    return (
+      <div className="flex flex-col gap-2 px-4 py-6">
+        <p className="font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground/70">
+          Twoje przypisane zadania
+        </p>
+        <p className="text-[0.84rem] text-muted-foreground">
+          Brak zadań przypisanych do Ciebie w workspace'ach. Klik w zadanie tej listy żeby zobaczyć szczegóły.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2 p-4">
+      <div className="flex items-baseline justify-between">
+        <p className="font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground/80">
+          Twoje przypisane zadania
+        </p>
+        <span className="font-mono text-[0.62rem] text-muted-foreground/60">
+          {tasks.length}
+        </span>
+      </div>
+      <ul className="flex flex-col gap-1.5">
+        {tasks.map((t) => (
+          <li key={t.id}>
+            <Link
+              href={`/w/${t.workspaceId}/t/${t.id}`}
+              className="group flex flex-col gap-1 rounded-md border border-border bg-card px-3 py-2 transition-all hover:-translate-y-[1px] hover:border-primary/60"
+            >
+              <div className="flex items-start gap-2">
+                <span className="min-w-0 flex-1 truncate font-display text-[0.86rem] font-semibold leading-tight tracking-[-0.01em] group-hover:text-primary">
+                  {t.title}
+                </span>
+                {t.statusName && t.statusColor && (
+                  <span
+                    className="shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[0.6rem] font-medium"
+                    style={{
+                      background: `${t.statusColor}1A`,
+                      color: t.statusColor,
+                    }}
+                  >
+                    {t.statusName}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground">
+                <span className="truncate">{t.workspaceName}</span>
+                <span aria-hidden>·</span>
+                <span className="truncate">{t.boardName}</span>
+                {t.stopAt && (
+                  <>
+                    <span aria-hidden>·</span>
+                    <span>do {formatShortDate(t.stopAt)}</span>
+                  </>
+                )}
+              </div>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }

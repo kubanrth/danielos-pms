@@ -94,6 +94,31 @@ export default async function MyTodoPage({
     ? lists.find((l) => l.id === activeListId) ?? null
     : null;
 
+  // F12-K17: pull workspace tasks where this user is assignee. Klient
+  // chce widzieć w prawym panelu (obok add-task) jakie zadania
+  // projektowe ma przypisane — TODO module to teraz nie tylko
+  // personal list ale też 'inbox' przypisanych prac. Tylko gdy lista
+  // wybrana (na smart view inbox bez sensu — pokazuje to /my-tasks).
+  const assignedTasks = activeListId
+    ? await db.taskAssignee.findMany({
+        where: {
+          userId,
+          task: { deletedAt: null },
+        },
+        orderBy: { task: { updatedAt: "desc" } },
+        take: 30,
+        include: {
+          task: {
+            include: {
+              workspace: { select: { id: true, name: true } },
+              board: { select: { id: true, name: true } },
+              statusColumn: { select: { name: true, colorHex: true } },
+            },
+          },
+        },
+      })
+    : [];
+
   // Also surface the "star" item by id if itemId is in URL — the client
   // can open the detail panel immediately without an extra fetch.
   const focusedItemId = params.itemId ?? null;
@@ -135,6 +160,17 @@ export default async function MyTodoPage({
           })),
         }))}
         focusedItemId={focusedItemId}
+        assignedTasks={assignedTasks.map((a) => ({
+          id: a.task.id,
+          title: a.task.title,
+          workspaceId: a.task.workspaceId,
+          workspaceName: a.task.workspace.name,
+          boardId: a.task.boardId,
+          boardName: a.task.board.name,
+          statusName: a.task.statusColumn?.name ?? null,
+          statusColor: a.task.statusColumn?.colorHex ?? null,
+          stopAt: a.task.stopAt ? a.task.stopAt.toISOString() : null,
+        }))}
       />
     </main>
   );
