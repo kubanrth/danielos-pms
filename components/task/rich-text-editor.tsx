@@ -571,24 +571,29 @@ function ColorSwatchPopover({
   onPick: (color: string) => void;
   onClear: () => void;
 }) {
+  // F12-K13: poprzedni popover miał h-5 w-5 swatche w 8-kol gridzie —
+  // ledwo klikalne. Teraz większe swatche w 4×2 gridzie, wyraźny
+  // separator i pełnoszerokościowy "Usuń kolor" jako secondary CTA.
   return (
-    <div className="absolute left-0 top-full z-50 mt-1 flex flex-col gap-2 rounded-lg border border-border bg-popover p-2 shadow-[0_18px_40px_-12px_rgba(10,10,40,0.3)]">
-      <div className="grid grid-cols-8 gap-1">
+    <div className="absolute left-0 top-full z-50 mt-1 flex w-[224px] flex-col gap-2 rounded-lg border border-border bg-popover p-3 shadow-[0_18px_40px_-12px_rgba(10,10,40,0.3)]">
+      <div className="grid grid-cols-4 gap-2">
         {colors.map((c) => (
           <button
             key={c}
             type="button"
             onClick={() => onPick(c)}
-            className="h-5 w-5 rounded border border-border transition-transform hover:scale-110"
+            className="h-9 w-full rounded-md border border-border transition-transform hover:scale-[1.06] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             style={{ background: c }}
             aria-label={`Kolor ${c}`}
+            title={c}
           />
         ))}
       </div>
+      <div className="h-px bg-border" aria-hidden />
       <button
         type="button"
         onClick={onClear}
-        className="rounded-md px-2 py-1 text-left font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-center font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
       >
         Usuń kolor
       </button>

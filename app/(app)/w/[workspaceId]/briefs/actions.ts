@@ -24,51 +24,175 @@ const createSchema = z.object({
   title: z.string().trim().min(1).max(200),
 });
 
+// F12-K13: bogaty ClickUp-style design brief template. Rozbudowany na
+// żądanie klienta — z tabelami (deliverables / brand colors / timeline /
+// team) i pełnym 1:1 zakresem sekcji typowego design brief'u.
+//
+// Tiptap JSON jest verbose, więc poniższe helpery składają strukturę
+// czytelnie. Templates podmieniamy w jednym miejscu (TEMPLATE_DOC).
+
+type TT = Record<string, unknown>;
+
+function h2(emoji: string, text: string): TT {
+  return {
+    type: "heading",
+    attrs: { level: 2 },
+    content: [{ type: "text", text: `${emoji} ${text}` }],
+  };
+}
+function h3(text: string): TT {
+  return {
+    type: "heading",
+    attrs: { level: 3 },
+    content: [{ type: "text", text }],
+  };
+}
+function p(text: string): TT {
+  return text
+    ? { type: "paragraph", content: [{ type: "text", text }] }
+    : { type: "paragraph" };
+}
+function ul(items: string[]): TT {
+  return {
+    type: "bulletList",
+    content: items.map((t) => ({
+      type: "listItem",
+      content: [{ type: "paragraph", content: [{ type: "text", text: t }] }],
+    })),
+  };
+}
+function tcell(text: string, isHeader = false): TT {
+  return {
+    type: isHeader ? "tableHeader" : "tableCell",
+    attrs: { colspan: 1, rowspan: 1, colwidth: null },
+    content: [{ type: "paragraph", content: text ? [{ type: "text", text }] : [] }],
+  };
+}
+function tr(cells: string[], isHeader = false): TT {
+  return {
+    type: "tableRow",
+    content: cells.map((c) => tcell(c, isHeader)),
+  };
+}
+function table(headerCells: string[], bodyRows: string[][]): TT {
+  return {
+    type: "table",
+    content: [tr(headerCells, true), ...bodyRows.map((r) => tr(r))],
+  };
+}
+
 const TEMPLATE_DOC = {
   type: "doc",
   content: [
-    {
-      type: "heading",
-      attrs: { level: 2 },
-      content: [{ type: "text", text: "🎯 Cel projektu" }],
-    },
-    { type: "paragraph", content: [{ type: "text", text: "Co chcemy osiągnąć? Jakim biznesowym problem rozwiązuje ten projekt?" }] },
-    {
-      type: "heading",
-      attrs: { level: 2 },
-      content: [{ type: "text", text: "👥 Grupa docelowa" }],
-    },
-    { type: "paragraph", content: [{ type: "text", text: "Kto jest odbiorcą? Persony, segmenty, key user types." }] },
-    {
-      type: "heading",
-      attrs: { level: 2 },
-      content: [{ type: "text", text: "📦 Deliverables" }],
-    },
-    {
-      type: "bulletList",
-      content: [
-        { type: "listItem", content: [{ type: "paragraph", content: [{ type: "text", text: "Materiał 1" }] }] },
-        { type: "listItem", content: [{ type: "paragraph", content: [{ type: "text", text: "Materiał 2" }] }] },
+    // ── Header / cel
+    h2("🎯", "Cel projektu"),
+    p(
+      "Krótko o co chodzi w tym projekcie. Jaki problem rozwiązujemy, dlaczego TERAZ, co po jego ukończeniu się zmieni dla biznesu i odbiorcy.",
+    ),
+
+    // ── Kontekst
+    h2("📋", "Kontekst i tło"),
+    p(
+      "Sytuacja wyjściowa, dotychczasowa komunikacja, ostatnie zmiany, ograniczenia (regulacyjne, brandowe, techniczne). Linki do dokumentów / Slack threadów / poprzednich kampanii.",
+    ),
+
+    // ── Cele biznesowe
+    h2("✅", "Cele projektu"),
+    ul([
+      "Cel 1 — mierzalny rezultat (np. +15% CTR w newsletterze)",
+      "Cel 2 — jakościowy rezultat (np. spójna identyfikacja na 5 touchpointach)",
+      "Cel 3 — internal goal (np. szybsza onboarding'owa ścieżka dla designerów)",
+    ]),
+
+    // ── Grupa docelowa
+    h2("👥", "Grupa docelowa"),
+    p(
+      "Kto jest odbiorcą — segment + 2-3 persony, ich potrzeby, frustracje, język. Czego po nas oczekują, gdzie nas spotkają, na jakim urządzeniu.",
+    ),
+
+    // ── Deliverables
+    h2("📦", "Deliverables"),
+    p("Co dokładnie ma być oddane. Format pliku, wymiary, ilość wariantów."),
+    table(
+      ["Element", "Format / wymiary", "Notatki"],
+      [
+        ["Logo", "SVG, PNG @1×/2×", "Wersja podstawowa + wer. monochromatyczna"],
+        ["Web banner", "1920×600 px", "Hero strona główna"],
+        ["Social post", "1080×1080 px", "5 wariantów na launch"],
       ],
-    },
-    {
-      type: "heading",
-      attrs: { level: 2 },
-      content: [{ type: "text", text: "🎨 Brand guidelines" }],
-    },
-    { type: "paragraph", content: [{ type: "text", text: "Kolory, fonty, ton wypowiedzi, tabu." }] },
-    {
-      type: "heading",
-      attrs: { level: 2 },
-      content: [{ type: "text", text: "🔗 Referencje" }],
-    },
-    { type: "paragraph", content: [{ type: "text", text: "Linki do inspiracji, konkurencji, mood-boardów." }] },
-    {
-      type: "heading",
-      attrs: { level: 2 },
-      content: [{ type: "text", text: "📅 Timeline" }],
-    },
-    { type: "paragraph", content: [{ type: "text", text: "Kluczowe milestones, deadline finalny, kto zatwierdza." }] },
+    ),
+
+    // ── Brand
+    h2("🎨", "Brand & visual identity"),
+    h3("Kolory marki"),
+    table(
+      ["Nazwa", "Hex", "Zastosowanie"],
+      [
+        ["Primary", "#7B68EE", "CTA, akcenty, key states"],
+        ["Accent", "#10B981", "Success, positive states"],
+        ["Ink", "#1F2937", "Body text, ikony"],
+        ["Paper", "#F8FAFC", "Tła, surface'y"],
+      ],
+    ),
+    h3("Typografia"),
+    ul([
+      "Display (nagłówki) — np. Söhne / Inter Display",
+      "Body (treść) — np. Inter / system-ui",
+      "Mono (eyebrow, kod) — np. JetBrains Mono",
+    ]),
+    h3("Tone of voice"),
+    p(
+      "Bezpośredni, konkretny, bez korpomowy. Czego unikać: superlatywów, klisz typu „rewolucyjny\", emoji w copy. Co preferujemy: aktywny czas, krótkie zdania, listy.",
+    ),
+
+    // ── Timeline
+    h2("📅", "Timeline & milestones"),
+    table(
+      ["Etap", "Daty", "Deliverable"],
+      [
+        ["Discovery", "T1–T2", "Notatki research, mood-board"],
+        ["Koncepcja", "T3", "3 kierunki, mocki low-fi"],
+        ["Iteracja", "T4–T5", "Wybrany kierunek + revisions"],
+        ["Launch", "T6", "Pliki finalne, handoff"],
+      ],
+    ),
+
+    // ── Zespół
+    h2("👤", "Zespół i role"),
+    table(
+      ["Osoba", "Rola", "Kontakt"],
+      [
+        ["", "Creative Director / Approver", ""],
+        ["", "Designer (lead)", ""],
+        ["", "Stakeholder biznesowy", ""],
+      ],
+    ),
+
+    // ── Referencje
+    h2("🔗", "Referencje i inspiracje"),
+    p(
+      "Linki do mood-boardów, konkurencji, dribbble/behance, screenshoty. Co podoba się i dlaczego — co odrzucamy i dlaczego.",
+    ),
+    ul([
+      "Inspiracja 1 — link + dlaczego pasuje",
+      "Inspiracja 2 — link + co bierzemy stąd",
+      "Czego unikać — link + dlaczego nie",
+    ]),
+
+    // ── Success metrics
+    h2("📊", "Success metrics"),
+    ul([
+      "Metryka biznesowa (np. konwersja, CTR, NPS)",
+      "Metryka jakościowa (np. spójność, feedback od stakeholderów)",
+      "Termin oceny (np. 4 tygodnie po launchu)",
+    ]),
+
+    // ── Otwarte pytania
+    h2("❓", "Otwarte pytania"),
+    p(
+      "Co jest jeszcze niejasne, kto musi odpowiedzieć, do kiedy. Lista TODO żeby brief był 'gotów do startu'.",
+    ),
+    p(""),
   ],
 };
 
