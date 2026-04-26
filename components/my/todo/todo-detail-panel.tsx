@@ -323,9 +323,8 @@ function StepsSection({
               setAdding(false);
             });
           }}
-          className="flex items-center gap-2"
+          className="flex items-center gap-2 rounded-md border border-border px-2 py-0.5 transition-colors focus-within:border-primary/60"
         >
-          <Plus size={12} className="text-muted-foreground" />
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -340,6 +339,15 @@ function StepsSection({
             }}
             className="flex-1 bg-transparent py-1 text-[0.85rem] outline-none placeholder:text-muted-foreground/60"
           />
+          <button
+            type="submit"
+            disabled={!title.trim()}
+            aria-label="Dodaj krok"
+            title="Dodaj krok (Enter)"
+            className="grid h-6 w-6 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Plus size={12} />
+          </button>
         </form>
       )}
 

@@ -475,11 +475,10 @@ function NewFolderForm({
           setName("");
         })
       }
-      className="flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2"
+      className="flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 transition-colors focus-within:border-primary/60"
     >
       <input type="hidden" name="workspaceId" value={workspaceId} />
       <input type="hidden" name="boardId" value={boardId} />
-      <Plus size={12} className="text-muted-foreground shrink-0" />
       <input
         name="name"
         value={name}
@@ -489,6 +488,15 @@ function NewFolderForm({
         placeholder="dodaj folder linków…"
         className="flex-1 bg-transparent font-mono text-[0.7rem] uppercase tracking-[0.14em] outline-none placeholder:text-muted-foreground/60"
       />
+      <button
+        type="submit"
+        disabled={!name.trim()}
+        aria-label="Dodaj folder linków"
+        title="Dodaj folder linków (Enter)"
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <Plus size={12} />
+      </button>
     </form>
   );
 }
