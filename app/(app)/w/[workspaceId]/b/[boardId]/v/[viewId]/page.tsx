@@ -90,7 +90,11 @@ export default async function CustomBoardViewPage({
         />
       )}
       {view.type === "KANBAN" && (
-        <KanbanRenderer workspaceId={workspaceId} boardId={boardId} />
+        <KanbanRenderer
+          workspaceId={workspaceId}
+          boardId={boardId}
+          canManageBoard={canManageBoard}
+        />
       )}
       {view.type === "ROADMAP" && (
         <RoadmapRenderer
@@ -237,9 +241,11 @@ async function TableRenderer({
 async function KanbanRenderer({
   workspaceId,
   boardId,
+  canManageBoard,
 }: {
   workspaceId: string;
   boardId: string;
+  canManageBoard: boolean;
 }) {
   const [board, memberships] = await Promise.all([
     db.board.findFirst({
@@ -269,6 +275,7 @@ async function KanbanRenderer({
     <KanbanBoard
       workspaceId={workspaceId}
       boardId={boardId}
+      canManageBoard={canManageBoard}
       statusColumns={board.statusColumns.map((c) => ({
         id: c.id,
         name: c.name,

@@ -95,6 +95,7 @@ export default async function BoardKanbanPage({
       <KanbanBoard
         workspaceId={workspaceId}
         boardId={board.id}
+        canManageBoard={canManageBoard}
         statusColumns={board.statusColumns.map((c) => ({
           id: c.id,
           name: c.name,

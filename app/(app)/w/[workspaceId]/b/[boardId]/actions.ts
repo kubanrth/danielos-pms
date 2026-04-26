@@ -84,6 +84,7 @@ export async function createStatusColumnAction(formData: FormData) {
     diff: { name: col.name },
   });
   revalidatePath(`/w/${workspaceId}/b/${parsed.data.boardId}/table`);
+  revalidatePath(`/w/${workspaceId}/b/${parsed.data.boardId}/kanban`);
 }
 
 export async function updateStatusColumnAction(formData: FormData) {
@@ -109,6 +110,7 @@ export async function updateStatusColumnAction(formData: FormData) {
     diff: { name: col.name },
   });
   revalidatePath(`/w/${workspaceId}/b/${col.boardId}/table`);
+  revalidatePath(`/w/${workspaceId}/b/${col.boardId}/kanban`);
 }
 
 export async function deleteStatusColumnAction(formData: FormData) {
@@ -140,6 +142,7 @@ export async function deleteStatusColumnAction(formData: FormData) {
     diff: { name: col.name },
   });
   revalidatePath(`/w/${workspaceId}/b/${col.boardId}/table`);
+  revalidatePath(`/w/${workspaceId}/b/${col.boardId}/kanban`);
 }
 
 // BoardView background — "ikona pędzla" per-view customization (color /

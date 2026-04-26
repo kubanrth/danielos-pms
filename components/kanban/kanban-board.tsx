@@ -1,9 +1,12 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useState, useTransition } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { createTaskAction } from "@/app/(app)/w/[workspaceId]/t/actions";
+import { createStatusColumnAction } from "@/app/(app)/w/[workspaceId]/b/[boardId]/actions";
+import { PRESET_COLORS } from "@/components/table/status-column-manager";
 import {
   DndContext,
   DragOverlay,
@@ -61,6 +64,7 @@ export function KanbanBoard({
   statusColumns,
   initialTasks,
   members,
+  canManageBoard,
 }: {
   workspaceId: string;
   boardId: string;
@@ -68,6 +72,8 @@ export function KanbanBoard({
   initialTasks: KanbanTask[];
   // F9-13 extension: needed for `M` hotkey popup.
   members: AssignMember[];
+  // F12-K1: gate inline „+ Kolumna" — tylko ADMIN/OWNER (board.update perm).
+  canManageBoard: boolean;
 }) {
   const assign = useAssignHotkey({ members, workspaceId });
   const [tasks, setTasks] = useState<KanbanTask[]>(initialTasks);
@@ -250,6 +256,9 @@ export function KanbanBoard({
             />
           );
         })}
+        {canManageBoard && (
+          <AddKanbanColumnButton workspaceId={workspaceId} boardId={boardId} />
+        )}
       </div>
       <DragOverlay>
         {activeTask ? (
@@ -533,6 +542,190 @@ function CardShell({
         )}
       </div>
     </article>
+  );
+}
+
+// F12-K1: inline „+ Kolumna" w Kanban — wzór 1:1 z AddColumnButton w
+// board-table.tsx. Ghost column (300px szer., dashed border) jako trigger,
+// po kliku popover via createPortal z nazwą + 8-color palette + Anuluj/Dodaj.
+// Tworzy StatusColumn (nie TableColumn) bo Kanban grupuje po statusie.
+function AddKanbanColumnButton({
+  workspaceId,
+  boardId,
+}: {
+  workspaceId: string;
+  boardId: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState<{
+    top: number;
+    left: number;
+    maxHeight: number;
+  } | null>(null);
+  const [name, setName] = useState("");
+  const [color, setColor] = useState<string>(PRESET_COLORS[0]);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+
+  const closeReset = () => {
+    setName("");
+    setColor(PRESET_COLORS[0]);
+    setOpen(false);
+    setCoords(null);
+  };
+
+  // Pozycjonowanie popover — auto-flip nad/pod trigger jeśli mało miejsca,
+  // clamp left do viewport. 1:1 z AddColumnButton w board-table.tsx.
+  const computeCoords = () => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const POP_WIDTH = 320;
+    const GAP = 6;
+    const PAGE_PAD = 16;
+    const spaceBelow = window.innerHeight - rect.bottom - GAP - PAGE_PAD;
+    const spaceAbove = rect.top - GAP - PAGE_PAD;
+    const wantBelow = spaceBelow >= 280 || spaceBelow >= spaceAbove;
+    const maxHeight = Math.max(220, wantBelow ? spaceBelow : spaceAbove);
+    const top = wantBelow ? rect.bottom + GAP : Math.max(PAGE_PAD, rect.top - GAP - maxHeight);
+    const left = Math.max(8, Math.min(window.innerWidth - POP_WIDTH - 8, rect.left));
+    return { top, left, maxHeight };
+  };
+
+  const openWithCoords = () => {
+    const c = computeCoords();
+    if (!c) return;
+    setCoords(c);
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (
+        !popRef.current?.contains(e.target as globalThis.Node) &&
+        !triggerRef.current?.contains(e.target as globalThis.Node)
+      ) {
+        closeReset();
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeReset();
+    };
+    const onReflow = () => {
+      const c = computeCoords();
+      if (c) setCoords(c);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", onReflow);
+    window.addEventListener("scroll", onReflow, true);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", onReflow);
+      window.removeEventListener("scroll", onReflow, true);
+    };
+  }, [open]);
+
+  const submit = () => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const fd = new FormData();
+    fd.set("workspaceId", workspaceId);
+    fd.set("boardId", boardId);
+    fd.set("name", trimmed);
+    fd.set("colorHex", color);
+    startTransition(async () => {
+      await createStatusColumnAction(fd);
+      closeReset();
+    });
+  };
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => (open ? closeReset() : openWithCoords())}
+        aria-label="Dodaj kolumnę"
+        className="grid w-[300px] shrink-0 place-items-center rounded-xl border border-dashed border-border bg-muted/20 p-3 font-mono text-[0.7rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/40 hover:text-foreground"
+      >
+        <span className="inline-flex items-center gap-1.5">
+          <Plus size={13} /> Dodaj kolumnę
+        </span>
+      </button>
+      {open && coords && typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={popRef}
+            style={{
+              position: "fixed",
+              top: coords.top,
+              left: coords.left,
+              width: 320,
+              maxHeight: coords.maxHeight,
+            }}
+            className="z-[60] flex flex-col overflow-hidden rounded-xl border border-border bg-popover shadow-[0_18px_40px_-12px_rgba(10,10,40,0.3)]"
+          >
+            <div className="shrink-0 border-b border-border px-3 py-2">
+              <p className="eyebrow">Nowa kolumna</p>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
+              <input
+                autoFocus
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && name.trim()) {
+                    e.preventDefault();
+                    submit();
+                  }
+                }}
+                maxLength={40}
+                placeholder="Nazwa kolumny…"
+                className="mb-3 w-full rounded-md border border-border bg-background px-2 py-1.5 text-[0.86rem] outline-none focus:border-primary/60"
+              />
+              <p className="mb-1.5 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted-foreground/80">
+                Kolor
+              </p>
+              <div className="grid grid-cols-8 gap-1.5">
+                {PRESET_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setColor(c)}
+                    aria-label={`Kolor ${c}`}
+                    className="h-7 w-7 rounded-full ring-1 ring-foreground/10 transition-transform hover:scale-110"
+                    style={{
+                      background: c,
+                      outline: color === c ? "2px solid var(--foreground)" : "none",
+                      outlineOffset: color === c ? 2 : 0,
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="shrink-0 flex items-center justify-end gap-2 border-t border-border bg-popover px-3 py-2">
+              <button
+                type="button"
+                onClick={closeReset}
+                className="font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Anuluj
+              </button>
+              <button
+                type="button"
+                onClick={submit}
+                disabled={!name.trim()}
+                className="inline-flex h-7 items-center rounded-md bg-primary px-3 font-mono text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                Dodaj kolumnę
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 

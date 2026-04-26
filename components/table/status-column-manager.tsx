@@ -14,7 +14,9 @@ interface Column {
   colorHex: string;
 }
 
-const PRESET_COLORS = [
+// F12-K1: exported jako single source of truth dla wszystkich
+// status-color picker'ów (tabela, kanban, status-picker w komórkach).
+export const PRESET_COLORS = [
   "#64748B",
   "#F59E0B",
   "#3B82F6",
