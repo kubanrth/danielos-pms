@@ -385,9 +385,11 @@ export async function patchTaskAction(formData: FormData) {
   });
 
   revalidatePath(`/w/${updated.workspaceId}`);
-  revalidatePath(`/w/${updated.workspaceId}/b/${updated.boardId}/table`);
-  revalidatePath(`/w/${updated.workspaceId}/b/${updated.boardId}/kanban`);
   revalidatePath(`/w/${updated.workspaceId}/t/${updated.id}`);
+  // F12-K4: layout-level revalidation covers /table + /kanban + /v/[viewId]
+  // + /roadmap + /gantt with one call. Without it, edits made in the task
+  // modal stay invisible on custom views until a hard reload.
+  revalidatePath(`/w/[workspaceId]/b/[boardId]`, "layout");
   await broadcastWorkspaceChange(updated.workspaceId, {
     type: "task.changed",
     taskId: updated.id,
@@ -439,8 +441,11 @@ export async function toggleAssigneeAction(formData: FormData) {
   });
 
   revalidatePath(`/w/${task.workspaceId}/t/${task.id}`);
-  revalidatePath(`/w/${task.workspaceId}/b/${task.boardId}/table`);
-  revalidatePath(`/w/${task.workspaceId}/b/${task.boardId}/kanban`);
+  // F12-K4: layout-level revalidation covers default /table + /kanban
+  // AND custom views /v/[viewId], /roadmap, /gantt — without it, custom
+  // views show stale assignees until manual reload. Pattern form is
+  // required by Next.js when path contains dynamic segments + 'layout'.
+  revalidatePath(`/w/[workspaceId]/b/[boardId]`, "layout");
   await broadcastWorkspaceChange(task.workspaceId, {
     type: "task.changed",
     taskId: task.id,
@@ -484,8 +489,9 @@ export async function toggleTagAction(formData: FormData) {
   });
 
   revalidatePath(`/w/${task.workspaceId}/t/${task.id}`);
-  revalidatePath(`/w/${task.workspaceId}/b/${task.boardId}/table`);
-  revalidatePath(`/w/${task.workspaceId}/b/${task.boardId}/kanban`);
+  // F12-K4: same layout revalidation as toggleAssigneeAction so tags
+  // toggled in the task modal propagate to all board views.
+  revalidatePath(`/w/[workspaceId]/b/[boardId]`, "layout");
   await broadcastWorkspaceChange(task.workspaceId, {
     type: "task.changed",
     taskId: task.id,

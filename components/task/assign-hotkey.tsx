@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useRouter } from "next/navigation";
 import { Search, UserPlus } from "lucide-react";
 import { toggleAssigneeAction } from "@/app/(app)/w/[workspaceId]/t/actions";
 
@@ -110,6 +111,7 @@ function AssignMenu({
   onClose: () => void;
   workspaceId: string;
 }) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -185,6 +187,10 @@ function AssignMenu({
                 action={(fd) =>
                   startTransition(async () => {
                     await toggleAssigneeAction(fd);
+                    // F12-K4: Realtime broadcast can fail silently — force
+                    // a router refresh so the hovered list view picks up
+                    // the new assignee even when the channel doesn't fire.
+                    router.refresh();
                     onClose();
                   })
                 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, startTransition, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Trash2, Plus, Check, X } from "lucide-react";
 import type { Role } from "@/lib/generated/prisma/enums";
 import {
@@ -106,6 +107,7 @@ export function TaskDetail({
   canVote,
   currentUserId,
 }: TaskDetailProps) {
+  const router = useRouter();
   const [state, formAction, pending] = useActionState<UpdateTaskState, FormData>(
     updateTaskAction,
     null,
@@ -113,6 +115,16 @@ export function TaskDetail({
 
   const fieldErrors = !state?.ok ? state?.fieldErrors : undefined;
   const flash = state?.ok ? state.message : null;
+
+  // F12-K4: Server actions revalidate paths but Supabase Realtime
+  // broadcast can fail silently (channel auth, network) — wrap the
+  // assignee toggle so the parent route always gets a router.refresh
+  // when the action returns. Cheap belt-and-suspenders.
+  // (Tag toggle wrapper lives inside TagsSection so it has its own.)
+  const toggleAssigneeWithRefresh = async (fd: FormData) => {
+    await toggleAssigneeAction(fd);
+    router.refresh();
+  };
 
   return (
     <div className="flex flex-col gap-10">
@@ -312,7 +324,7 @@ export function TaskDetail({
           {allMembers.map((m) => {
             const active = assigneeIds.has(m.id);
             return (
-              <form key={m.id} action={toggleAssigneeAction} className="m-0">
+              <form key={m.id} action={toggleAssigneeWithRefresh} className="m-0">
                 <input type="hidden" name="taskId" value={task.id} />
                 <input type="hidden" name="userId" value={m.id} />
                 <button
@@ -399,8 +411,16 @@ function TagsSection({
   tagIds: Set<string>;
   canEdit: boolean;
 }) {
+  const router = useRouter();
   const [creating, setCreating] = useState(false);
   const [color, setColor] = useState(TAG_COLORS[0]);
+
+  // F12-K4: see comment in TaskDetail — same belt-and-suspenders pattern
+  // for tag toggles so the table re-fetches even if Realtime is silent.
+  const toggleTagWithRefresh = async (fd: FormData) => {
+    await toggleTagAction(fd);
+    router.refresh();
+  };
 
   return (
     <section className="flex flex-col gap-3">
@@ -410,7 +430,7 @@ function TagsSection({
           {allTags.map((t) => {
             const active = tagIds.has(t.id);
             return (
-              <form key={t.id} action={toggleTagAction} className="m-0">
+              <form key={t.id} action={toggleTagWithRefresh} className="m-0">
                 <input type="hidden" name="taskId" value={taskId} />
                 <input type="hidden" name="tagId" value={t.id} />
                 <button
