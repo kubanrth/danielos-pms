@@ -30,6 +30,11 @@ import { patchTaskAction } from "@/app/(app)/w/[workspaceId]/t/actions";
 import { useWorkspaceRealtime } from "@/hooks/use-workspace-realtime";
 import { taskPl } from "@/lib/pluralize";
 import { ColumnSettings, type ColumnDef } from "@/components/table/column-settings";
+import {
+  AssigneePickerCell,
+  TagPickerCell,
+  type PickerTag,
+} from "@/components/table/cell-pickers";
 import { FieldCell } from "@/components/table/field-cells";
 import { TableHeaderCell } from "@/components/table/header-cell";
 import { FieldOptionsEditor, FieldTypePicker } from "@/components/table/field-config";
@@ -133,6 +138,7 @@ export function BoardTable({
   initialPinned,
   customColumns,
   members,
+  allTags,
 }: {
   workspaceId: string;
   boardId: string;
@@ -155,6 +161,9 @@ export function BoardTable({
   customColumns: CustomTableColumn[];
   // F9-13: needed for the `M` assign hotkey.
   members: AssignMember[];
+  // F12-K5: workspace-wide tag list for the in-cell tag picker. Empty
+  // array is fine — the picker shows an instructional empty state.
+  allTags: PickerTag[];
 }) {
   const assign = useAssignHotkey({ members, workspaceId });
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -418,64 +427,31 @@ export function BoardTable({
       }),
       col.accessor("assignees", {
         header: "Osoby",
-        size: 130,
-        minSize: 60,
+        size: 160,
+        minSize: 80,
         enableSorting: false,
-        cell: (info) => {
-          const assignees = info.getValue();
-          if (assignees.length === 0) {
-            return <span className="font-mono text-[0.7rem] text-muted-foreground/60">—</span>;
-          }
-          return (
-            <div className="flex -space-x-1.5">
-              {assignees.slice(0, 4).map((a) => (
-                <span
-                  key={a.id}
-                  title={a.name ?? a.email}
-                  className="grid h-6 w-6 place-items-center overflow-hidden rounded-full border-2 border-background bg-brand-gradient font-display text-[0.6rem] font-bold text-white"
-                >
-                  {a.avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={a.avatarUrl} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    (a.name ?? a.email).slice(0, 2).toUpperCase()
-                  )}
-                </span>
-              ))}
-              {assignees.length > 4 && (
-                <span className="grid h-6 w-6 place-items-center rounded-full border-2 border-background bg-muted font-mono text-[0.58rem] text-muted-foreground">
-                  +{assignees.length - 4}
-                </span>
-              )}
-            </div>
-          );
-        },
+        cell: (info) => (
+          <AssigneePickerCell
+            taskId={info.row.original.id}
+            current={info.getValue()}
+            members={members}
+            canEdit={canEdit}
+          />
+        ),
       }),
       col.accessor("tags", {
         header: "Tagi",
-        size: 200,
-        minSize: 80,
+        size: 220,
+        minSize: 100,
         enableSorting: false,
-        cell: (info) => {
-          const tags = info.getValue();
-          if (tags.length === 0) {
-            return <span className="font-mono text-[0.7rem] text-muted-foreground/60">—</span>;
-          }
-          return (
-            <div className="flex flex-wrap gap-1">
-              {tags.map((t) => (
-                <span
-                  key={t.id}
-                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.7rem] font-medium"
-                  style={{ background: `${t.colorHex}1A`, color: t.colorHex }}
-                >
-                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: t.colorHex }} />
-                  {t.name}
-                </span>
-              ))}
-            </div>
-          );
-        },
+        cell: (info) => (
+          <TagPickerCell
+            taskId={info.row.original.id}
+            current={info.getValue()}
+            allTags={allTags}
+            canEdit={canEdit}
+          />
+        ),
       }),
       col.accessor("startAt", {
         header: "Start",
@@ -526,7 +502,7 @@ export function BoardTable({
         }),
       ),
     ],
-    [statusColumns, canEdit, workspaceId, boardId, canManagePrefs, customColumns],
+    [statusColumns, canEdit, workspaceId, boardId, canManagePrefs, customColumns, members, allTags],
   );
 
   const table = useReactTable({

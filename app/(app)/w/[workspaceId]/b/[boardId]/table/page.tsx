@@ -26,6 +26,14 @@ export default async function BoardTablePage({
     orderBy: { joinedAt: "asc" },
   });
 
+  // F12-K5: fetch the full tag list for the in-cell tag picker.
+  // Mirrors the same `OR: workspace + global` query used by task-fetch.ts.
+  const allTags = await db.tag.findMany({
+    where: { OR: [{ workspaceId }, { workspaceId: null }] },
+    orderBy: [{ workspaceId: { sort: "desc", nulls: "last" } }, { name: "asc" }],
+    select: { id: true, name: true, colorHex: true },
+  });
+
   const board = await db.board.findFirst({
     where: { id: boardId, workspaceId, deletedAt: null },
     include: {
@@ -164,6 +172,7 @@ export default async function BoardTablePage({
           options: c.options,
         }))}
         members={memberships.map((m) => m.user)}
+        allTags={allTags}
       />
 
     </BoardShell>

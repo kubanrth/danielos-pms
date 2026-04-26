@@ -143,6 +143,14 @@ async function TableRenderer({
     orderBy: { joinedAt: "asc" },
   });
 
+  // F12-K5: same workspace-wide tag list as the default /table route so
+  // the in-cell tag picker has options to choose from in custom views.
+  const allTags = await db.tag.findMany({
+    where: { OR: [{ workspaceId }, { workspaceId: null }] },
+    orderBy: [{ workspaceId: { sort: "desc", nulls: "last" } }, { name: "asc" }],
+    select: { id: true, name: true, colorHex: true },
+  });
+
   const board = await db.board.findFirst({
     where: { id: boardId },
     include: {
@@ -239,6 +247,7 @@ async function TableRenderer({
         options: c.options,
       }))}
       members={memberships.map((m) => m.user)}
+      allTags={allTags}
     />
   );
 }
