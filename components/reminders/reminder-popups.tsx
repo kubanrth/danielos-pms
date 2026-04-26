@@ -13,9 +13,11 @@ export interface DuePopup {
   isSelfAuthored: boolean;
 }
 
-// F9-16: stacked floating popups in the top-right corner for every
-// reminder that's due + not yet dismissed by the recipient. Rendered
-// once globally from the (app) layout.
+// F9-16 + F11-12 (#2): stacked floating popups in the top-right corner
+// for every reminder that's due + not yet dismissed by the recipient.
+// Rendered once globally from the (app) layout. Poll'uje /api/reminders/due
+// co 60s żeby user widział popup nawet bez refresh'a (np. ustawił reminder
+// na za 5 minut i siedzi na innej karcie).
 export function ReminderPopups({ initial }: { initial: DuePopup[] }) {
   // Client-side mirror so "dismiss" hides the card immediately — we
   // don't need to await the server round-trip to remove it visually.
@@ -24,6 +26,33 @@ export function ReminderPopups({ initial }: { initial: DuePopup[] }) {
   useEffect(() => {
     setList(initial);
   }, [initial]);
+
+  // Periodic poll for newly-due reminders. Merge by id so dismissed
+  // popups stay hidden until next page load (we filter dismissedAt on
+  // server, so they're already excluded).
+  useEffect(() => {
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const res = await fetch("/api/reminders/due", { cache: "no-store" });
+        if (!res.ok) return;
+        const data: { items: DuePopup[] } = await res.json();
+        if (cancelled) return;
+        // Replace state with fresh list — server is source of truth.
+        // Local optimistic dismisses are temporary; if the server still
+        // returns them, they reappear (means dismiss action didn't reach
+        // the DB). Safer than diverging.
+        setList(data.items);
+      } catch {
+        /* swallow — net hiccup */
+      }
+    };
+    const id = setInterval(tick, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
 
   if (list.length === 0) return null;
 

@@ -1,11 +1,12 @@
 "use client";
 
 import { startTransition, useState } from "react";
-import { Bell, BellOff, Clock, Plus, Trash2, User as UserIcon } from "lucide-react";
+import { Bell, BellOff, Clock, Pencil, Plus, Trash2, User as UserIcon } from "lucide-react";
 import {
   createReminderAction,
   deleteReminderAction,
   dismissReminderAction,
+  updateReminderAction,
 } from "@/app/(app)/my/reminders/actions";
 
 export interface ReminderMember {
@@ -54,8 +55,18 @@ export function RemindersWorkspace({
 
       <NewReminderForm currentUserId={currentUserId} members={members} />
 
-      <Section title="Wysłane przeze mnie" items={sent} currentUserId={currentUserId} />
-      <Section title="Dla mnie" items={received} currentUserId={currentUserId} />
+      <Section
+        title="Wysłane przeze mnie"
+        items={sent}
+        currentUserId={currentUserId}
+        members={members}
+      />
+      <Section
+        title="Dla mnie"
+        items={received}
+        currentUserId={currentUserId}
+        members={members}
+      />
     </div>
   );
 }
@@ -144,20 +155,12 @@ function NewReminderForm({
         </div>
         <div className="flex flex-col gap-1.5">
           <span className="eyebrow">Komu</span>
-          <select
+          <RecipientPicker
             value={recipientId}
-            onChange={(e) => setRecipientId(e.target.value)}
-            className="h-9 rounded-md border border-border bg-background px-3 font-mono text-[0.72rem] uppercase tracking-[0.12em] outline-none focus:border-primary"
-          >
-            <option value={currentUserId}>Ja (sobie)</option>
-            {members
-              .filter((m) => m.id !== currentUserId)
-              .map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name ?? m.email}
-                </option>
-              ))}
-          </select>
+            onChange={setRecipientId}
+            members={members}
+            currentUserId={currentUserId}
+          />
         </div>
       </div>
 
@@ -184,10 +187,12 @@ function Section({
   title,
   items,
   currentUserId,
+  members,
 }: {
   title: string;
   items: ReminderRow[];
   currentUserId: string;
+  members: ReminderMember[];
 }) {
   if (items.length === 0) return null;
   return (
@@ -200,7 +205,12 @@ function Section({
       </div>
       <ul className="flex flex-col rounded-xl border border-border bg-card overflow-hidden">
         {items.map((r) => (
-          <ReminderRowCard key={r.id} reminder={r} currentUserId={currentUserId} />
+          <ReminderRowCard
+            key={r.id}
+            reminder={r}
+            currentUserId={currentUserId}
+            members={members}
+          />
         ))}
       </ul>
     </section>
@@ -210,15 +220,31 @@ function Section({
 function ReminderRowCard({
   reminder,
   currentUserId,
+  members,
 }: {
   reminder: ReminderRow;
   currentUserId: string;
+  members: ReminderMember[];
 }) {
   const due = new Date(reminder.dueAt);
   const overdue = due.getTime() < Date.now();
   const dismissed = !!reminder.dismissedAt;
   const isOwnCreator = reminder.creatorId === currentUserId;
   const isOwnRecipient = reminder.recipientId === currentUserId;
+  // F11-13 (#3): in-place edit. Only creator can toggle.
+  const [editing, setEditing] = useState(false);
+  if (editing && isOwnCreator) {
+    return (
+      <li className="border-b border-border last:border-b-0">
+        <EditReminderForm
+          reminder={reminder}
+          currentUserId={currentUserId}
+          members={members}
+          onClose={() => setEditing(false)}
+        />
+      </li>
+    );
+  }
 
   return (
     <li className="group flex items-center gap-3 border-b border-border px-4 py-3 last:border-b-0">
@@ -280,6 +306,19 @@ function ReminderRowCard({
         </form>
       )}
 
+      {/* Creator-only edit (F11-13) */}
+      {isOwnCreator && (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          aria-label="Edytuj przypomnienie"
+          title="Edytuj przypomnienie"
+          className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <Pencil size={14} />
+        </button>
+      )}
+
       {/* Creator-only delete */}
       {isOwnCreator && (
         <form
@@ -304,4 +343,208 @@ function ReminderRowCard({
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleString("pl-PL", { dateStyle: "medium", timeStyle: "short" });
+}
+
+// F11-13 (#3): inline edit. Same shape as the create form but pre-filled.
+function EditReminderForm({
+  reminder,
+  currentUserId,
+  members,
+  onClose,
+}: {
+  reminder: ReminderRow;
+  currentUserId: string;
+  members: ReminderMember[];
+  onClose: () => void;
+}) {
+  const [title, setTitle] = useState(reminder.title);
+  const [body, setBody] = useState(reminder.body ?? "");
+  const [dueAt, setDueAt] = useState(() => {
+    const d = new Date(reminder.dueAt);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  });
+  const [recipientId, setRecipientId] = useState(reminder.recipientId ?? currentUserId);
+
+  return (
+    <form
+      action={(fd) =>
+        startTransition(async () => {
+          await updateReminderAction(fd);
+          onClose();
+        })
+      }
+      className="flex flex-col gap-3 bg-primary/5 p-4"
+    >
+      <input type="hidden" name="id" value={reminder.id} />
+      <input type="hidden" name="recipientId" value={recipientId} />
+      <div className="flex flex-col gap-1">
+        <span className="eyebrow">Tytuł</span>
+        <input
+          name="title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          required
+          maxLength={200}
+          className="h-9 rounded-md border border-border bg-background px-2 text-[0.9rem] outline-none focus:border-primary"
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <span className="eyebrow">Opis</span>
+        <textarea
+          name="body"
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          rows={2}
+          maxLength={2000}
+          className="resize-none rounded-md border border-border bg-background p-2 text-[0.86rem] outline-none focus:border-primary"
+        />
+      </div>
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-1">
+          <span className="eyebrow">Kiedy</span>
+          <input
+            name="dueAt"
+            type="datetime-local"
+            value={dueAt}
+            onChange={(e) => setDueAt(e.target.value)}
+            required
+            className="h-9 rounded-md border border-border bg-background px-2 font-mono text-[0.78rem] outline-none focus:border-primary"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <span className="eyebrow">Komu</span>
+          <RecipientPicker
+            value={recipientId}
+            onChange={setRecipientId}
+            members={members}
+            currentUserId={currentUserId}
+          />
+        </div>
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={onClose}
+          className="font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Anuluj
+        </button>
+        <button
+          type="submit"
+          className="inline-flex h-8 items-center rounded-md bg-primary px-3 font-mono text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-primary-foreground transition-opacity hover:opacity-90"
+        >
+          Zapisz
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// F11-14 (#4): rich recipient picker with member avatars + searchable
+// list. Replaces the plain <select> the klient called "nieczytelny".
+function RecipientPicker({
+  value,
+  onChange,
+  members,
+  currentUserId,
+}: {
+  value: string;
+  onChange: (id: string) => void;
+  members: ReminderMember[];
+  currentUserId: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const all = [
+    { id: currentUserId, name: "Ja (sobie)", email: "" },
+    ...members.filter((m) => m.id !== currentUserId).map((m) => ({
+      id: m.id,
+      name: m.name ?? m.email,
+      email: m.email,
+    })),
+  ];
+  const selected = all.find((m) => m.id === value) ?? all[0];
+  const filtered = query.trim()
+    ? all.filter(
+        (m) =>
+          m.name.toLowerCase().includes(query.toLowerCase()) ||
+          m.email.toLowerCase().includes(query.toLowerCase()),
+      )
+    : all;
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex h-9 min-w-[180px] items-center gap-2 rounded-md border border-border bg-background px-2 text-left text-[0.84rem] outline-none transition-colors hover:border-primary/60 focus-visible:border-primary"
+      >
+        <span
+          className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-gradient font-display text-[0.56rem] font-bold text-white"
+          aria-hidden
+        >
+          {selected.name.slice(0, 2).toUpperCase()}
+        </span>
+        <span className="flex-1 truncate">{selected.name}</span>
+        <span className="font-mono text-[0.6rem] uppercase text-muted-foreground">▾</span>
+      </button>
+      {open && (
+        <>
+          <button
+            type="button"
+            aria-label="Zamknij"
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-40 cursor-default"
+          />
+          <div className="absolute left-0 top-[calc(100%+4px)] z-50 w-[260px] rounded-lg border border-border bg-popover p-2 shadow-[0_18px_40px_-12px_rgba(10,10,40,0.3)]">
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Szukaj członka…"
+              className="mb-1 h-8 w-full rounded-md border border-border bg-background px-2 text-[0.82rem] outline-none focus:border-primary/60"
+            />
+            <ul className="max-h-60 overflow-y-auto">
+              {filtered.length === 0 && (
+                <li className="px-2 py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.12em] text-muted-foreground/70">
+                  brak dopasowań
+                </li>
+              )}
+              {filtered.map((m) => (
+                <li key={m.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange(m.id);
+                      setOpen(false);
+                      setQuery("");
+                    }}
+                    className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[0.82rem] transition-colors hover:bg-accent ${
+                      m.id === value ? "bg-accent" : ""
+                    }`}
+                  >
+                    <span
+                      className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-gradient font-display text-[0.6rem] font-bold text-white"
+                      aria-hidden
+                    >
+                      {m.name.slice(0, 2).toUpperCase()}
+                    </span>
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate">{m.name}</span>
+                      {m.email && (
+                        <span className="truncate font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted-foreground">
+                          {m.email}
+                        </span>
+                      )}
+                    </div>
+                    {m.id === value && <span className="text-primary">✓</span>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      )}
+    </div>
+  );
 }

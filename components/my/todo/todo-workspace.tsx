@@ -198,9 +198,14 @@ export function TodoWorkspace({
         </div>
       </section>
 
-      {/* Right slide-in detail panel — only rendered when a task is
-           selected, so the main list gets full width otherwise. */}
-      {selectedItem && (
+      {/* F11-11 (#1): klient zażądał MS-To-Do parity — po kliknięciu w
+          listę pokaż po prawej stronie pole dodawania zadania. Right
+          panel jest teraz ZAWSZE widoczny gdy lista jest aktywna:
+          - selectedItem present → klasyczny TodoDetailPanel
+          - else, activeListId set → quick-add prompt z dedykowanym CTA
+          - smart view → panel ukryty (smart view nie ma kanonicznego
+            targetu) */}
+      {selectedItem ? (
         <div className="w-[380px] shrink-0 border-l border-border bg-card/50 overflow-y-auto">
           <TodoDetailPanel
             key={selectedItem.id}
@@ -208,7 +213,20 @@ export function TodoWorkspace({
             onClose={() => setSelectedItemId(null)}
           />
         </div>
-      )}
+      ) : activeListId ? (
+        <div className="w-[380px] shrink-0 border-l border-border bg-card/50 overflow-y-auto p-4">
+          <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-[0_4px_16px_-8px_rgba(10,10,40,0.1)]">
+            <span className="eyebrow text-primary">Dodaj zadanie</span>
+            <p className="font-display text-[1rem] font-semibold leading-tight tracking-[-0.01em]">
+              Co masz do zrobienia w {activeListName ? `„${activeListName}"` : "tej liście"}?
+            </p>
+            <QuickAddItem listId={activeListId} variant="panel" />
+            <p className="font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted-foreground/80">
+              klik w istniejące zadanie → szczegóły / kroki / przypomnienie
+            </p>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -559,8 +577,21 @@ function ItemRow({
   );
 }
 
-function QuickAddItem({ listId }: { listId: string }) {
+function QuickAddItem({
+  listId,
+  variant = "main",
+}: {
+  listId: string;
+  // F11-11: same form rendered in two places (main top header + right
+  // panel). Right-panel variant has slimmer chrome since it's nested in
+  // a card.
+  variant?: "main" | "panel";
+}) {
   const [content, setContent] = useState("");
+  const cls =
+    variant === "panel"
+      ? "flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 transition-colors focus-within:border-primary/60"
+      : "flex items-center gap-3 rounded-xl border border-border bg-card px-5 py-3 shadow-[0_1px_2px_rgba(10,10,40,0.04)]";
   return (
     <form
       action={(fd) =>
@@ -569,10 +600,10 @@ function QuickAddItem({ listId }: { listId: string }) {
           setContent("");
         })
       }
-      className="flex items-center gap-3 rounded-xl border border-border bg-card px-5 py-3 shadow-[0_1px_2px_rgba(10,10,40,0.04)]"
+      className={cls}
     >
       <input type="hidden" name="listId" value={listId} />
-      <Plus size={15} className="text-primary/70" />
+      <Plus size={variant === "panel" ? 13 : 15} className="text-primary/70" />
       <input
         name="content"
         value={content}
@@ -580,7 +611,12 @@ function QuickAddItem({ listId }: { listId: string }) {
         required
         maxLength={300}
         placeholder="Dodaj zadanie…"
-        className="flex-1 bg-transparent py-1 text-[0.95rem] outline-none placeholder:text-muted-foreground/60"
+        autoFocus={variant === "panel"}
+        className={
+          variant === "panel"
+            ? "flex-1 bg-transparent text-[0.88rem] outline-none placeholder:text-muted-foreground/60"
+            : "flex-1 bg-transparent py-1 text-[0.95rem] outline-none placeholder:text-muted-foreground/60"
+        }
       />
     </form>
   );
