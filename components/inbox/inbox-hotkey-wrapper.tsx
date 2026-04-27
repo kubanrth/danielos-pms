@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { startTransition } from "react";
-import { AtSign, Check, UserPlus, Vote } from "lucide-react";
+import { AtSign, Check, CheckCircle2, UserPlus, Vote } from "lucide-react";
 import {
   useAssignHotkey,
   type AssignMember,
@@ -28,6 +28,10 @@ export interface InboxNotification {
     question?: string;
     // F12-K21: task.assigned typ — actor który przypisał current usera.
     actorName?: string | null;
+    // F12-K25: support.resolved typ.
+    ticketId?: string;
+    ticketTitle?: string;
+    status?: string;
   };
   // F9-13: server pre-computes the assigneeIds for the task this
   // notification refers to, so the hotkey popup can mark them as
@@ -124,8 +128,13 @@ function NotificationRow({
   const isPoll = type === "poll.created";
   // F12-K21: render notyfikacji o przypisaniu do task'a.
   const isAssigned = type === "task.assigned";
-  const href =
-    payload.workspaceId && payload.taskId
+  // F12-K25: render notyfikacji o zamknięciu ticketu supportu.
+  const isSupportResolved = type === "support.resolved";
+  const href = isSupportResolved
+    ? payload.workspaceId
+      ? `/w/${payload.workspaceId}/support`
+      : "/inbox"
+    : payload.workspaceId && payload.taskId
       ? `/w/${payload.workspaceId}/t/${payload.taskId}`
       : "/inbox";
 
@@ -164,6 +173,24 @@ function NotificationRow({
         )}
         .
       </>
+    ) : isSupportResolved ? (
+      <>
+        Twoje zgłoszenie{" "}
+        <span className="font-semibold text-foreground">
+          {payload.ticketTitle ?? "?"}
+        </span>{" "}
+        zostało{" "}
+        <span className="font-semibold text-emerald-500">
+          {payload.status === "RESOLVED" ? "rozwiązane" : "zamknięte"}
+        </span>
+        {payload.actorName && (
+          <>
+            {" przez "}
+            <span className="font-semibold text-foreground">{payload.actorName}</span>
+          </>
+        )}
+        .
+      </>
     ) : (
       <span className="text-muted-foreground">{type}</span>
     );
@@ -187,7 +214,9 @@ function NotificationRow({
             ? "bg-amber-500/10 text-amber-500"
             : isAssigned
               ? "bg-emerald-500/10 text-emerald-500"
-              : "bg-primary/10 text-primary"
+              : isSupportResolved
+                ? "bg-emerald-500/10 text-emerald-500"
+                : "bg-primary/10 text-primary"
         }`}
         aria-hidden
       >
@@ -195,6 +224,8 @@ function NotificationRow({
           <Vote size={14} />
         ) : isAssigned ? (
           <UserPlus size={14} />
+        ) : isSupportResolved ? (
+          <CheckCircle2 size={14} />
         ) : (
           <AtSign size={14} />
         )}

@@ -3,21 +3,34 @@
 // F11-20 (#23): support tickets workspace.
 // F12-K11: rewrite z grouped cards na table view + edycja treści (title/
 // description) + dueAt + isUrgent ("NATYCHMIAST") + "Zamknięte w X" duration.
+// F12-K25: custom dropdowns (Status / Priorytet / Odpowiedzialny) zamiast
+// native opacity-0 select'a, attachments, ticket counter, notyfikacja
+// reporter'a po RESOLVED.
 
-import { startTransition, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronDown,
   Clock,
+  ExternalLink,
+  Paperclip,
   Pause,
   Pencil,
   Plus,
   Trash2,
+  Upload,
+  UserPlus,
+  X,
   Zap,
 } from "lucide-react";
 import {
+  confirmSupportAttachmentUploadAction,
   createSupportTicketAction,
+  deleteSupportAttachmentAction,
   deleteSupportTicketAction,
+  requestSupportAttachmentUploadAction,
   updateSupportTicketAction,
 } from "@/app/(app)/w/[workspaceId]/support/actions";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
@@ -33,6 +46,15 @@ export interface SupportMember {
   avatarUrl: string | null;
 }
 
+export interface SupportAttachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  storageKey: string;
+  uploaderId: string;
+}
+
 export interface SupportTicketRow {
   id: string;
   title: string;
@@ -46,6 +68,8 @@ export interface SupportTicketRow {
   resolvedAt: string | null;
   reporter: { id: string; name: string | null; email: string; avatarUrl: string | null };
   assignee: { id: string; name: string | null; email: string; avatarUrl: string | null } | null;
+  // F12-K25: lista załączników (screenshoty, pliki) per ticket.
+  attachments: SupportAttachment[];
 }
 
 const STATUS_META: Record<Status, { label: string; color: string; icon: typeof Clock }> = {
@@ -84,12 +108,30 @@ export function SupportWorkspace({
 }) {
   const [editing, setEditing] = useState<SupportTicketRow | null>(null);
 
+  // F12-K25: counters w nagłówku — total + open (nowe + w toku).
+  const openCount = tickets.filter(
+    (t) => t.status === "OPEN" || t.status === "IN_PROGRESS",
+  ).length;
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
         <span className="eyebrow">Wsparcie</span>
-        <h1 className="font-display text-[2.2rem] font-bold leading-[1.1] tracking-[-0.03em]">
-          <span className="text-brand-gradient">Support</span> — zgłoszenia.
+        <h1 className="flex items-baseline gap-3 font-display text-[2.2rem] font-bold leading-[1.1] tracking-[-0.03em]">
+          <span>
+            <span className="text-brand-gradient">Support</span> — zgłoszenia.
+          </span>
+          <span className="font-mono text-[0.78rem] uppercase tracking-[0.14em] text-muted-foreground">
+            {tickets.length}
+            {tickets.length > 0 && (
+              <>
+                <span className="mx-1">·</span>
+                <span className={openCount > 0 ? "text-primary" : ""}>
+                  {openCount} otwartych
+                </span>
+              </>
+            )}
+          </span>
         </h1>
         <p className="max-w-[60ch] text-[0.95rem] leading-[1.55] text-muted-foreground">
           Zgłoś temat wymagający supportu. Admini przestrzeni przypisują
@@ -215,11 +257,20 @@ function TicketRow({
         >
           {ticket.title}
         </button>
-        {ticket.description && (
-          <p className="mt-0.5 line-clamp-1 text-[0.78rem] text-muted-foreground">
-            {ticket.description}
-          </p>
-        )}
+        <div className="mt-0.5 flex items-center gap-2 text-[0.78rem] text-muted-foreground">
+          {ticket.description && (
+            <p className="line-clamp-1 min-w-0 flex-1">{ticket.description}</p>
+          )}
+          {ticket.attachments.length > 0 && (
+            <span
+              className="inline-flex shrink-0 items-center gap-1 font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground"
+              title={`${ticket.attachments.length} załączników`}
+            >
+              <Paperclip size={10} />
+              {ticket.attachments.length}
+            </span>
+          )}
+        </div>
       </td>
 
       {/* Status */}
@@ -339,63 +390,236 @@ function PersonChip({
 // Inline cell editors
 // ─────────────────────────────────────────────────────────────────────
 
+// F12-K25: shared dropdown popover hook + helpers. Portal to body żeby
+// uniknąć clipping przez table overflow + sticky cells. Coords liczone
+// z trigger rect, auto-flip above gdy mało miejsca, close on outside
+// click / Escape / scroll.
+function useDropdown() {
+  const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    placement: "below" | "above";
+  } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+
+  const close = () => {
+    setOpen(false);
+    setCoords(null);
+  };
+
+  const compute = (preferredWidth = 220) => {
+    const r = triggerRef.current?.getBoundingClientRect();
+    if (!r) return null;
+    if (r.bottom < 0 || r.top > window.innerHeight) return null;
+    const margin = 8;
+    const desiredHeight = 320;
+    const spaceBelow = window.innerHeight - r.bottom - margin;
+    const spaceAbove = r.top - margin;
+    const placement: "below" | "above" =
+      spaceBelow >= 200 || spaceBelow >= spaceAbove ? "below" : "above";
+    const width = Math.max(r.width, preferredWidth);
+    const left = Math.min(
+      Math.max(r.left, margin),
+      window.innerWidth - width - margin,
+    );
+    if (placement === "below") {
+      return { top: r.bottom + 4, left, width, placement };
+    }
+    return {
+      top: Math.max(margin, r.top - 4 - desiredHeight),
+      left,
+      width,
+      placement,
+    };
+  };
+
+  const openPicker = (preferredWidth?: number) => {
+    const c = compute(preferredWidth);
+    if (!c) return;
+    setCoords(c);
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (popRef.current?.contains(e.target as Node)) return;
+      if (triggerRef.current?.contains(e.target as Node)) return;
+      close();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    const onReflow = () => {
+      const c = compute();
+      if (c) setCoords(c);
+      else close();
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", onReflow);
+    window.addEventListener("scroll", onReflow, true);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", onReflow);
+      window.removeEventListener("scroll", onReflow, true);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  return { open, coords, triggerRef, popRef, openPicker, close };
+}
+
 function StatusSelect({ ticketId, current }: { ticketId: string; current: Status }) {
   const meta = STATUS_META[current];
   const Icon = meta.icon;
+  const dd = useDropdown();
+
+  const pick = (s: Status) => {
+    const fd = new FormData();
+    fd.set("id", ticketId);
+    fd.set("status", s);
+    startTransition(() => updateSupportTicketAction(fd));
+    dd.close();
+  };
+
   return (
-    <span
-      className="relative inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[0.72rem] font-medium"
-      style={{ background: `${meta.color}1A`, color: meta.color }}
-    >
-      <Icon size={11} />
-      {meta.label}
-      <select
-        value={current}
-        onChange={(e) => {
-          const fd = new FormData();
-          fd.set("id", ticketId);
-          fd.set("status", e.target.value);
-          startTransition(() => updateSupportTicketAction(fd));
-        }}
-        aria-label="Zmień status"
-        className="absolute inset-0 cursor-pointer opacity-0"
+    <>
+      <button
+        ref={dd.triggerRef}
+        type="button"
+        onClick={() => (dd.open ? dd.close() : dd.openPicker(220))}
+        aria-haspopup="listbox"
+        aria-expanded={dd.open}
+        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.72rem] font-medium transition-opacity hover:opacity-80"
+        style={{ background: `${meta.color}1A`, color: meta.color }}
       >
-        {STATUSES.map((s) => (
-          <option key={s} value={s}>
-            {STATUS_META[s].label}
-          </option>
-        ))}
-      </select>
-    </span>
+        <Icon size={11} />
+        <span>{meta.label}</span>
+        <ChevronDown size={11} className="opacity-70" />
+      </button>
+      {dd.open && dd.coords && typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={dd.popRef}
+            style={{
+              position: "fixed",
+              top: dd.coords.top,
+              left: dd.coords.left,
+              width: dd.coords.width,
+            }}
+            className="z-[80] overflow-hidden rounded-lg border border-border bg-popover p-1 shadow-[0_18px_40px_-12px_rgba(10,10,40,0.3)]"
+          >
+            <ul role="listbox" className="flex flex-col gap-0.5">
+              {STATUSES.map((s) => {
+                const m = STATUS_META[s];
+                const SI = m.icon;
+                const active = s === current;
+                return (
+                  <li key={s}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      onClick={() => pick(s)}
+                      data-active={active}
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[0.84rem] transition-colors hover:bg-accent data-[active=true]:bg-primary/10"
+                    >
+                      <span
+                        className="grid h-6 w-6 shrink-0 place-items-center rounded-md"
+                        style={{ background: `${m.color}1A`, color: m.color }}
+                      >
+                        <SI size={12} />
+                      </span>
+                      <span className="flex-1">{m.label}</span>
+                      {active && (
+                        <span className="font-mono text-[0.62rem] text-primary">✓</span>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 
 function PrioritySelect({ ticketId, current }: { ticketId: string; current: Priority }) {
   const meta = PRIORITY_META[current];
+  const dd = useDropdown();
+
+  const pick = (p: Priority) => {
+    const fd = new FormData();
+    fd.set("id", ticketId);
+    fd.set("priority", p);
+    startTransition(() => updateSupportTicketAction(fd));
+    dd.close();
+  };
+
   return (
-    <span
-      className="relative inline-flex items-center rounded-full px-2 py-0.5 text-[0.72rem] font-medium"
-      style={{ background: `${meta.color}1A`, color: meta.color }}
-    >
-      {meta.label}
-      <select
-        value={current}
-        onChange={(e) => {
-          const fd = new FormData();
-          fd.set("id", ticketId);
-          fd.set("priority", e.target.value);
-          startTransition(() => updateSupportTicketAction(fd));
-        }}
-        aria-label="Zmień priorytet"
-        className="absolute inset-0 cursor-pointer opacity-0"
+    <>
+      <button
+        ref={dd.triggerRef}
+        type="button"
+        onClick={() => (dd.open ? dd.close() : dd.openPicker(180))}
+        aria-haspopup="listbox"
+        aria-expanded={dd.open}
+        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.72rem] font-medium transition-opacity hover:opacity-80"
+        style={{ background: `${meta.color}1A`, color: meta.color }}
       >
-        {PRIORITIES.map((p) => (
-          <option key={p} value={p}>
-            {PRIORITY_META[p].label}
-          </option>
-        ))}
-      </select>
-    </span>
+        <span>{meta.label}</span>
+        <ChevronDown size={11} className="opacity-70" />
+      </button>
+      {dd.open && dd.coords && typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={dd.popRef}
+            style={{
+              position: "fixed",
+              top: dd.coords.top,
+              left: dd.coords.left,
+              width: dd.coords.width,
+            }}
+            className="z-[80] overflow-hidden rounded-lg border border-border bg-popover p-1 shadow-[0_18px_40px_-12px_rgba(10,10,40,0.3)]"
+          >
+            <ul role="listbox" className="flex flex-col gap-0.5">
+              {PRIORITIES.map((p) => {
+                const m = PRIORITY_META[p];
+                const active = p === current;
+                return (
+                  <li key={p}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      onClick={() => pick(p)}
+                      data-active={active}
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[0.84rem] transition-colors hover:bg-accent data-[active=true]:bg-primary/10"
+                    >
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ background: m.color }}
+                      />
+                      <span className="flex-1">{m.label}</span>
+                      {active && (
+                        <span className="font-mono text-[0.62rem] text-primary">✓</span>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 
@@ -408,34 +632,130 @@ function AssigneeSelect({
   current: SupportTicketRow["assignee"];
   members: SupportMember[];
 }) {
+  const dd = useDropdown();
+  const [query, setQuery] = useState("");
+
+  const pick = (userId: string) => {
+    const fd = new FormData();
+    fd.set("id", ticketId);
+    fd.set("assigneeId", userId);
+    startTransition(() => updateSupportTicketAction(fd));
+    dd.close();
+    setQuery("");
+  };
+
+  const q = query.trim().toLowerCase();
+  const filtered = members.filter((m) => {
+    if (!q) return true;
+    const n = (m.name ?? "").toLowerCase();
+    return n.includes(q) || m.email.toLowerCase().includes(q);
+  });
+
   return (
-    <span className="relative inline-flex w-full items-center gap-2">
-      {current ? (
-        <PersonChip person={current} />
-      ) : (
-        <span className="font-mono text-[0.7rem] uppercase tracking-[0.14em] text-muted-foreground/70">
-          + przypisz
-        </span>
-      )}
-      <select
-        value={current?.id ?? ""}
-        onChange={(e) => {
-          const fd = new FormData();
-          fd.set("id", ticketId);
-          fd.set("assigneeId", e.target.value);
-          startTransition(() => updateSupportTicketAction(fd));
-        }}
-        aria-label="Przypisz osobę"
-        className="absolute inset-0 cursor-pointer opacity-0"
+    <>
+      <button
+        ref={dd.triggerRef}
+        type="button"
+        onClick={() => (dd.open ? dd.close() : dd.openPicker(280))}
+        aria-haspopup="listbox"
+        aria-expanded={dd.open}
+        className="inline-flex w-full items-center gap-2 rounded-md border border-transparent px-2 py-1 text-left transition-colors hover:border-border hover:bg-accent/40"
       >
-        <option value="">— brak —</option>
-        {members.map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.name ?? m.email}
-          </option>
-        ))}
-      </select>
-    </span>
+        {current ? (
+          <PersonChip person={current} />
+        ) : (
+          <span className="inline-flex items-center gap-1.5 font-mono text-[0.7rem] uppercase tracking-[0.14em] text-muted-foreground/70">
+            <UserPlus size={11} /> przypisz
+          </span>
+        )}
+        <ChevronDown size={11} className="ml-auto shrink-0 text-muted-foreground" />
+      </button>
+      {dd.open && dd.coords && typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={dd.popRef}
+            style={{
+              position: "fixed",
+              top: dd.coords.top,
+              left: dd.coords.left,
+              width: dd.coords.width,
+            }}
+            className="z-[80] flex flex-col overflow-hidden rounded-lg border border-border bg-popover shadow-[0_18px_40px_-12px_rgba(10,10,40,0.3)]"
+          >
+            <div className="border-b border-border p-2">
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Szukaj osoby…"
+                className="h-8 w-full rounded-md border border-border bg-background px-2 text-[0.82rem] outline-none focus:border-primary/60"
+              />
+            </div>
+            <ul role="listbox" className="max-h-72 overflow-y-auto p-1">
+              <li>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={!current}
+                  onClick={() => pick("")}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[0.82rem] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
+                    <X size={11} />
+                  </span>
+                  <span className="flex-1">— brak —</span>
+                  {!current && (
+                    <span className="font-mono text-[0.62rem] text-primary">✓</span>
+                  )}
+                </button>
+              </li>
+              {filtered.length === 0 && (
+                <li className="px-3 py-3 text-center font-mono text-[0.62rem] uppercase tracking-[0.12em] text-muted-foreground/70">
+                  brak dopasowań
+                </li>
+              )}
+              {filtered.map((m) => {
+                const active = m.id === current?.id;
+                return (
+                  <li key={m.id}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      onClick={() => pick(m.id)}
+                      data-active={active}
+                      className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[0.84rem] transition-colors hover:bg-accent data-[active=true]:bg-primary/10"
+                    >
+                      <span className="grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-full bg-brand-gradient font-display text-[0.6rem] font-bold text-white">
+                        {m.avatarUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={m.avatarUrl} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          (m.name ?? m.email).slice(0, 2).toUpperCase()
+                        )}
+                      </span>
+                      <div className="flex min-w-0 flex-1 flex-col leading-tight">
+                        <span className="truncate font-medium">
+                          {m.name ?? m.email}
+                        </span>
+                        {m.name && (
+                          <span className="truncate font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted-foreground">
+                            {m.email}
+                          </span>
+                        )}
+                      </div>
+                      {active && (
+                        <span className="font-mono text-[0.62rem] text-primary">✓</span>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 
@@ -627,6 +947,13 @@ function EditTicketDialog({
           </p>
         )}
 
+        <AttachmentsSection
+          ticketId={ticket.id}
+          attachments={ticket.attachments}
+          currentUserId={currentUserId}
+          canManage={canManage}
+        />
+
         <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
           <button
             type="button"
@@ -783,4 +1110,173 @@ function NewTicketForm({ workspaceId }: { workspaceId: string }) {
       </div>
     </form>
   );
+}
+
+// F12-K25: attachments do support ticketu. Drop zone + lista zał. z
+// link do API route (/api/support-attachment/[...path]) który verifyje
+// access i 302-redirectuje na świeży signed URL z Supabase Storage.
+function AttachmentsSection({
+  ticketId,
+  attachments,
+  currentUserId,
+  canManage,
+}: {
+  ticketId: string;
+  attachments: SupportAttachment[];
+  currentUserId: string;
+  canManage: boolean;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const onPick = async (file: File) => {
+    setError(null);
+    setUploading(true);
+    try {
+      const req = await requestSupportAttachmentUploadAction(
+        ticketId,
+        file.name,
+        file.type || "application/octet-stream",
+        file.size,
+      );
+      if (!req.ok) {
+        setError(req.error);
+        setUploading(false);
+        return;
+      }
+      const putRes = await fetch(req.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: file,
+      });
+      if (!putRes.ok) {
+        setError("Upload nie powiódł się.");
+        setUploading(false);
+        return;
+      }
+      const confirm = await confirmSupportAttachmentUploadAction({
+        ticketId,
+        storageKey: req.storageKey,
+        filename: file.name,
+        contentType: file.type || "application/octet-stream",
+        sizeBytes: file.size,
+      });
+      if (!confirm.ok) {
+        setError(confirm.error ?? "Nie udało się zapisać pliku.");
+      }
+    } catch (e) {
+      console.warn("[support-attachment] upload error", e);
+      setError("Upload nie powiódł się — sprawdź połączenie.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeAttachment = (id: string) => {
+    if (!confirm("Usunąć ten załącznik?")) return;
+    const fd = new FormData();
+    fd.set("id", id);
+    startTransition(() => deleteSupportAttachmentAction(fd));
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <span className="eyebrow">Załączniki</span>
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+          className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground disabled:opacity-60"
+        >
+          <Upload size={11} /> {uploading ? "Wysyłam…" : "Dodaj plik"}
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          className="hidden"
+          accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,text/plain"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = "";
+            if (f) void onPick(f);
+          }}
+        />
+      </div>
+      {error && (
+        <p className="font-mono text-[0.66rem] uppercase tracking-[0.14em] text-destructive">
+          {error}
+        </p>
+      )}
+      {attachments.length === 0 ? (
+        <p className="font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground/70">
+          Brak załączników. Dodaj screenshot lub plik aby ułatwić obsługę zgłoszenia.
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-1.5">
+          {attachments.map((a) => {
+            const canDelete = a.uploaderId === currentUserId || canManage;
+            const isImage = a.mimeType.startsWith("image/");
+            return (
+              <li
+                key={a.id}
+                className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2"
+              >
+                <span
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground"
+                  aria-hidden
+                >
+                  {isImage ? (
+                    <span className="text-[0.62rem] font-mono">IMG</span>
+                  ) : (
+                    <Paperclip size={14} />
+                  )}
+                </span>
+                <a
+                  href={`/api/support-attachment/${a.storageKey}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex min-w-0 flex-1 flex-col leading-tight hover:text-primary"
+                >
+                  <span className="truncate text-[0.86rem] font-medium">
+                    {a.filename}
+                  </span>
+                  <span className="font-mono text-[0.62rem] uppercase tracking-[0.12em] text-muted-foreground">
+                    {formatFileSize(a.sizeBytes)} · klik aby otworzyć
+                  </span>
+                </a>
+                <a
+                  href={`/api/support-attachment/${a.storageKey}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Otwórz w nowej karcie"
+                  className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <ExternalLink size={12} />
+                </a>
+                {canDelete && (
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(a.id)}
+                    aria-label="Usuń załącznik"
+                    title="Usuń"
+                    className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

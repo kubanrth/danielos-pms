@@ -1,10 +1,19 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { randomBytes } from "node:crypto";
 import { z } from "zod";
+import { Prisma } from "@/lib/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireWorkspaceAction, requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { writeAudit } from "@/lib/audit";
+import {
+  ATTACHMENTS_BUCKET,
+  MAX_ATTACHMENT_BYTES,
+  createSignedUploadUrl,
+  isAllowedMime,
+  supabaseAdmin,
+} from "@/lib/storage";
 
 // F11-20 (#23): internal helpdesk module per-workspace. Każdy member
 // może zgłosić ticket; ADMIN/MEMBER (z task.update) może obsłużyć.
@@ -112,6 +121,7 @@ export async function updateSupportTicketAction(formData: FormData) {
       reporterId: true,
       status: true,
       assigneeId: true,
+      title: true,
     },
   });
   if (!ticket) return;
@@ -176,6 +186,39 @@ export async function updateSupportTicketAction(formData: FormData) {
   }
 
   await db.supportTicket.update({ where: { id: ticket.id }, data });
+
+  // F12-K25: gdy ticket właśnie się zamknął (transition do RESOLVED/CLOSED
+  // ze stanu OPEN/IN_PROGRESS), powiadom reporter'a w inboxie. Skip
+  // jeśli reporter sam jest tym kto zamyka (zwykle admin to robi).
+  const wasOpenBefore = ticket.status === "OPEN" || ticket.status === "IN_PROGRESS";
+  const isClosedNow =
+    parsed.data.status === "RESOLVED" || parsed.data.status === "CLOSED";
+  if (
+    parsed.data.status &&
+    wasOpenBefore &&
+    isClosedNow &&
+    ticket.reporterId !== ctx.userId
+  ) {
+    const actor = await db.user.findUnique({
+      where: { id: ctx.userId },
+      select: { name: true, email: true },
+    });
+    await db.notification.create({
+      data: {
+        userId: ticket.reporterId,
+        type: "support.resolved",
+        payload: {
+          workspaceId: ticket.workspaceId,
+          ticketId: ticket.id,
+          ticketTitle: ticket.title,
+          status: parsed.data.status,
+          actorId: ctx.userId,
+          actorName: actor?.name ?? actor?.email ?? null,
+        } as Prisma.InputJsonValue,
+      },
+    });
+  }
+
   await writeAudit({
     workspaceId: ticket.workspaceId,
     objectType: "SupportTicket",
@@ -185,6 +228,147 @@ export async function updateSupportTicketAction(formData: FormData) {
     diff: data as Record<string, string | number | boolean | null>,
   });
   revalidatePath(`/w/${ticket.workspaceId}/support`);
+}
+
+// F12-K25: attachments dla ticketów. Reuse Supabase Storage flow z
+// bucketu 'attachments' (signed upload URL → klient PUT-uje plik →
+// klient potwierdza addSupportAttachmentAction → row w
+// SupportTicketAttachment'cie + revalidate). Storage path:
+// w/<wid>/support/<tid>/<rand>-<safe-name>.
+
+const requestUploadSchema = z.object({
+  ticketId: z.string().min(1),
+  filename: z.string().trim().min(1).max(200),
+  contentType: z.string().min(1).max(100),
+  sizeBytes: z.number().int().positive().max(MAX_ATTACHMENT_BYTES),
+});
+
+export type RequestUploadResult =
+  | { ok: true; uploadUrl: string; storageKey: string }
+  | { ok: false; error: string };
+
+function sanitizeFilename(name: string): string {
+  return (
+    name
+      .replace(/[\\/]/g, "_")
+      .replace(/[^\w.\-]/g, "_")
+      .replace(/_+/g, "_")
+      .slice(-120) || "file"
+  );
+}
+
+export async function requestSupportAttachmentUploadAction(
+  ticketId: string,
+  filename: string,
+  contentType: string,
+  sizeBytes: number,
+): Promise<RequestUploadResult> {
+  const parsed = requestUploadSchema.safeParse({ ticketId, filename, contentType, sizeBytes });
+  if (!parsed.success) return { ok: false, error: "Nieprawidłowe parametry pliku." };
+  if (!isAllowedMime(parsed.data.contentType)) {
+    return { ok: false, error: "Niedozwolony typ pliku." };
+  }
+
+  const ticket = await db.supportTicket.findUnique({
+    where: { id: parsed.data.ticketId },
+    select: { id: true, workspaceId: true },
+  });
+  if (!ticket) return { ok: false, error: "Zgłoszenie nie istnieje." };
+  await requireWorkspaceMembership(ticket.workspaceId);
+
+  const safe = sanitizeFilename(parsed.data.filename);
+  const rand = randomBytes(9).toString("base64url");
+  const storageKey = `w/${ticket.workspaceId}/support/${ticket.id}/${rand}-${safe}`;
+
+  try {
+    const signed = await createSignedUploadUrl(storageKey);
+    return { ok: true, uploadUrl: signed.signedUrl, storageKey };
+  } catch (err) {
+    console.warn("[support-attachment] signed upload failed", err);
+    return { ok: false, error: "Nie udało się przygotować uploadu." };
+  }
+}
+
+const confirmAttachmentSchema = z.object({
+  ticketId: z.string().min(1),
+  storageKey: z.string().min(1),
+  filename: z.string().trim().min(1).max(200),
+  contentType: z.string().min(1).max(100),
+  sizeBytes: z.number().int().positive().max(MAX_ATTACHMENT_BYTES),
+});
+
+export async function confirmSupportAttachmentUploadAction(input: {
+  ticketId: string;
+  storageKey: string;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+}): Promise<{ ok: boolean; error?: string }> {
+  const parsed = confirmAttachmentSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Nieprawidłowe parametry." };
+
+  const ticket = await db.supportTicket.findUnique({
+    where: { id: parsed.data.ticketId },
+    select: { id: true, workspaceId: true },
+  });
+  if (!ticket) return { ok: false, error: "Zgłoszenie nie istnieje." };
+  const ctx = await requireWorkspaceMembership(ticket.workspaceId);
+
+  await db.supportTicketAttachment.create({
+    data: {
+      ticketId: ticket.id,
+      uploaderId: ctx.userId,
+      filename: parsed.data.filename,
+      mimeType: parsed.data.contentType,
+      sizeBytes: parsed.data.sizeBytes,
+      storageKey: parsed.data.storageKey,
+    },
+  });
+  await writeAudit({
+    workspaceId: ticket.workspaceId,
+    objectType: "SupportTicket",
+    objectId: ticket.id,
+    actorId: ctx.userId,
+    action: "support.attachmentAdded",
+    diff: { filename: parsed.data.filename },
+  });
+  revalidatePath(`/w/${ticket.workspaceId}/support`);
+  return { ok: true };
+}
+
+export async function deleteSupportAttachmentAction(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const att = await db.supportTicketAttachment.findUnique({
+    where: { id },
+    include: { ticket: { select: { workspaceId: true, id: true, reporterId: true } } },
+  });
+  if (!att) return;
+  const ctx = await requireWorkspaceMembership(att.ticket.workspaceId);
+  // Uploader może swój usunąć; admin (task.update perm) — każdy.
+  const isUploader = att.uploaderId === ctx.userId;
+  if (!isUploader) {
+    await requireWorkspaceAction(att.ticket.workspaceId, "task.update");
+  }
+
+  // Best-effort storage cleanup (ignore failure — DB row removal is
+  // the source of truth; orphaned blobs cleaned up by Supabase
+  // lifecycle policy if any).
+  try {
+    await supabaseAdmin().storage.from(ATTACHMENTS_BUCKET).remove([att.storageKey]);
+  } catch {
+    /* swallow */
+  }
+  await db.supportTicketAttachment.delete({ where: { id } });
+  await writeAudit({
+    workspaceId: att.ticket.workspaceId,
+    objectType: "SupportTicket",
+    objectId: att.ticket.id,
+    actorId: ctx.userId,
+    action: "support.attachmentRemoved",
+    diff: { attachmentId: id },
+  });
+  revalidatePath(`/w/${att.ticket.workspaceId}/support`);
 }
 
 export async function deleteSupportTicketAction(formData: FormData) {

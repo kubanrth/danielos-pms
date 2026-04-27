@@ -22,6 +22,18 @@ export default async function SupportPage({
       include: {
         reporter: { select: { id: true, name: true, email: true, avatarUrl: true } },
         assignee: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        attachments: {
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            filename: true,
+            mimeType: true,
+            sizeBytes: true,
+            storageKey: true,
+            uploaderId: true,
+            createdAt: true,
+          },
+        },
       },
     }),
     db.workspaceMembership.findMany({
@@ -60,6 +72,14 @@ export default async function SupportPage({
               avatarUrl: t.assignee.avatarUrl,
             }
           : null,
+        attachments: t.attachments.map((a) => ({
+          id: a.id,
+          filename: a.filename,
+          mimeType: a.mimeType,
+          sizeBytes: a.sizeBytes,
+          storageKey: a.storageKey,
+          uploaderId: a.uploaderId,
+        })),
       }))}
       members={members.map((m) => m.user)}
     />

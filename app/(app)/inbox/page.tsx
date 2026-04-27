@@ -38,6 +38,17 @@ interface TaskAssignedPayload {
   actorName?: string | null;
 }
 
+// F12-K25: support.resolved — emitowane przez updateSupportTicketAction
+// gdy admin oznacza ticket reporter'a jako RESOLVED lub CLOSED.
+interface SupportResolvedPayload {
+  workspaceId?: string;
+  ticketId?: string;
+  ticketTitle?: string;
+  status?: string;
+  actorId?: string;
+  actorName?: string | null;
+}
+
 async function loadNotifications(userId: string) {
   return db.notification.findMany({
     where: { userId },
@@ -101,7 +112,8 @@ export default async function InboxPage() {
   const toRow = (n: (typeof notifications)[number]): InboxNotification => {
     const payload = (n.payload ?? {}) as MentionPayload &
       PollCreatedPayload &
-      TaskAssignedPayload;
+      TaskAssignedPayload &
+      SupportResolvedPayload;
     return {
       id: n.id,
       type: n.type,
@@ -116,6 +128,9 @@ export default async function InboxPage() {
         boardName: payload.boardName ?? undefined,
         question: payload.question,
         actorName: payload.actorName,
+        ticketId: payload.ticketId,
+        ticketTitle: payload.ticketTitle,
+        status: payload.status,
       },
       assigneeIds: payload.taskId
         ? assigneesByTask.get(payload.taskId) ?? []

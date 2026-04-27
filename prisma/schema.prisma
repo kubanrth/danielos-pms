@@ -68,6 +68,8 @@ model User {
   // F11-20: support tickets (zgłoszenia w ramach workspace).
   reportedTickets    SupportTicket[]       @relation("SupportReporter")
   assignedTickets    SupportTicket[]       @relation("SupportAssignee")
+  // F12-K25: support attachment uploader.
+  supportAttachments SupportTicketAttachment[] @relation("SupportAttachmentUploader")
   // F11-21: creative briefs created by user.
   createdBriefs      CreativeBrief[]       @relation("BriefCreator")
   // F11-22: workspace-level calendar events created by user.
@@ -579,9 +581,10 @@ model SupportTicket {
   updatedAt   DateTime              @updatedAt
   resolvedAt  DateTime?
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  reporter  User      @relation("SupportReporter", fields: [reporterId], references: [id])
-  assignee  User?     @relation("SupportAssignee", fields: [assigneeId], references: [id])
+  workspace   Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  reporter    User                      @relation("SupportReporter", fields: [reporterId], references: [id])
+  assignee    User?                     @relation("SupportAssignee", fields: [assigneeId], references: [id])
+  attachments SupportTicketAttachment[]
 
   @@index([workspaceId, status])
   @@index([reporterId])
@@ -763,6 +766,25 @@ model Attachment {
   uploader User @relation(fields: [uploaderId], references: [id])
 
   @@index([taskId])
+}
+
+// F12-K25: załączniki dla support ticketów (oddzielny model od
+// Attachment'a do task'ów — chcemy odrębną retention policy + cascade
+// delete na poziomie ticketu). Storage path: w/<wid>/support/<tid>/...
+model SupportTicketAttachment {
+  id         String    @id @default(cuid())
+  ticketId   String
+  uploaderId String
+  filename   String
+  mimeType   String
+  sizeBytes  Int
+  storageKey String
+  createdAt  DateTime  @default(now())
+
+  ticket   SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  uploader User          @relation("SupportAttachmentUploader", fields: [uploaderId], references: [id])
+
+  @@index([ticketId])
 }
 
 model Notification {
