@@ -632,14 +632,18 @@ function NoteEditor({ note, folders }: { note: ActiveNote; folders: NoteFolderRo
           readOnly={isTrashed}
           className="w-full border-0 bg-transparent pb-2 font-display text-[2rem] font-bold leading-tight tracking-[-0.02em] outline-none placeholder:text-muted-foreground/40"
         />
-        {/* F11-23: Tiptap rich-text editor (StarterKit + headings + lists +
-            checklists). Reuses the editor from task descriptions. */}
+        {/* F12-K24: pełny toolbar w notatniku — bold/italic/strike/
+            nagłówki/listy/cytat/kod/link + tabele + kolor tekstu +
+            highlight (przez extras='brief'). Wcześniej variant='display'
+            ukrywał toolbar całkowicie, klient widział tylko gołe pole
+            tekstu. */}
         <div className="flex-1">
           <RichTextEditor
             initial={doc}
             readOnly={isTrashed}
             placeholder="Zacznij pisać…"
-            variant="display"
+            variant={isTrashed ? "display" : "field"}
+            extras="brief"
             onChange={(d) => setDoc(d)}
           />
         </div>
