@@ -289,13 +289,7 @@ function TicketRow({
             <p className="line-clamp-1 min-w-0 flex-1">{ticket.description}</p>
           )}
           {ticket.attachments.length > 0 && (
-            <span
-              className="inline-flex shrink-0 items-center gap-1 font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground"
-              title={`${ticket.attachments.length} załączników`}
-            >
-              <Paperclip size={10} />
-              {ticket.attachments.length}
-            </span>
+            <AttachmentBadge attachments={ticket.attachments} />
           )}
         </div>
       </td>
@@ -1010,12 +1004,110 @@ function EditTicketDialog({
 // ─────────────────────────────────────────────────────────────────────
 
 function NewTicketForm({ workspaceId }: { workspaceId: string }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<Priority>("MEDIUM");
   const [isUrgent, setIsUrgent] = useState(false);
   const [dueAt, setDueAt] = useState<string>("");
+  // F12-K27: pending files trzymane w state — uploadują się PO
+  // stworzeniu ticket'u (potrzebujemy ticketId żeby je zapisać).
+  const [files, setFiles] = useState<File[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const reset = () => {
+    setOpen(false);
+    setTitle("");
+    setDescription("");
+    setPriority("MEDIUM");
+    setIsUrgent(false);
+    setDueAt("");
+    setFiles([]);
+    setError(null);
+  };
+
+  const inferContentType = (file: File): string => {
+    if (file.type) return file.type;
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    const map: Record<string, string> = {
+      png: "image/png",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      gif: "image/gif",
+      webp: "image/webp",
+      svg: "image/svg+xml",
+      pdf: "application/pdf",
+      txt: "text/plain",
+      csv: "text/csv",
+      md: "text/markdown",
+    };
+    return ext && map[ext] ? map[ext] : "application/octet-stream";
+  };
+
+  const submit = async () => {
+    if (!title.trim() || !description.trim()) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.set("workspaceId", workspaceId);
+      fd.set("title", title.trim());
+      fd.set("description", description.trim());
+      fd.set("priority", priority);
+      fd.set("isUrgent", isUrgent ? "true" : "false");
+      fd.set("dueAt", isUrgent ? "" : dueAt);
+      const res = await createSupportTicketAction(fd);
+      if (!res.ok) {
+        setError(res.error);
+        setSubmitting(false);
+        return;
+      }
+      // Upload każdy file równolegle. Każdy fail nie blokuje innych —
+      // ticket już istnieje, więc partial success jest akceptowalne
+      // (user widzi co się udało w liście załączników).
+      if (files.length > 0) {
+        await Promise.all(
+          files.map(async (f) => {
+            const ct = inferContentType(f);
+            const reqRes = await requestSupportAttachmentUploadAction(
+              res.ticketId,
+              f.name,
+              ct,
+              f.size,
+            );
+            if (!reqRes.ok) return;
+            try {
+              const putRes = await fetch(reqRes.uploadUrl, {
+                method: "PUT",
+                headers: { "Content-Type": ct },
+                body: f,
+              });
+              if (!putRes.ok) return;
+              await confirmSupportAttachmentUploadAction({
+                ticketId: res.ticketId,
+                storageKey: reqRes.storageKey,
+                filename: f.name,
+                contentType: ct,
+                sizeBytes: f.size,
+              });
+            } catch {
+              /* swallow per-file errors */
+            }
+          }),
+        );
+      }
+      router.refresh();
+      reset();
+    } catch (e) {
+      console.warn("[create-ticket] error", e);
+      setError("Nie udało się utworzyć zgłoszenia.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   if (!open) {
     return (
@@ -1031,24 +1123,12 @@ function NewTicketForm({ workspaceId }: { workspaceId: string }) {
 
   return (
     <form
-      action={(fd) =>
-        startTransition(async () => {
-          await createSupportTicketAction(fd);
-          setOpen(false);
-          setTitle("");
-          setDescription("");
-          setPriority("MEDIUM");
-          setIsUrgent(false);
-          setDueAt("");
-        })
-      }
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
       className="flex flex-col gap-4 rounded-xl border border-primary/40 bg-primary/5 p-5"
     >
-      <input type="hidden" name="workspaceId" value={workspaceId} />
-      <input type="hidden" name="priority" value={priority} />
-      <input type="hidden" name="isUrgent" value={isUrgent ? "true" : "false"} />
-      <input type="hidden" name="dueAt" value={isUrgent ? "" : dueAt} />
-
       <div className="flex flex-col gap-1.5">
         <span className="eyebrow">Temat</span>
         <input
@@ -1120,19 +1200,85 @@ function NewTicketForm({ workspaceId }: { workspaceId: string }) {
         </div>
       </div>
 
+      {/* F12-K27: załączniki przy tworzeniu — multi-file picker, lista
+          z removeami, upload odbywa się po stworzeniu ticketu. */}
+      <div className="flex flex-col gap-2">
+        <span className="eyebrow">Załączniki (screenshoty, pliki)</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 font-mono text-[0.7rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
+          >
+            <Upload size={12} /> Dodaj plik
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,text/plain"
+            onChange={(e) => {
+              const list = Array.from(e.target.files ?? []);
+              e.target.value = "";
+              if (list.length > 0) setFiles((prev) => [...prev, ...list]);
+            }}
+          />
+          {files.length === 0 && (
+            <span className="font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground/70">
+              opcjonalne
+            </span>
+          )}
+        </div>
+        {files.length > 0 && (
+          <ul className="flex flex-col gap-1">
+            {files.map((f, idx) => (
+              <li
+                key={`${f.name}-${idx}`}
+                className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5"
+              >
+                <Paperclip size={12} className="shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate text-[0.84rem]">
+                  {f.name}
+                </span>
+                <span className="shrink-0 font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted-foreground">
+                  {formatFileSize(f.size)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setFiles((prev) => prev.filter((_, i) => i !== idx))}
+                  aria-label="Usuń z listy"
+                  className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <X size={11} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {error && (
+        <p className="font-mono text-[0.66rem] uppercase tracking-[0.14em] text-destructive">
+          {error}
+        </p>
+      )}
+
       <div className="flex items-center justify-end gap-3">
         <button
           type="button"
-          onClick={() => setOpen(false)}
-          className="font-mono text-[0.72rem] uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground"
+          onClick={reset}
+          disabled={submitting}
+          className="font-mono text-[0.72rem] uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground disabled:opacity-50"
         >
           Anuluj
         </button>
         <button
           type="submit"
-          className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-gradient px-5 font-sans text-[0.9rem] font-semibold text-white shadow-brand transition-[transform,opacity] hover:-translate-y-[1px]"
+          disabled={submitting || !title.trim() || !description.trim()}
+          className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-gradient px-5 font-sans text-[0.9rem] font-semibold text-white shadow-brand transition-[transform,opacity] hover:-translate-y-[1px] disabled:opacity-60"
         >
-          Zgłoś
+          {submitting ? "Wysyłam…" : "Zgłoś"}
         </button>
       </div>
     </form>
@@ -1339,4 +1485,126 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// F12-K27: klikalny attachment badge w wierszu — open popover z listą
+// załączników, każdy klikalny do otwarcia w nowej karcie. Zastępuje
+// poprzedni statyczny badge który wyglądał jakby był klikalny ale nic
+// nie robił.
+function AttachmentBadge({ attachments }: { attachments: SupportAttachment[] }) {
+  const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+
+  const close = () => {
+    setOpen(false);
+    setCoords(null);
+  };
+
+  const onClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (open) {
+      close();
+      return;
+    }
+    const r = triggerRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const margin = 8;
+    const width = 320;
+    const left = Math.min(
+      Math.max(r.left, margin),
+      window.innerWidth - width - margin,
+    );
+    setCoords({ top: r.bottom + 4, left });
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (popRef.current?.contains(e.target as Node)) return;
+      if (triggerRef.current?.contains(e.target as Node)) return;
+      close();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [open]);
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={onClick}
+        title={`${attachments.length} załączników — klik aby otworzyć`}
+        className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-2 py-0.5 font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
+      >
+        <Paperclip size={11} />
+        {attachments.length}
+      </button>
+      {open && coords && typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={popRef}
+            style={{ position: "fixed", top: coords.top, left: coords.left, width: 320 }}
+            className="z-[80] flex flex-col overflow-hidden rounded-lg border border-border bg-popover p-2 shadow-[0_18px_40px_-12px_rgba(10,10,40,0.3)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-2 pb-2 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted-foreground/80">
+              Załączniki
+            </div>
+            <ul className="flex max-h-[320px] flex-col gap-1 overflow-y-auto">
+              {attachments.map((a) => {
+                const isImage = a.mimeType.startsWith("image/");
+                return (
+                  <li key={a.id}>
+                    <a
+                      href={`/api/support-attachment/${a.storageKey}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="group flex items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-accent"
+                    >
+                      <span
+                        className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground"
+                        aria-hidden
+                      >
+                        {isImage ? (
+                          <span className="text-[0.62rem] font-mono">IMG</span>
+                        ) : (
+                          <Paperclip size={13} />
+                        )}
+                      </span>
+                      <div className="flex min-w-0 flex-1 flex-col leading-tight">
+                        <span className="truncate text-[0.84rem] group-hover:text-primary">
+                          {a.filename}
+                        </span>
+                        <span className="font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted-foreground">
+                          {formatFileSize(a.sizeBytes)}
+                        </span>
+                      </div>
+                      <ExternalLink
+                        size={12}
+                        className="shrink-0 text-muted-foreground/60 group-hover:text-foreground"
+                      />
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>,
+          document.body,
+        )}
+    </>
+  );
 }

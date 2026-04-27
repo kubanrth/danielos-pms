@@ -37,7 +37,13 @@ const createTicketSchema = z.object({
   isUrgent: z.preprocess((v) => v === "true" || v === "1" || v === true, z.boolean()).default(false),
 });
 
-export async function createSupportTicketAction(formData: FormData) {
+export type CreateTicketResult =
+  | { ok: true; ticketId: string }
+  | { ok: false; error: string };
+
+export async function createSupportTicketAction(
+  formData: FormData,
+): Promise<CreateTicketResult> {
   const parsed = createTicketSchema.safeParse({
     workspaceId: formData.get("workspaceId"),
     title: formData.get("title"),
@@ -46,7 +52,7 @@ export async function createSupportTicketAction(formData: FormData) {
     dueAt: formData.get("dueAt") ?? undefined,
     isUrgent: formData.get("isUrgent") ?? false,
   });
-  if (!parsed.success) return;
+  if (!parsed.success) return { ok: false, error: "Nieprawidłowe dane formularza." };
 
   const ctx = await requireWorkspaceMembership(parsed.data.workspaceId);
 
@@ -83,6 +89,7 @@ export async function createSupportTicketAction(formData: FormData) {
     },
   });
   revalidatePath(`/w/${parsed.data.workspaceId}/support`);
+  return { ok: true, ticketId: ticket.id };
 }
 
 const updateTicketSchema = z.object({
