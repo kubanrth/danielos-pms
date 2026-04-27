@@ -631,6 +631,15 @@ function ItemRow({
         >
           <RenderContent content={item.content} />
         </span>
+        {/* F12-K28+: pokazuj preview notatek (zamiast tylko labela
+            "notatka") — klient chciał widzieć co dokładnie tam jest bez
+            klikania w detail panel. Truncate do 2 linii + collapse
+            multi-newline w whitespace. */}
+        {item.notes && item.notes.trim() !== "" && (
+          <span className="line-clamp-2 w-full whitespace-pre-wrap break-words text-[0.78rem] leading-snug text-muted-foreground">
+            {item.notes.trim()}
+          </span>
+        )}
         <div className="flex flex-wrap items-center gap-2 font-mono text-[0.62rem] uppercase tracking-[0.12em] text-muted-foreground">
           {showListChip && (
             <span className="inline-flex items-center gap-1">
@@ -654,11 +663,6 @@ function ItemRow({
           {stepCount > 0 && (
             <span className="inline-flex items-center gap-1">
               <CheckSquare size={10} /> {stepsDone}/{stepCount}
-            </span>
-          )}
-          {item.notes && (
-            <span className="inline-flex items-center gap-1">
-              <span aria-hidden>≡</span> notatka
             </span>
           )}
         </div>
