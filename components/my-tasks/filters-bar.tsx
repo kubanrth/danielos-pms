@@ -5,11 +5,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  ArrowUpDown,
   Check,
   ChevronDown,
   Clock,
   History,
   Search,
+  Sparkles,
   X,
 } from "lucide-react";
 
@@ -44,6 +46,32 @@ const SORT_ICONS: Record<SortMode, typeof Clock> = {
   createdAsc: History,
   createdDesc: Clock,
 };
+
+// F12-K23: dropdown pogrupowany w sekcje z eyebrow nagłówkami zamiast
+// płaskiej listy. Dużo czytelniejsze niż 6 opcji jedna pod drugą.
+const SORT_GROUPS: { label: string; items: { mode: SortMode; description: string }[] }[] = [
+  {
+    label: "Modyfikacja",
+    items: [
+      { mode: "updatedDesc", description: "od najnowszej zmiany" },
+      { mode: "updatedAsc", description: "od najstarszej zmiany" },
+    ],
+  },
+  {
+    label: "Termin",
+    items: [
+      { mode: "dueAsc", description: "najpierw bliższy" },
+      { mode: "dueDesc", description: "najpierw dalszy" },
+    ],
+  },
+  {
+    label: "Utworzenie",
+    items: [
+      { mode: "createdDesc", description: "od najnowszego" },
+      { mode: "createdAsc", description: "od najstarszego" },
+    ],
+  },
+];
 
 // URL-synced filter bar. Each interaction writes shallow to the search
 // params so reloads and shareable links preserve state.
@@ -181,9 +209,10 @@ export function FiltersBar({
   );
 }
 
-// Custom sort dropdown — replaces the native <select> so the look matches
-// the rest of the app (rounded pill button + animated chevron + menu
-// with per-option icon and checkmark on the active item).
+// F12-K23: redesigned sort dropdown — pogrupowane sekcje z eyebrow
+// nagłówkami, większe option items (z descriptionem), trigger pokazuje
+// 'Sortuj: <label>' z ArrowUpDown ikoną zamiast clock'a (bardziej
+// generic — sygnalizuje że to SORT, nie filter time'em).
 function SortDropdown({
   current,
   onPick,
@@ -193,7 +222,6 @@ function SortDropdown({
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const CurrentIcon = SORT_ICONS[current];
 
   useEffect(() => {
     if (!open) return;
@@ -218,48 +246,85 @@ function SortDropdown({
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-background px-3 font-mono text-[0.72rem] uppercase tracking-[0.12em] text-foreground transition-colors hover:border-primary/60 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"
+        className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-background px-3.5 text-[0.86rem] text-foreground transition-colors hover:border-primary/60 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"
       >
-        <CurrentIcon size={12} className="text-muted-foreground" />
-        <span>{SORT_LABELS[current]}</span>
+        <ArrowUpDown size={13} className="text-muted-foreground" />
+        <span className="font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted-foreground">
+          Sortuj
+        </span>
+        <span className="font-medium">{SORT_LABELS[current]}</span>
         <ChevronDown
-          size={12}
+          size={13}
           className={`text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
         />
       </button>
 
       {open && (
-        <ul
+        <div
           role="listbox"
-          className="absolute right-0 top-[calc(100%+6px)] z-30 w-[220px] overflow-hidden rounded-lg border border-border bg-popover p-1 shadow-[0_12px_32px_-12px_rgba(10,10,40,0.25)]"
+          className="absolute right-0 top-[calc(100%+6px)] z-30 w-[280px] overflow-hidden rounded-xl border border-border bg-popover p-1.5 shadow-[0_18px_40px_-12px_rgba(10,10,40,0.3)]"
         >
-          {(Object.entries(SORT_LABELS) as [SortMode, string][]).map(([k, label]) => {
-            const Icon = SORT_ICONS[k];
-            const active = k === current;
-            return (
-              <li key={k}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={active}
-                  onClick={() => {
-                    onPick(k);
-                    setOpen(false);
-                  }}
-                  data-active={active ? "true" : "false"}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left font-mono text-[0.72rem] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground data-[active=true]:bg-primary/10 data-[active=true]:text-foreground"
-                >
-                  <Icon
-                    size={12}
-                    className={active ? "text-primary" : "text-muted-foreground"}
-                  />
-                  <span className="flex-1 truncate">{label}</span>
-                  {active && <Check size={12} className="text-primary" />}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+          {/* Header */}
+          <div className="flex items-center gap-1.5 px-2 pt-1 pb-2">
+            <Sparkles size={11} className="text-primary" />
+            <span className="font-mono text-[0.6rem] uppercase tracking-[0.16em] text-muted-foreground">
+              Sortowanie
+            </span>
+          </div>
+
+          {SORT_GROUPS.map((group, gi) => (
+            <div key={group.label}>
+              {gi > 0 && <div className="mx-2 my-1 h-px bg-border" aria-hidden />}
+              <div className="px-2 pt-1 pb-1 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground/70">
+                {group.label}
+              </div>
+              <ul className="flex flex-col gap-0.5">
+                {group.items.map((item) => {
+                  const Icon = SORT_ICONS[item.mode];
+                  const active = item.mode === current;
+                  return (
+                    <li key={item.mode}>
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={active}
+                        onClick={() => {
+                          onPick(item.mode);
+                          setOpen(false);
+                        }}
+                        data-active={active ? "true" : "false"}
+                        className="group flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-accent data-[active=true]:bg-primary/10"
+                      >
+                        <span
+                          className={`grid h-7 w-7 shrink-0 place-items-center rounded-md transition-colors ${
+                            active
+                              ? "bg-primary/15 text-primary"
+                              : "bg-muted text-muted-foreground group-hover:text-foreground"
+                          }`}
+                        >
+                          <Icon size={13} />
+                        </span>
+                        <div className="flex min-w-0 flex-1 flex-col leading-tight">
+                          <span
+                            className={`text-[0.86rem] ${active ? "font-semibold text-foreground" : "text-foreground"}`}
+                          >
+                            {SORT_LABELS[item.mode]}
+                          </span>
+                          <span className="font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted-foreground/80">
+                            {item.description}
+                          </span>
+                        </div>
+                        {active && (
+                          <Check size={14} className="shrink-0 text-primary" />
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
