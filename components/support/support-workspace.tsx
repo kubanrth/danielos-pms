@@ -8,6 +8,7 @@
 // reporter'a po RESOLVED.
 
 import { startTransition, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import {
   AlertCircle,
@@ -106,37 +107,63 @@ export function SupportWorkspace({
   tickets: SupportTicketRow[];
   members: SupportMember[];
 }) {
-  const [editing, setEditing] = useState<SupportTicketRow | null>(null);
+  // F12-K26: editing state by ID — wcześniej trzymał cały ticket object,
+  // który stawał się stale po revalidatePath (np. nowy załącznik nie
+  // pojawiał się w dialog'u, bo ticket prop zostawał ze starym
+  // attachments[]). Look up po id z tickets[] daje świeży obiekt na
+  // każdy re-render.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editing = editingId
+    ? tickets.find((t) => t.id === editingId) ?? null
+    : null;
 
-  // F12-K25: counters w nagłówku — total + open (nowe + w toku).
-  const openCount = tickets.filter(
-    (t) => t.status === "OPEN" || t.status === "IN_PROGRESS",
-  ).length;
+  // F12-K26: counters per status — zamiast jednej liczby pokazujemy
+  // breakdown chip-per-status, klient widzi od razu ile czego.
+  const statusCounts: Record<Status, number> = {
+    OPEN: 0,
+    IN_PROGRESS: 0,
+    RESOLVED: 0,
+    CLOSED: 0,
+  };
+  for (const t of tickets) statusCounts[t.status] += 1;
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3">
         <span className="eyebrow">Wsparcie</span>
-        <h1 className="flex items-baseline gap-3 font-display text-[2.2rem] font-bold leading-[1.1] tracking-[-0.03em]">
-          <span>
-            <span className="text-brand-gradient">Support</span> — zgłoszenia.
-          </span>
-          <span className="font-mono text-[0.78rem] uppercase tracking-[0.14em] text-muted-foreground">
-            {tickets.length}
-            {tickets.length > 0 && (
-              <>
-                <span className="mx-1">·</span>
-                <span className={openCount > 0 ? "text-primary" : ""}>
-                  {openCount} otwartych
-                </span>
-              </>
-            )}
-          </span>
+        <h1 className="font-display text-[2.2rem] font-bold leading-[1.1] tracking-[-0.03em]">
+          <span className="text-brand-gradient">Support</span> — zgłoszenia.
         </h1>
         <p className="max-w-[60ch] text-[0.95rem] leading-[1.55] text-muted-foreground">
           Zgłoś temat wymagający supportu. Admini przestrzeni przypisują
-          osobę odpowiedzialną i zamykają zgłoszenia. Statusy: nowe → w toku → rozwiązane → zamknięte.
+          osobę odpowiedzialną i zamykają zgłoszenia.
         </p>
+        {/* F12-K26: status breakdown chip per status. Klient widzi od
+            razu rozkład — łącznie / nowe / w toku / rozwiązane /
+            zamknięte. */}
+        {tickets.length > 0 && (
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground">
+              <span className="text-foreground font-semibold">{tickets.length}</span>
+              łącznie
+            </span>
+            {(["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"] as Status[]).map((s) => {
+              if (statusCounts[s] === 0) return null;
+              const m = STATUS_META[s];
+              const Icon = m.icon;
+              return (
+                <span
+                  key={s}
+                  className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-mono text-[0.66rem] uppercase tracking-[0.14em] font-semibold"
+                  style={{ background: `${m.color}1A`, color: m.color }}
+                >
+                  <Icon size={11} />
+                  {statusCounts[s]} {m.label.toLowerCase()}
+                </span>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <NewTicketForm workspaceId={workspaceId} />
@@ -172,7 +199,7 @@ export function SupportWorkspace({
                     members={members}
                     canManage={canManage}
                     currentUserId={currentUserId}
-                    onEdit={() => setEditing(t)}
+                    onEdit={() => setEditingId(t.id)}
                   />
                 ))}
               </tbody>
@@ -186,7 +213,7 @@ export function SupportWorkspace({
           ticket={editing}
           canManage={canManage}
           currentUserId={currentUserId}
-          onClose={() => setEditing(null)}
+          onClose={() => setEditingId(null)}
         />
       )}
     </div>
@@ -1126,18 +1153,41 @@ function AttachmentsSection({
   currentUserId: string;
   canManage: boolean;
 }) {
+  const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // F12-K26: ALLOWED MIME na serverze odrzuca pliki bez detekcji typu
+  // (np. .heic czy custom). Sprawdzamy tu szybciutko i mappujemy
+  // common cases zanim wyślemy żądanie.
+  const inferContentType = (file: File): string => {
+    if (file.type) return file.type;
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    const map: Record<string, string> = {
+      png: "image/png",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      gif: "image/gif",
+      webp: "image/webp",
+      svg: "image/svg+xml",
+      pdf: "application/pdf",
+      txt: "text/plain",
+      csv: "text/csv",
+      md: "text/markdown",
+    };
+    return ext && map[ext] ? map[ext] : "application/octet-stream";
+  };
+
   const onPick = async (file: File) => {
     setError(null);
     setUploading(true);
+    const contentType = inferContentType(file);
     try {
       const req = await requestSupportAttachmentUploadAction(
         ticketId,
         file.name,
-        file.type || "application/octet-stream",
+        contentType,
         file.size,
       );
       if (!req.ok) {
@@ -1147,24 +1197,31 @@ function AttachmentsSection({
       }
       const putRes = await fetch(req.uploadUrl, {
         method: "PUT",
-        headers: { "Content-Type": file.type || "application/octet-stream" },
+        headers: { "Content-Type": contentType },
         body: file,
       });
       if (!putRes.ok) {
-        setError("Upload nie powiódł się.");
+        const body = await putRes.text().catch(() => "");
+        console.warn("[support-attachment] PUT failed", putRes.status, body);
+        setError(`Upload nie powiódł się (HTTP ${putRes.status}).`);
         setUploading(false);
         return;
       }
-      const confirm = await confirmSupportAttachmentUploadAction({
+      const confirmRes = await confirmSupportAttachmentUploadAction({
         ticketId,
         storageKey: req.storageKey,
         filename: file.name,
-        contentType: file.type || "application/octet-stream",
+        contentType,
         sizeBytes: file.size,
       });
-      if (!confirm.ok) {
-        setError(confirm.error ?? "Nie udało się zapisać pliku.");
+      if (!confirmRes.ok) {
+        setError(confirmRes.error ?? "Nie udało się zapisać pliku.");
+        setUploading(false);
+        return;
       }
+      // F12-K26: explicit refresh — revalidatePath sam nie zawsze
+      // dochodzi do otwartego dialogu (intercepted route caching).
+      router.refresh();
     } catch (e) {
       console.warn("[support-attachment] upload error", e);
       setError("Upload nie powiódł się — sprawdź połączenie.");
@@ -1177,7 +1234,10 @@ function AttachmentsSection({
     if (!confirm("Usunąć ten załącznik?")) return;
     const fd = new FormData();
     fd.set("id", id);
-    startTransition(() => deleteSupportAttachmentAction(fd));
+    startTransition(async () => {
+      await deleteSupportAttachmentAction(fd);
+      router.refresh();
+    });
   };
 
   return (

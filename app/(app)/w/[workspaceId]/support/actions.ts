@@ -193,16 +193,39 @@ export async function updateSupportTicketAction(formData: FormData) {
   const wasOpenBefore = ticket.status === "OPEN" || ticket.status === "IN_PROGRESS";
   const isClosedNow =
     parsed.data.status === "RESOLVED" || parsed.data.status === "CLOSED";
+
+  // F12-K26: gdy admin przypisuje kogoś do ticketu (i to nie ten kto
+  // klika) — wyślij notyfikację 'support.assigned' do nowego assignee.
+  // Wcześniej tylko reporter dostawał info na zamknięciu, assignee
+  // nie wiedział że dostał ticket.
+  let newAssigneeId: string | null = null;
+  if (parsed.data.assigneeId !== undefined) {
+    const next = parsed.data.assigneeId === "" ? null : parsed.data.assigneeId;
+    if (next && next !== ticket.assigneeId && next !== ctx.userId) {
+      newAssigneeId = next;
+    }
+  }
+
+  // Resolve actor once if any notification will be sent.
+  const willNotify =
+    (parsed.data.status &&
+      wasOpenBefore &&
+      isClosedNow &&
+      ticket.reporterId !== ctx.userId) ||
+    newAssigneeId !== null;
+  const actor = willNotify
+    ? await db.user.findUnique({
+        where: { id: ctx.userId },
+        select: { name: true, email: true },
+      })
+    : null;
+
   if (
     parsed.data.status &&
     wasOpenBefore &&
     isClosedNow &&
     ticket.reporterId !== ctx.userId
   ) {
-    const actor = await db.user.findUnique({
-      where: { id: ctx.userId },
-      select: { name: true, email: true },
-    });
     await db.notification.create({
       data: {
         userId: ticket.reporterId,
@@ -212,6 +235,22 @@ export async function updateSupportTicketAction(formData: FormData) {
           ticketId: ticket.id,
           ticketTitle: ticket.title,
           status: parsed.data.status,
+          actorId: ctx.userId,
+          actorName: actor?.name ?? actor?.email ?? null,
+        } as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  if (newAssigneeId) {
+    await db.notification.create({
+      data: {
+        userId: newAssigneeId,
+        type: "support.assigned",
+        payload: {
+          workspaceId: ticket.workspaceId,
+          ticketId: ticket.id,
+          ticketTitle: ticket.title,
           actorId: ctx.userId,
           actorName: actor?.name ?? actor?.email ?? null,
         } as Prisma.InputJsonValue,

@@ -128,15 +128,17 @@ function NotificationRow({
   const isPoll = type === "poll.created";
   // F12-K21: render notyfikacji o przypisaniu do task'a.
   const isAssigned = type === "task.assigned";
-  // F12-K25: render notyfikacji o zamknięciu ticketu supportu.
+  // F12-K25/K26: support notyfikacje.
   const isSupportResolved = type === "support.resolved";
-  const href = isSupportResolved
-    ? payload.workspaceId
-      ? `/w/${payload.workspaceId}/support`
-      : "/inbox"
-    : payload.workspaceId && payload.taskId
-      ? `/w/${payload.workspaceId}/t/${payload.taskId}`
-      : "/inbox";
+  const isSupportAssigned = type === "support.assigned";
+  const href =
+    isSupportResolved || isSupportAssigned
+      ? payload.workspaceId
+        ? `/w/${payload.workspaceId}/support`
+        : "/inbox"
+      : payload.workspaceId && payload.taskId
+        ? `/w/${payload.workspaceId}/t/${payload.taskId}`
+        : "/inbox";
 
   // Only attach hotkey hooks when the notification actually points to a
   // task (and we have its assignee list).
@@ -191,6 +193,17 @@ function NotificationRow({
         )}
         .
       </>
+    ) : isSupportAssigned ? (
+      <>
+        <span className="font-semibold text-foreground">
+          {payload.actorName ?? "Ktoś"}
+        </span>
+        {" przypisał(a) Cię do zgłoszenia "}
+        <span className="font-semibold text-foreground">
+          {payload.ticketTitle ?? "?"}
+        </span>
+        .
+      </>
     ) : (
       <span className="text-muted-foreground">{type}</span>
     );
@@ -212,17 +225,17 @@ function NotificationRow({
         className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${
           isPoll
             ? "bg-amber-500/10 text-amber-500"
-            : isAssigned
+            : isAssigned || isSupportResolved
               ? "bg-emerald-500/10 text-emerald-500"
-              : isSupportResolved
-                ? "bg-emerald-500/10 text-emerald-500"
+              : isSupportAssigned
+                ? "bg-blue-500/10 text-blue-500"
                 : "bg-primary/10 text-primary"
         }`}
         aria-hidden
       >
         {isPoll ? (
           <Vote size={14} />
-        ) : isAssigned ? (
+        ) : isAssigned || isSupportAssigned ? (
           <UserPlus size={14} />
         ) : isSupportResolved ? (
           <CheckCircle2 size={14} />
