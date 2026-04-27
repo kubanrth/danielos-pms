@@ -50,6 +50,18 @@ export default async function BoardTablePage({
           },
           tags: { include: { tag: true } },
           customValues: true,
+          // F12-K29: lekkie include (4 pola) dla kolumny 'Załączniki' —
+          // pełne metadane (uploader, createdAt) są w task-detail.
+          attachments: {
+            where: { deletedAt: null },
+            select: {
+              id: true,
+              filename: true,
+              mimeType: true,
+              sizeBytes: true,
+            },
+            orderBy: { createdAt: "desc" },
+          },
         },
       },
     },
@@ -156,6 +168,12 @@ export default async function BoardTablePage({
           customValues: Object.fromEntries(
             t.customValues.map((v) => [v.columnId, v.valueText ?? ""]),
           ),
+          attachments: t.attachments.map((a) => ({
+            id: a.id,
+            filename: a.filename,
+            mimeType: a.mimeType,
+            sizeBytes: a.sizeBytes,
+          })),
         }))}
         canEdit={canEdit}
         canManagePrefs={canManageBoard}

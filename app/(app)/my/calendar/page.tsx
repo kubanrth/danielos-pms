@@ -34,11 +34,17 @@ export default async function MyCalendarPage({
 
   // Fetch every assignment that has at least one date — we still need the
   // task row for title, workspace, and status color.
+  // F12-K29: filtruj też po workspace.deletedAt — `deleteWorkspaceAction`
+  // soft-delete'uje sam workspace (deletedAt) ale NIE cascade-deletuje
+  // tasków, więc bez tego warunku 'wszystkie przestrzenie' pokazywało
+  // zadania ze skasowanych workspace'ów. Również board.deletedAt.
   const assignments = await db.taskAssignee.findMany({
     where: {
       userId,
       task: {
         deletedAt: null,
+        workspace: { deletedAt: null },
+        board: { deletedAt: null },
         ...(selectedWorkspace !== "all"
           ? { workspaceId: selectedWorkspace }
           : {}),

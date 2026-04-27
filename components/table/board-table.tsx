@@ -40,6 +40,11 @@ import { FieldCell } from "@/components/table/field-cells";
 import { TableHeaderCell } from "@/components/table/header-cell";
 import { FieldOptionsEditor, FieldTypePicker } from "@/components/table/field-config";
 import { StatusPicker } from "@/components/table/status-picker";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AttachmentCell,
+  type AttachmentCellItem,
+} from "@/components/table/attachment-cell";
 import { parseFieldOptions, type FieldOptions, type FieldType } from "@/lib/table-fields";
 import {
   TableFiltersToolbar,
@@ -76,6 +81,11 @@ export interface BoardTableTask {
   tags: { id: string; name: string; colorHex: string }[];
   // F9-07: user-defined column values, keyed by custom column id.
   customValues: Record<string, string>;
+  // F12-K29: lista załączników do wyświetlenia w kolumnie 'Załączniki'.
+  // Typ collapsed do tego, czego potrzebuje AttachmentCell — pełnego
+  // metadata (uploader, createdAt) tutaj nie dopuszczamy bo widok tabeli
+  // nie powinien tego wyświetlać.
+  attachments: AttachmentCellItem[];
 }
 
 export interface BoardTableColumn {
@@ -112,6 +122,7 @@ const DEFAULT_COLUMN_ORDER: string[] = [
   "tags",
   "startAt",
   "stopAt",
+  "attachments",
 ];
 
 // F11-6 (#12): klient zażądał możliwości ukrywania defaultowych kolumn
@@ -125,6 +136,7 @@ const COLUMN_DEFS: ColumnDef[] = [
   { id: "tags", label: "Tagi" },
   { id: "startAt", label: "Start" },
   { id: "stopAt", label: "Koniec" },
+  { id: "attachments", label: "Załączniki" },
 ];
 
 export function BoardTable({
@@ -484,6 +496,24 @@ export function BoardTable({
           />
         ),
       }),
+      // F12-K29: built-in 'Załączniki' kolumna — count + popover z listą
+      // i uploadem. Sortowanie po liczbie plików (DESC default jest
+      // intuicyjne — taski z najwięcej załącznikami na górze).
+      col.accessor("attachments", {
+        id: "attachments",
+        header: "Załączniki",
+        size: 140,
+        minSize: 100,
+        sortingFn: (a, b) =>
+          a.original.attachments.length - b.original.attachments.length,
+        cell: (info) => (
+          <AttachmentCell
+            taskId={info.row.original.id}
+            attachments={info.row.original.attachments}
+            canEdit={canEdit}
+          />
+        ),
+      }),
       // F9-07 / F10-A: one TanStack column per user-defined custom
       // column. `id` uses a `custom:` prefix so column-order + visibility
       // state stays distinct from the built-in ids. Cell rendering is
@@ -800,27 +830,35 @@ export function BoardTable({
               );
               const checkboxOffset = canEdit ? 40 : 0;
               return (
-                <tr key={hg.id} className="border-b border-border bg-muted/40">
+                <tr key={hg.id} className="border-b border-border bg-card">
                   {canEdit && (
-                    <th className="sticky left-0 top-0 z-30 h-10 w-10 bg-muted/95 px-2 shadow-[1px_0_0_0_var(--border)] backdrop-blur-sm">
-                      <input
-                        type="checkbox"
-                        aria-label="Zaznacz wszystkie wiersze"
-                        checked={
+                    // F12-K29: bg-card (było bg-muted/95) — pełna nieprzezroczystość
+                    // żeby tło BoardShell (gradient/obraz) nie przebijało za checkboxem.
+                    <th className="sticky left-0 top-0 z-30 h-10 w-10 bg-card px-2 shadow-[1px_0_0_0_var(--border)]">
+                      {(() => {
+                        const allChecked =
                           table.getRowModel().rows.length > 0 &&
-                          table.getRowModel().rows.every((r) => rowSelection[r.id])
-                        }
-                        onChange={(e) => {
-                          if (e.currentTarget.checked) {
-                            const next: RowSelectionState = {};
-                            for (const r of table.getRowModel().rows) next[r.id] = true;
-                            setRowSelection(next);
-                          } else {
-                            setRowSelection({});
-                          }
-                        }}
-                        className="h-3.5 w-3.5 cursor-pointer accent-[var(--primary)]"
-                      />
+                          table.getRowModel().rows.every((r) => rowSelection[r.id]);
+                        const someChecked = table
+                          .getRowModel()
+                          .rows.some((r) => rowSelection[r.id]);
+                        return (
+                          <Checkbox
+                            ariaLabel="Zaznacz wszystkie wiersze"
+                            checked={allChecked}
+                            indeterminate={!allChecked && someChecked}
+                            onChange={(e) => {
+                              if (e.currentTarget.checked) {
+                                const next: RowSelectionState = {};
+                                for (const r of table.getRowModel().rows) next[r.id] = true;
+                                setRowSelection(next);
+                              } else {
+                                setRowSelection({});
+                              }
+                            }}
+                          />
+                        );
+                      })()}
                     </th>
                   )}
                   {[...leftHeaders, ...centerHeaders].map((header) => {
@@ -999,25 +1037,27 @@ export function BoardTable({
                                 background: isSelected ? "rgba(var(--primary-rgb,0,0,0),0.05)" : undefined,
                               }}
                             >
-                              <input
-                                type="checkbox"
-                                aria-label={`Zaznacz wiersz ${row.original.title}`}
+                              <Checkbox
+                                ariaLabel={`Zaznacz wiersz ${row.original.title}`}
                                 checked={isSelected}
-                                onChange={(e) => {
+                                onClick={(e) => {
                                   // Shift-click extends the range from the
                                   // last clicked row.
-                                  const ev = e.nativeEvent as MouseEvent;
-                                  if (ev.shiftKey && lastClickedRowRef.current) {
+                                  if (e.shiftKey && lastClickedRowRef.current) {
+                                    e.preventDefault();
                                     extendSelection(row.original.id);
                                   } else {
                                     setRowSelection((prev) => ({
                                       ...prev,
                                       [row.original.id]: !prev[row.original.id],
                                     }));
+                                    e.preventDefault();
                                   }
                                   lastClickedRowRef.current = row.original.id;
                                 }}
-                                className="h-3.5 w-3.5 cursor-pointer accent-[var(--primary)]"
+                                onChange={() => {
+                                  /* handled in onClick to support shift+click */
+                                }}
                               />
                             </td>
                           )}

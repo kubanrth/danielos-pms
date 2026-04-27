@@ -165,6 +165,17 @@ async function TableRenderer({
           },
           tags: { include: { tag: true } },
           customValues: true,
+          // F12-K29: 'Załączniki' built-in column needs file metadata.
+          attachments: {
+            where: { deletedAt: null },
+            select: {
+              id: true,
+              filename: true,
+              mimeType: true,
+              sizeBytes: true,
+            },
+            orderBy: { createdAt: "desc" },
+          },
         },
       },
     },
@@ -231,6 +242,12 @@ async function TableRenderer({
         customValues: Object.fromEntries(
           t.customValues.map((v) => [v.columnId, v.valueText ?? ""]),
         ),
+        attachments: t.attachments.map((a) => ({
+          id: a.id,
+          filename: a.filename,
+          mimeType: a.mimeType,
+          sizeBytes: a.sizeBytes,
+        })),
       }))}
       canEdit={canEdit}
       canManagePrefs={canManageBoard}

@@ -569,7 +569,11 @@ function Popover({
     <div ref={ref} className="relative">
       {trigger}
       {open && (
-        <div className="absolute left-0 top-[calc(100%+6px)] z-30 rounded-xl border border-border bg-popover shadow-[0_12px_32px_-12px_rgba(10,10,40,0.25)]">
+        // F12-K29: z-50 (było z-30) — sticky <thead> ma własny stacking
+        // context z z-30, więc filter popover wpadał pod nagłówek tabeli
+        // ('obraz nakłada się na checkbox' = tło thead nakładało się na
+        // listę filtrów).
+        <div className="absolute left-0 top-[calc(100%+6px)] z-50 rounded-xl border border-border bg-popover shadow-[0_12px_32px_-12px_rgba(10,10,40,0.25)]">
           {children}
         </div>
       )}

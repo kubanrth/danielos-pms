@@ -157,7 +157,9 @@ export function ColumnSettings({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-[calc(100%+6px)] z-30 w-80 rounded-xl border border-border bg-popover p-3 shadow-[0_12px_32px_-12px_rgba(10,10,40,0.25)]">
+        // F12-K29: bump z-30 → z-50; sticky <thead> creates own stacking
+        // context at z-30, popover was rendered behind the column headers.
+        <div className="absolute right-0 top-[calc(100%+6px)] z-50 w-80 rounded-xl border border-border bg-popover p-3 shadow-[0_12px_32px_-12px_rgba(10,10,40,0.25)]">
           <div className="mb-2 flex items-center justify-between">
             <span className="eyebrow">Kolumny tabeli</span>
             <button
