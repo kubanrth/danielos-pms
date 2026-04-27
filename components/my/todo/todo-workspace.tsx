@@ -16,6 +16,7 @@ import {
   Star,
   Sun,
   Trash2,
+  UserCheck as UserIcon,
 } from "lucide-react";
 import {
   createTodoFolderAction,
@@ -56,11 +57,16 @@ export interface AssignedTaskRef {
   stopAt: string | null;
 }
 
-// MS-To-Do-like labels / icons for the three smart views.
+// MS-To-Do-like labels / icons for smart views.
+// F12-K22: dorzucone 'Przydzielone do mnie' (assigned-to-me) — pokazuje
+// taski projektowe gdzie current user jest assignee, jako osobny widok
+// w sidebarze (jak MS To Do). Zastępuje wcześniejszy embedded
+// AssignedTasksPanel w prawym panelu.
 const SMART_VIEWS: { key: SmartView; label: string; icon: typeof Sun; accent: string }[] = [
   { key: "my-day", label: "Mój dzień", icon: Sun, accent: "text-amber-500" },
   { key: "important", label: "Ważne", icon: Star, accent: "text-rose-500" },
   { key: "planned", label: "Zaplanowane", icon: CalendarDays, accent: "text-sky-500" },
+  { key: "assigned", label: "Przydzielone do mnie", icon: UserIcon, accent: "text-emerald-500" },
 ];
 
 // F9-11: fullwidth 2-column layout (sidebar + main) with a slide-in
@@ -195,29 +201,36 @@ export function TodoWorkspace({
         </div>
       </aside>
 
-      {/* Main content — selected list or smart view */}
+      {/* Main content — selected list / smart view (full width).
+          F12-K22: MS-To-Do parity — main rozciągnięty na całą szerokość
+          (minus sidebar i ewentualny detail panel). Add-task input
+          przyklejony u dołu sticky. */}
       <section className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <header className="flex items-center justify-between border-b border-border bg-background px-8 py-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {activeSmart && (
               <activeSmart.icon size={22} className={activeSmart.accent} aria-hidden />
             )}
             <h1 className="font-display text-[1.8rem] font-bold leading-tight tracking-[-0.02em]">
               {pageTitle}
             </h1>
-            <span className="ml-2 font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground">
-              {completed.length} z {items.length}
-            </span>
+            {smart !== "assigned" && (
+              <span className="ml-2 font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground">
+                {completed.length} z {items.length}
+              </span>
+            )}
+            {smart === "assigned" && assignedTasks.length > 0 && (
+              <span className="ml-2 font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground">
+                {assignedTasks.length} przypisanych
+              </span>
+            )}
           </div>
         </header>
 
-        {/* F12-K16: quick-add przeniesiony WYŁĄCZNIE do prawego panelu
-             (klient zażądał MS-To-Do parity — add-task zawsze po prawej
-             stronie kiedy lista aktywna, niezależnie czy wybrano task'a).
-             Top header zostaje czysty. */}
-
-        <div className="flex-1 overflow-y-auto px-8 py-4">
-          {items.length === 0 ? (
+        <div className="min-h-0 flex-1 overflow-y-auto px-8 py-4">
+          {smart === "assigned" ? (
+            <AssignedTasksPanel tasks={assignedTasks} />
+          ) : items.length === 0 ? (
             <EmptyState smart={smart} hasList={!!activeListId} />
           ) : (
             <div className="flex flex-col gap-4">
@@ -238,44 +251,25 @@ export function TodoWorkspace({
             </div>
           )}
         </div>
+
+        {/* F12-K22: sticky bottom add-task — MS To Do style. Pokazuje się
+            tylko gdy lista jest aktywna (smart views nie mają kanonicznego
+            targetu). */}
+        {activeListId && (
+          <div className="shrink-0 border-t border-border bg-background/95 px-8 py-3 backdrop-blur-sm">
+            <QuickAddItem
+              listId={activeListId}
+              listName={activeListName ?? ""}
+              variant="bottom"
+              onOptimistic={addOptimisticItem}
+            />
+          </div>
+        )}
       </section>
 
-      {/* F12-K16: prawy panel jest ZAWSZE widoczny gdy lista jest
-          aktywna. Trzyma sticky add-task input u góry + opcjonalny
-          TodoDetailPanel pod nim gdy task wybrany. Smart view (My Day /
-          Important / Planned) nie ma kanonicznego targetu — tam panel
-          ukryty (jak w MS To Do). */}
-      {activeListId ? (
-        <div className="flex w-[380px] shrink-0 flex-col border-l border-border bg-card/50">
-          <div className="shrink-0 border-b border-border bg-background/60 p-4 backdrop-blur-sm">
-            <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3 shadow-[0_4px_16px_-8px_rgba(10,10,40,0.08)]">
-              <span className="eyebrow text-primary">Dodaj zadanie</span>
-              <p className="text-[0.82rem] leading-[1.45] text-muted-foreground">
-                {activeListName
-                  ? `Lista: „${activeListName}"`
-                  : "Wpisz tytuł i Enter."}
-              </p>
-              <QuickAddItem
-                listId={activeListId}
-                listName={activeListName ?? ""}
-                variant="panel"
-                onOptimistic={addOptimisticItem}
-              />
-            </div>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {selectedItem ? (
-              <TodoDetailPanel
-                key={selectedItem.id}
-                item={selectedItem}
-                onClose={() => setSelectedItemId(null)}
-              />
-            ) : (
-              <AssignedTasksPanel tasks={assignedTasks} />
-            )}
-          </div>
-        </div>
-      ) : selectedItem ? (
+      {/* F12-K22: prawy detail panel TYLKO gdy task wybrany. Inaczej
+          main jest na całą dostępną szerokość. */}
+      {selectedItem && (
         <div className="w-[380px] shrink-0 border-l border-border bg-card/50 overflow-y-auto">
           <TodoDetailPanel
             key={selectedItem.id}
@@ -283,7 +277,7 @@ export function TodoWorkspace({
             onClose={() => setSelectedItemId(null)}
           />
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
@@ -662,13 +656,13 @@ function QuickAddItem({
 }: {
   listId: string;
   listName: string;
-  // F11-11: same form rendered in two places (main top header + right
-  // panel). Right-panel variant has slimmer chrome since it's nested in
-  // a card.
-  variant?: "main" | "panel";
+  // F11-11 → F12-K22: 'bottom' variant = sticky bottom of main content
+  // (MS-To-Do style — input full-width pod listą zadań). 'panel' = card
+  // wewnątrz right panelu (legacy — usunięte w F12-K22). 'main' = top
+  // header inline (legacy — usunięte w F12-K22).
+  variant?: "main" | "panel" | "bottom";
   // F12-K18: callback do parent useOptimistic — input renders new item
-  // natychmiast lokalnie, server save w tle. Bez tego flow czuł się
-  // laggy (revalidatePath round-trip).
+  // natychmiast lokalnie, server save w tle.
   onOptimistic?: (pending: {
     tempId: string;
     content: string;
@@ -700,9 +694,14 @@ function QuickAddItem({
   };
 
   const cls =
-    variant === "panel"
-      ? "flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 transition-colors focus-within:border-primary/60"
-      : "flex items-center gap-3 rounded-xl border border-border bg-card px-5 py-3 shadow-[0_1px_2px_rgba(10,10,40,0.04)]";
+    variant === "bottom"
+      ? "flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-2.5 transition-colors focus-within:border-primary/60 focus-within:shadow-[0_2px_8px_-2px_rgba(10,10,40,0.08)]"
+      : variant === "panel"
+        ? "flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 transition-colors focus-within:border-primary/60"
+        : "flex items-center gap-3 rounded-xl border border-border bg-card px-5 py-3 shadow-[0_1px_2px_rgba(10,10,40,0.04)]";
+
+  const iconSize = variant === "panel" ? 13 : variant === "bottom" ? 16 : 15;
+
   return (
     <form
       onSubmit={(e) => {
@@ -711,7 +710,7 @@ function QuickAddItem({
       }}
       className={cls}
     >
-      <Plus size={variant === "panel" ? 13 : 15} className="text-primary/70" />
+      <Plus size={iconSize} className="text-primary/70" />
       <input
         ref={inputRef}
         name="content"
@@ -719,12 +718,14 @@ function QuickAddItem({
         onChange={(e) => setContent(e.target.value)}
         required
         maxLength={300}
-        placeholder="Dodaj zadanie…"
+        placeholder="Dodaj zadanie"
         autoFocus={variant === "panel"}
         className={
-          variant === "panel"
-            ? "flex-1 bg-transparent text-[0.88rem] outline-none placeholder:text-muted-foreground/60"
-            : "flex-1 bg-transparent py-1 text-[0.95rem] outline-none placeholder:text-muted-foreground/60"
+          variant === "bottom"
+            ? "flex-1 bg-transparent py-1 text-[0.96rem] outline-none placeholder:text-muted-foreground/60"
+            : variant === "panel"
+              ? "flex-1 bg-transparent text-[0.88rem] outline-none placeholder:text-muted-foreground/60"
+              : "flex-1 bg-transparent py-1 text-[0.95rem] outline-none placeholder:text-muted-foreground/60"
         }
       />
       <button
@@ -733,12 +734,14 @@ function QuickAddItem({
         aria-label="Dodaj zadanie"
         title="Dodaj (Enter)"
         className={
-          variant === "panel"
-            ? "grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-            : "grid h-9 w-9 shrink-0 place-items-center rounded-md bg-brand-gradient text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          variant === "bottom"
+            ? "grid h-9 w-9 shrink-0 place-items-center rounded-md bg-brand-gradient text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            : variant === "panel"
+              ? "grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+              : "grid h-9 w-9 shrink-0 place-items-center rounded-md bg-brand-gradient text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         }
       >
-        <Plus size={variant === "panel" ? 13 : 16} />
+        <Plus size={iconSize} />
       </button>
     </form>
   );

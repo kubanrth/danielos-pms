@@ -9,10 +9,17 @@ import { TodoWorkspace } from "@/components/my/todo/todo-workspace";
 //   my-day    — items where myDayAt >= start-of-today (auto-expires)
 //   important — items where important=true
 //   planned   — items where dueDate is set
-export type SmartView = "my-day" | "important" | "planned";
+// F12-K22: 'assigned' smart view = workspace tasks gdzie current user
+// jest przypisany (zastąpienie wcześniejszego embedded panelu w prawym).
+export type SmartView = "my-day" | "important" | "planned" | "assigned";
 
 function isSmartView(v: string | undefined): v is SmartView {
-  return v === "my-day" || v === "important" || v === "planned";
+  return (
+    v === "my-day" ||
+    v === "important" ||
+    v === "planned" ||
+    v === "assigned"
+  );
 }
 
 export default async function MyTodoPage({
@@ -67,6 +74,10 @@ export default async function MyTodoPage({
     }
 
     // Smart view — pull across all lists, apply filter.
+    // F12-K22: 'assigned' smart view nie ładuje TodoItems (pokazuje tylko
+    // workspace TaskAssignee'y poniżej), więc skip tego query całkowicie.
+    if (effectiveSmart === "assigned") return [];
+
     const smartWhere = (() => {
       switch (effectiveSmart) {
         case "my-day":
@@ -94,30 +105,31 @@ export default async function MyTodoPage({
     ? lists.find((l) => l.id === activeListId) ?? null
     : null;
 
-  // F12-K17: pull workspace tasks where this user is assignee. Klient
-  // chce widzieć w prawym panelu (obok add-task) jakie zadania
-  // projektowe ma przypisane — TODO module to teraz nie tylko
-  // personal list ale też 'inbox' przypisanych prac. Tylko gdy lista
-  // wybrana (na smart view inbox bez sensu — pokazuje to /my-tasks).
-  const assignedTasks = activeListId
-    ? await db.taskAssignee.findMany({
-        where: {
-          userId,
-          task: { deletedAt: null },
-        },
-        orderBy: { task: { updatedAt: "desc" } },
-        take: 30,
-        include: {
-          task: {
-            include: {
-              workspace: { select: { id: true, name: true } },
-              board: { select: { id: true, name: true } },
-              statusColumn: { select: { name: true, colorHex: true } },
+  // F12-K22: pull workspace tasks gdzie current user jest assignee.
+  // Pokazywane jako osobny smart view 'Przydzielone do mnie' w sidebar'ze
+  // (MS-To-Do parity). Też potrzebne gdy activeListId set, bo
+  // prawy detail panel oryginalnie próbował to pokazywać — teraz tylko
+  // dla smart='assigned'.
+  const assignedTasks =
+    activeListId || effectiveSmart === "assigned"
+      ? await db.taskAssignee.findMany({
+          where: {
+            userId,
+            task: { deletedAt: null },
+          },
+          orderBy: { task: { updatedAt: "desc" } },
+          take: 60,
+          include: {
+            task: {
+              include: {
+                workspace: { select: { id: true, name: true } },
+                board: { select: { id: true, name: true } },
+                statusColumn: { select: { name: true, colorHex: true } },
+              },
             },
           },
-        },
-      })
-    : [];
+        })
+      : [];
 
   // Also surface the "star" item by id if itemId is in URL — the client
   // can open the detail panel immediately without an extra fetch.
