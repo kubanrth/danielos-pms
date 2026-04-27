@@ -1059,6 +1059,10 @@ model TodoStep {
   id        String   @id @default(cuid())
   itemId    String
   title     String
+  // F12-K28: notes per pod-zadanie. Klient zażądał osobnych opisów
+  // dla każdego subtaska (parent TodoItem już ma `notes`). Optional —
+  // pusty string i null są równoważne na poziomie UI.
+  notes     String?  @db.Text
   completed Boolean  @default(false)
   order     Float    @default(0)
   createdAt DateTime @default(now())

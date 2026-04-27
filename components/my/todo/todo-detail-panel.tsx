@@ -24,6 +24,8 @@ import {
   toggleTodoMyDayAction,
   toggleTodoStepAction,
   updateTodoNotesAction,
+  updateTodoStepNotesAction,
+  updateTodoStepTitleAction,
   updateTodoTitleAction,
 } from "@/app/(app)/my/todo/actions";
 
@@ -31,6 +33,8 @@ export interface TodoStepRow {
   id: string;
   title: string;
   completed: boolean;
+  // F12-K28: opis pod-zadania.
+  notes: string | null;
 }
 
 export interface TodoItemFull {
@@ -227,6 +231,13 @@ function TitleEditor({
   );
 }
 
+// F12-K28: pod-zadania (subtaski) z osobnymi opisami. Klient zażądał
+// 'Plusik pod mniejszym zadaniem' + 'notatkę pod zadaniem... odnosi
+// się też do pod-zadań'. Każdy step ma teraz:
+//   - checkbox toggle (zostawione)
+//   - inline title edit (na klik)
+//   - expand button → opis editor (nowy)
+//   - usuwanie (zostawione)
 function StepsSection({
   itemId,
   steps,
@@ -242,70 +253,19 @@ function StepsSection({
     <section className="flex flex-col gap-2 rounded-md border border-border bg-background p-3">
       <div className="flex items-center justify-between">
         <span className="font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted-foreground">
-          Kroki {steps.length > 0 && `· ${done}/${steps.length}`}
+          Pod-zadania {steps.length > 0 && `· ${done}/${steps.length}`}
         </span>
-        {!adding && (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            aria-label="Dodaj krok"
-            className="grid h-6 w-6 place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <Plus size={12} />
-          </button>
-        )}
       </div>
 
       {steps.length > 0 && (
         <ul className="flex flex-col gap-0.5">
           {steps.map((s) => (
-            <li
-              key={s.id}
-              className="group flex items-center gap-2 rounded-sm px-1 py-1 hover:bg-accent/40"
-            >
-              <form
-                action={(fd) => startTransition(() => toggleTodoStepAction(fd))}
-                className="m-0 shrink-0"
-              >
-                <input type="hidden" name="id" value={s.id} />
-                <input type="hidden" name="completed" value={s.completed ? "false" : "true"} />
-                <button
-                  type="submit"
-                  className="grid h-4 w-4 place-items-center text-muted-foreground hover:text-primary"
-                >
-                  {s.completed ? (
-                    <CheckCircle2 size={14} className="text-primary" />
-                  ) : (
-                    <Circle size={14} />
-                  )}
-                </button>
-              </form>
-              <span
-                className={`flex-1 truncate text-[0.85rem] ${
-                  s.completed ? "text-muted-foreground line-through" : ""
-                }`}
-              >
-                {s.title}
-              </span>
-              <form
-                action={(fd) => startTransition(() => deleteTodoStepAction(fd))}
-                className="m-0"
-              >
-                <input type="hidden" name="id" value={s.id} />
-                <button
-                  type="submit"
-                  aria-label="Usuń krok"
-                  className="grid h-5 w-5 place-items-center rounded-sm text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
-                >
-                  <X size={11} />
-                </button>
-              </form>
-            </li>
+            <StepRow key={s.id} step={s} />
           ))}
         </ul>
       )}
 
-      {adding && (
+      {adding ? (
         <form
           onSubmit={(e: FormEvent<HTMLFormElement>) => {
             e.preventDefault();
@@ -323,14 +283,15 @@ function StepsSection({
               setAdding(false);
             });
           }}
-          className="flex items-center gap-2 rounded-md border border-border px-2 py-0.5 transition-colors focus-within:border-primary/60"
+          className="flex items-center gap-2 rounded-md border border-primary/40 px-2 py-1 transition-colors"
         >
+          <Plus size={13} className="shrink-0 text-primary/70" />
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             autoFocus
             maxLength={200}
-            placeholder="Następny krok…"
+            placeholder="Następne pod-zadanie…"
             onKeyDown={(e) => {
               if (e.key === "Escape") {
                 setTitle("");
@@ -342,21 +303,168 @@ function StepsSection({
           <button
             type="submit"
             disabled={!title.trim()}
-            aria-label="Dodaj krok"
-            title="Dodaj krok (Enter)"
+            aria-label="Dodaj pod-zadanie"
+            title="Dodaj (Enter)"
             className="grid h-6 w-6 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Plus size={12} />
           </button>
         </form>
-      )}
-
-      {steps.length === 0 && !adding && (
-        <p className="text-[0.8rem] text-muted-foreground/80">
-          Rozbij na mniejsze kroki — kliknij +
-        </p>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="inline-flex items-center gap-1.5 self-start rounded-md border border-dashed border-border px-2.5 py-1.5 font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
+        >
+          <Plus size={11} /> Dodaj pod-zadanie
+        </button>
       )}
     </section>
+  );
+}
+
+// F12-K28: pojedynczy step row z możliwością expandowania notatek + edit
+// title inline. Klik chevron → toggle notes editor; klik tytuł → edit.
+function StepRow({ step }: { step: TodoStepRow }) {
+  const [expanded, setExpanded] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(step.title);
+  const hasNotes = !!step.notes && step.notes.trim() !== "";
+
+  const submitTitle = () => {
+    const t = titleDraft.trim();
+    if (!t || t === step.title) {
+      setEditingTitle(false);
+      setTitleDraft(step.title);
+      return;
+    }
+    const fd = new FormData();
+    fd.set("id", step.id);
+    fd.set("title", t);
+    startTransition(() => {
+      updateTodoStepTitleAction(fd);
+      setEditingTitle(false);
+    });
+  };
+
+  return (
+    <li className="flex flex-col gap-1 rounded-sm">
+      <div className="group flex items-center gap-2 rounded-sm px-1 py-1 hover:bg-accent/40">
+        <form
+          action={(fd) => startTransition(() => toggleTodoStepAction(fd))}
+          className="m-0 shrink-0"
+        >
+          <input type="hidden" name="id" value={step.id} />
+          <input
+            type="hidden"
+            name="completed"
+            value={step.completed ? "false" : "true"}
+          />
+          <button
+            type="submit"
+            className="grid h-4 w-4 place-items-center text-muted-foreground hover:text-primary"
+          >
+            {step.completed ? (
+              <CheckCircle2 size={14} className="text-primary" />
+            ) : (
+              <Circle size={14} />
+            )}
+          </button>
+        </form>
+
+        {editingTitle ? (
+          <input
+            value={titleDraft}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onBlur={submitTitle}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                submitTitle();
+              } else if (e.key === "Escape") {
+                setTitleDraft(step.title);
+                setEditingTitle(false);
+              }
+            }}
+            autoFocus
+            maxLength={200}
+            className="flex-1 rounded-sm border border-primary/40 bg-background px-1 py-0.5 text-[0.85rem] outline-none"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEditingTitle(true)}
+            className={`flex-1 truncate text-left text-[0.85rem] hover:text-primary ${
+              step.completed ? "text-muted-foreground line-through" : ""
+            }`}
+          >
+            {step.title}
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-label={expanded ? "Zwiń opis" : "Rozwiń opis"}
+          title={hasNotes ? "Pokaż opis" : "Dodaj opis"}
+          data-has-notes={hasNotes}
+          className="grid h-5 w-5 shrink-0 place-items-center rounded-sm text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[has-notes=true]:text-primary data-[has-notes=true]:opacity-100"
+        >
+          <NoteIcon size={11} />
+        </button>
+
+        <form
+          action={(fd) => startTransition(() => deleteTodoStepAction(fd))}
+          className="m-0"
+        >
+          <input type="hidden" name="id" value={step.id} />
+          <button
+            type="submit"
+            aria-label="Usuń pod-zadanie"
+            className="grid h-5 w-5 place-items-center rounded-sm text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+          >
+            <X size={11} />
+          </button>
+        </form>
+      </div>
+
+      {expanded && <StepNotesEditor stepId={step.id} initial={step.notes ?? ""} />}
+    </li>
+  );
+}
+
+// Tiny inline icon — small "lined paper" feel for notes affordance.
+function NoteIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" fill="none" aria-hidden>
+      <rect x="2" y="2" width="10" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M4 5.5h6M4 7.5h6M4 9.5h4" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function StepNotesEditor({ stepId, initial }: { stepId: string; initial: string }) {
+  const [value, setValue] = useState(initial);
+  const persist = (next: string) => {
+    const fd = new FormData();
+    fd.set("id", stepId);
+    fd.set("notes", next);
+    startTransition(() => updateTodoStepNotesAction(fd));
+  };
+  return (
+    <div className="ml-6 rounded-md border border-border bg-card p-2">
+      <textarea
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => {
+          if (value !== initial) persist(value);
+        }}
+        rows={2}
+        maxLength={5000}
+        placeholder="Opis pod-zadania…"
+        className="min-h-[44px] w-full resize-y bg-transparent text-[0.82rem] leading-[1.45] outline-none placeholder:text-muted-foreground/60"
+      />
+    </div>
   );
 }
 

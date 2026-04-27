@@ -169,6 +169,7 @@ export default async function MyTodoPage({
             id: s.id,
             title: s.title,
             completed: s.completed,
+            notes: s.notes,
           })),
         }))}
         focusedItemId={focusedItemId}

@@ -172,6 +172,30 @@ export async function deleteTodoItemAction(formData: FormData) {
   revalidatePath("/my/todo");
 }
 
+// F12-K28: bulk-delete completed items na liście. Optional listId
+// (gdy pusty/brak — usuwa wszystkie completed użytkownika, np. ze
+// smart view'u). Klient: 'usuń wszystkie wykonane zadania'.
+const bulkDeleteCompletedSchema = z.object({
+  listId: z.string().optional(),
+});
+
+export async function bulkDeleteCompletedTodoItemsAction(formData: FormData) {
+  const userId = await currentUserId();
+  if (!userId) return;
+  const parsed = bulkDeleteCompletedSchema.safeParse({
+    listId: formData.get("listId") || undefined,
+  });
+  if (!parsed.success) return;
+  await db.todoItem.deleteMany({
+    where: {
+      userId,
+      completed: true,
+      ...(parsed.data.listId ? { listId: parsed.data.listId } : {}),
+    },
+  });
+  revalidatePath("/my/todo");
+}
+
 // F8c — MS To Do parity ==================================================
 
 const itemIdSchema = z.object({ id: z.string().min(1) });
@@ -388,5 +412,57 @@ export async function deleteTodoStepAction(formData: FormData) {
   });
   if (!step || step.item.userId !== userId) return;
   await db.todoStep.delete({ where: { id: parsed.data.id } });
+  revalidatePath("/my/todo");
+}
+
+// F12-K28: notes per subtask. Klient zażądał opisów dla każdego
+// pod-zadania, nie tylko parent task'a.
+const updateStepNotesSchema = z.object({
+  id: z.string().min(1),
+  notes: z.string().max(5000),
+});
+
+export async function updateTodoStepNotesAction(formData: FormData) {
+  const userId = await currentUserId();
+  if (!userId) return;
+  const parsed = updateStepNotesSchema.safeParse({
+    id: formData.get("id"),
+    notes: formData.get("notes") ?? "",
+  });
+  if (!parsed.success) return;
+  const step = await db.todoStep.findUnique({
+    where: { id: parsed.data.id },
+    include: { item: { select: { userId: true } } },
+  });
+  if (!step || step.item.userId !== userId) return;
+  await db.todoStep.update({
+    where: { id: parsed.data.id },
+    data: { notes: parsed.data.notes.trim() === "" ? null : parsed.data.notes },
+  });
+  revalidatePath("/my/todo");
+}
+
+const updateStepTitleSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().trim().min(1).max(200),
+});
+
+export async function updateTodoStepTitleAction(formData: FormData) {
+  const userId = await currentUserId();
+  if (!userId) return;
+  const parsed = updateStepTitleSchema.safeParse({
+    id: formData.get("id"),
+    title: formData.get("title"),
+  });
+  if (!parsed.success) return;
+  const step = await db.todoStep.findUnique({
+    where: { id: parsed.data.id },
+    include: { item: { select: { userId: true } } },
+  });
+  if (!step || step.item.userId !== userId) return;
+  await db.todoStep.update({
+    where: { id: parsed.data.id },
+    data: { title: parsed.data.title },
+  });
   revalidatePath("/my/todo");
 }

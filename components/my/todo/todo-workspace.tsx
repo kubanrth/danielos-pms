@@ -19,10 +19,12 @@ import {
   UserCheck as UserIcon,
 } from "lucide-react";
 import {
+  bulkDeleteCompletedTodoItemsAction,
   createTodoFolderAction,
   createTodoItemAction,
   createTodoListAction,
   deleteTodoFolderAction,
+  deleteTodoItemAction,
   deleteTodoListAction,
   toggleTodoImportantAction,
   toggleTodoItemAction,
@@ -206,8 +208,8 @@ export function TodoWorkspace({
           (minus sidebar i ewentualny detail panel). Add-task input
           przyklejony u dołu sticky. */}
       <section className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex items-center justify-between border-b border-border bg-background px-8 py-4">
-          <div className="flex items-center gap-3">
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background px-8 py-4">
+          <div className="flex flex-wrap items-center gap-3">
             {activeSmart && (
               <activeSmart.icon size={22} className={activeSmart.accent} aria-hidden />
             )}
@@ -215,16 +217,67 @@ export function TodoWorkspace({
               {pageTitle}
             </h1>
             {smart !== "assigned" && (
-              <span className="ml-2 font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground">
-                {completed.length} z {items.length}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <CounterChip
+                  label="wszystkie"
+                  value={items.length}
+                  tone="default"
+                />
+                <CounterChip
+                  label="do zrobienia"
+                  value={incomplete.length}
+                  tone="primary"
+                />
+                <CounterChip
+                  label="ukończone"
+                  value={completed.length}
+                  tone="muted"
+                />
+              </div>
             )}
             {smart === "assigned" && assignedTasks.length > 0 && (
-              <span className="ml-2 font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground">
-                {assignedTasks.length} przypisanych
-              </span>
+              <CounterChip
+                label="przypisanych"
+                value={assignedTasks.length}
+                tone="primary"
+              />
             )}
           </div>
+
+          {/* F12-K28: bulk-delete ukończone — pokazane gdy są jakieś
+              completed itemy na bieżącym widoku. Scope = activeListId
+              (dla list view) lub all-completed (dla smart view). */}
+          {smart !== "assigned" && completed.length > 0 && (
+            <form
+              action={(fd) =>
+                startTransition(() => bulkDeleteCompletedTodoItemsAction(fd))
+              }
+              onSubmit={(e) => {
+                if (
+                  !confirm(
+                    `Usunąć ${completed.length} ukończ${
+                      completed.length === 1 ? "one zadanie" : "onych zadań"
+                    }? Tej operacji nie można cofnąć.`,
+                  )
+                ) {
+                  e.preventDefault();
+                }
+              }}
+              className="m-0"
+            >
+              {activeListId && (
+                <input type="hidden" name="listId" value={activeListId} />
+              )}
+              <button
+                type="submit"
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/5 hover:text-destructive"
+                title="Usuń wszystkie ukończone zadania"
+              >
+                <Trash2 size={12} />
+                Usuń ukończone ({completed.length})
+              </button>
+            </form>
+          )}
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-8 py-4">
@@ -644,6 +697,28 @@ function ItemRow({
           <Star size={14} fill={item.important ? "currentColor" : "none"} />
         </button>
       </form>
+
+      {/* F12-K28: pojedyncza opcja usunięcia zadania. Visible on row hover
+          (group-hover) — żeby nie pęknąć się z gwiazdką/słoneczkiem. */}
+      <form
+        action={(fd) => startTransition(() => deleteTodoItemAction(fd))}
+        onSubmit={(e) => {
+          if (!confirm("Usunąć to zadanie? Tej operacji nie można cofnąć.")) {
+            e.preventDefault();
+          }
+        }}
+        className="m-0 shrink-0"
+      >
+        <input type="hidden" name="id" value={item.id} />
+        <button
+          type="submit"
+          aria-label="Usuń zadanie"
+          title="Usuń zadanie"
+          className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+        >
+          <Trash2 size={14} />
+        </button>
+      </form>
     </div>
   );
 }
@@ -802,6 +877,37 @@ function EmptyState({
           : "Utwórz nową listę lub folder w dolnej części panelu."}
       </p>
     </div>
+  );
+}
+
+// F12-K28: chip-style counter w header'ze TODO. Klient: 'brak cyferki ile
+// jest zgłoszeń, pokazywać ilość elementów'. Trzy chipy: total /
+// do-zrobienia / ukończone — szybki overview stanu listy.
+function CounterChip({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "default" | "primary" | "muted";
+}) {
+  const cls =
+    tone === "primary"
+      ? "border-primary/30 bg-primary/10 text-primary"
+      : tone === "muted"
+        ? "border-border bg-muted/40 text-muted-foreground"
+        : "border-border bg-background text-foreground";
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-mono text-[0.62rem] uppercase tracking-[0.14em] ${cls}`}
+      title={`${value} ${label}`}
+    >
+      <span className="text-[0.78rem] font-semibold tracking-normal normal-case">
+        {value}
+      </span>
+      <span className="opacity-70">{label}</span>
+    </span>
   );
 }
 
