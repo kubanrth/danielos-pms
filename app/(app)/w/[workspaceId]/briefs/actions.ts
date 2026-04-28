@@ -110,7 +110,36 @@ export async function updateBriefAction(formData: FormData) {
 
   if (Object.keys(data).length === 0) return;
 
-  await db.creativeBrief.update({ where: { id: brief.id }, data });
+  const updated = await db.creativeBrief.update({
+    where: { id: brief.id },
+    data,
+  });
+
+  // F12-K33: po każdym save upsertujemy dzienny snapshot. Klucz =
+  // (briefId, dayKey YYYY-MM-DD w Europe/Warsaw). Pierwszy edit dnia
+  // tworzy snapshot, kolejne edity tego samego dnia tylko go nadpisują —
+  // dzięki temu starsze dni są nietknięte i mamy historię bez duplikatów.
+  const dayKey = polishDayKey(new Date());
+  await db.briefSnapshot.upsert({
+    where: { briefId_dayKey: { briefId: updated.id, dayKey } },
+    update: {
+      title: updated.title,
+      contentJson: (updated.contentJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+      status: updated.status,
+      emoji: updated.emoji,
+      headerColor: updated.headerColor,
+    },
+    create: {
+      briefId: updated.id,
+      dayKey,
+      title: updated.title,
+      contentJson: (updated.contentJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+      status: updated.status,
+      emoji: updated.emoji,
+      headerColor: updated.headerColor,
+    },
+  });
+
   await writeAudit({
     workspaceId: brief.workspaceId,
     objectType: "Workspace",
@@ -121,6 +150,91 @@ export async function updateBriefAction(formData: FormData) {
   });
   revalidatePath(`/w/${brief.workspaceId}/briefs/${brief.id}`);
   revalidatePath(`/w/${brief.workspaceId}/briefs`);
+}
+
+// F12-K33: zwraca YYYY-MM-DD w strefie Europe/Warsaw — używane jako
+// dayKey w BriefSnapshot. 'sv-SE' format = ISO date bez czasu.
+function polishDayKey(d: Date): string {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Europe/Warsaw",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
+
+// F12-K33: lista snapshotów dla danego briefu. Permissions = task.update
+// (creator może też przez wzgląd na update'y, ale read-only listing
+// jest dla każdego workspace membera). Limit 60 dni — głębsza historia
+// jest do przyszłej implementacji retencji.
+export async function listBriefSnapshotsAction(briefId: string): Promise<
+  | { ok: true; snapshots: { id: string; dayKey: string; createdAt: string }[] }
+  | { ok: false; error: string }
+> {
+  const brief = await db.creativeBrief.findUnique({
+    where: { id: briefId },
+    select: { id: true, workspaceId: true },
+  });
+  if (!brief) return { ok: false, error: "Brief nie istnieje." };
+  await requireWorkspaceMembership(brief.workspaceId);
+  const snapshots = await db.briefSnapshot.findMany({
+    where: { briefId },
+    orderBy: { dayKey: "desc" },
+    take: 60,
+    select: { id: true, dayKey: true, createdAt: true },
+  });
+  return {
+    ok: true,
+    snapshots: snapshots.map((s) => ({
+      id: s.id,
+      dayKey: s.dayKey,
+      createdAt: s.createdAt.toISOString(),
+    })),
+  };
+}
+
+// F12-K33: restore snapshot — kopiuje state ze snapshotu z powrotem do
+// CreativeBrief'u. Następujący update zaraz po restore dalej upsertuje
+// snapshot DZISIEJSZEGO dnia (nie nadpisuje starszych).
+const restoreSchema = z.object({ snapshotId: z.string().min(1) });
+
+export async function restoreBriefSnapshotAction(formData: FormData) {
+  const parsed = restoreSchema.safeParse({ snapshotId: formData.get("snapshotId") });
+  if (!parsed.success) return;
+
+  const snapshot = await db.briefSnapshot.findUnique({
+    where: { id: parsed.data.snapshotId },
+    include: {
+      brief: {
+        select: { id: true, workspaceId: true, creatorId: true },
+      },
+    },
+  });
+  if (!snapshot) return;
+  const ctx = await requireWorkspaceAction(snapshot.brief.workspaceId, "task.update");
+
+  await db.creativeBrief.update({
+    where: { id: snapshot.briefId },
+    data: {
+      title: snapshot.title,
+      contentJson: (snapshot.contentJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+      status: snapshot.status,
+      emoji: snapshot.emoji,
+      headerColor: snapshot.headerColor,
+    },
+  });
+
+  await writeAudit({
+    workspaceId: snapshot.brief.workspaceId,
+    objectType: "Workspace",
+    objectId: snapshot.brief.workspaceId,
+    actorId: ctx.userId,
+    action: "creativeBrief.restored",
+    diff: { briefId: snapshot.briefId, snapshotDayKey: snapshot.dayKey },
+  });
+
+  revalidatePath(`/w/${snapshot.brief.workspaceId}/briefs/${snapshot.briefId}`);
+  revalidatePath(`/w/${snapshot.brief.workspaceId}/briefs`);
 }
 
 export async function deleteBriefAction(formData: FormData) {

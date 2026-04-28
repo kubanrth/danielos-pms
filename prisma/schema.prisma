@@ -538,11 +538,35 @@ model CreativeBrief {
   updatedAt   DateTime            @updatedAt
   deletedAt   DateTime?
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  creator   User      @relation("BriefCreator", fields: [creatorId], references: [id])
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator   User            @relation("BriefCreator", fields: [creatorId], references: [id])
+  snapshots BriefSnapshot[]
 
   @@index([workspaceId, deletedAt])
   @@index([creatorId])
+}
+
+// F12-K33: dzienne snapshoty briefów. Każda akcja `updateBriefAction`
+// upsertuje snapshot dla bieżącej daty (Europe/Warsaw) — w efekcie
+// ostatnia wersja danego dnia zostaje zachowana, a starsze dni są
+// nietknięte. Klient: 'potrzebuję mieć miejsce, gdzie tworzy się
+// automatyczna kopia z dnia'.
+model BriefSnapshot {
+  id          String              @id @default(cuid())
+  briefId     String
+  // YYYY-MM-DD w strefie Europe/Warsaw — unique key dla 1-snapshot/dzień.
+  dayKey      String
+  title       String
+  contentJson Json?
+  status      CreativeBriefStatus
+  emoji       String?
+  headerColor String?
+  createdAt   DateTime            @default(now())
+
+  brief CreativeBrief @relation(fields: [briefId], references: [id], onDelete: Cascade)
+
+  @@unique([briefId, dayKey])
+  @@index([briefId])
 }
 
 // F11-20 (#23): support tickets — internal helpdesk. Każdy member
