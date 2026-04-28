@@ -18,6 +18,8 @@ export const SHAPES = [
   "FRAME",
   // F10-W: Mural-feel additions.
   "TEXT",
+  // F12-K37: image upload — data.imagePath = Supabase Storage key.
+  "IMAGE",
 ] as const;
 export type CanvasShape = (typeof SHAPES)[number];
 export const EDGE_ENDS = ["arrow", "none", "diamond", "circle"] as const;
@@ -39,6 +41,9 @@ export interface CanvasNodeValue {
   // F10-W3: when locked, the node can't be moved, resized, or deleted
   // via React Flow's normal interactions. The UI shows a lock icon.
   locked?: boolean;
+  // F12-K37: dla shape="IMAGE" — Supabase Storage key (path relatywny
+  // do bucket'u attachments). Renderowane przez `/api/canvas-image/<key>`.
+  imagePath?: string | null;
 }
 
 export interface CanvasEdgeValue {
@@ -110,6 +115,8 @@ function toNodeYMap(node: CanvasNodeValue): Y.Map<unknown> {
   m.set("colorHex", node.colorHex);
   if (node.reactions) m.set("reactions", node.reactions);
   if (node.locked) m.set("locked", true);
+  // F12-K37: imagePath dla shape="IMAGE".
+  if (node.imagePath) m.set("imagePath", node.imagePath);
   return m;
 }
 
@@ -146,6 +153,13 @@ export function setNodeValue(
     }
     if ((existing.get("locked") ?? false) !== Boolean(node.locked)) {
       existing.set("locked", Boolean(node.locked));
+    }
+    // F12-K37: imagePath sync. Tylko gdy się zmienił żeby nie spamować
+    // peerów niepotrzebnymi update'ami.
+    const prevImagePath = existing.get("imagePath") ?? null;
+    const nextImagePath = node.imagePath ?? null;
+    if (prevImagePath !== nextImagePath) {
+      existing.set("imagePath", nextImagePath);
     }
   } else {
     nodesMap.set(node.id, toNodeYMap(node));
@@ -218,6 +232,7 @@ export function readCanvasSnapshot(refs: CanvasYRefs): {
       width: asNumber(value.get("width"), 160),
       height: asNumber(value.get("height"), 80),
       colorHex: asString(value.get("colorHex"), "#FFFFFF"),
+      imagePath: asNullString(value.get("imagePath")) ?? undefined,
       reactions: Object.keys(reactions).length > 0 ? reactions : undefined,
       locked: value.get("locked") === true ? true : undefined,
     });

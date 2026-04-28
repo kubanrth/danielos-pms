@@ -31,6 +31,7 @@ import {
   Diamond as DiamondIcon,
   Download,
   Frame as FrameIcon,
+  Image as ImageIcon,
   LayoutTemplate,
   Link2,
   Lock,
@@ -50,7 +51,10 @@ import {
   X,
 } from "lucide-react";
 import { toPng } from "html-to-image";
-import { saveCanvasSnapshotAction } from "@/app/(app)/w/[workspaceId]/c/actions";
+import {
+  requestCanvasImageUploadAction,
+  saveCanvasSnapshotAction,
+} from "@/app/(app)/w/[workspaceId]/c/actions";
 import {
   createAndLinkTaskFromNodeAction,
   linkTaskToNodeAction,
@@ -98,6 +102,8 @@ export interface EditorInitialNode {
   reactions?: Record<string, number>;
   // F10-W3: when true, node is locked (no drag/resize/delete).
   locked?: boolean;
+  // F12-K37: shape="IMAGE" stores Supabase Storage key here.
+  imagePath?: string | null;
 }
 
 export interface WorkspaceTaskOption {
@@ -137,6 +143,9 @@ const SHAPE_DEFAULTS: Record<ShapeKind, { width: number; height: number; color: 
   CIRCLE: { width: 120, height: 120, color: "#FFFFFF" },
   STICKY: { width: 150, height: 150, color: "#FEF3C7" },
   FRAME: { width: 520, height: 320, color: "#F1F5F9" },
+  // F12-K37: image — ten default jest tylko fallback'iem; rzeczywisty
+  // rozmiar ustawiamy w handleImageUpload po PUT'cie pliku.
+  IMAGE: { width: 280, height: 200, color: "#FFFFFF" },
   // F10-W: TEXT carries its color in colorHex (text color, not bg).
   TEXT: { width: 220, height: 60, color: "#1F2937" },
 };
@@ -223,6 +232,7 @@ function toRFNode(n: EditorInitialNode, workspaceId: string): RFNode {
       workspaceId,
       reactions: n.reactions,
       locked: n.locked,
+      imagePath: n.imagePath ?? undefined,
     },
     width: n.width,
     height: n.height,
@@ -291,6 +301,8 @@ function CanvasEditorInner({
   const reactFlow = useReactFlow();
   const nodeTypes: NodeTypes = useMemo(() => ({ shape: ShapeNode }), []);
   const flowWrapperRef = useRef<HTMLDivElement>(null);
+  // F12-K37: file picker dla 'Dodaj obraz' button.
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const [nodes, setNodes, rfOnNodesChange] = useNodesState<RFNode>(
     initialNodes.map((n) => toRFNode(n, workspaceId)),
@@ -381,6 +393,7 @@ function CanvasEditorInner({
             workspaceId,
             reactions: n.reactions,
             locked: n.locked,
+            imagePath: n.imagePath ?? undefined,
           },
           width: n.width,
           height: n.height,
@@ -483,6 +496,7 @@ function CanvasEditorInner({
           width: node.data.width,
           height: node.data.height,
           colorHex: node.data.colorHex,
+          imagePath: node.data.imagePath ?? null,
           reactions: node.data.reactions,
           locked: node.data.locked,
         });
@@ -595,6 +609,68 @@ function CanvasEditorInner({
       commitNodeToY(rfNode);
     },
     [setNodes, workspaceId, commitNodeToY],
+  );
+
+  // F12-K37: upload obrazu do whiteboard'u. 3-step: requestUpload (signed
+  // URL) → PUT → utwórz IMAGE node z imagePath = storageKey.
+  const handleImageUpload = useCallback(
+    async (file: File) => {
+      const req = await requestCanvasImageUploadAction(
+        canvasId,
+        file.name,
+        file.type || "application/octet-stream",
+        file.size,
+      );
+      if (!req.ok) {
+        alert(req.error);
+        return;
+      }
+      try {
+        const put = await fetch(req.uploadUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Type": file.type || "application/octet-stream",
+            "x-upsert": "false",
+          },
+          body: file,
+        });
+        if (!put.ok) {
+          alert(`Upload nie powiódł się (${put.status}).`);
+          return;
+        }
+      } catch (e) {
+        console.warn("[canvas-image] upload error", e);
+        alert("Upload nie powiódł się — sprawdź połączenie.");
+        return;
+      }
+
+      // Default rozmiar 280x200 — user może zaraz przeskalować.
+      const id = cuidish();
+      const x = 120 + Math.random() * 180;
+      const y = 120 + Math.random() * 140;
+      const rfNode: RFNode = {
+        id,
+        type: "shape",
+        position: { x, y },
+        data: {
+          shape: "IMAGE",
+          label: null,
+          colorHex: "#FFFFFF",
+          width: 280,
+          height: 200,
+          linkedTasks: [],
+          workspaceId,
+          imagePath: req.storageKey,
+        },
+        width: 280,
+        height: 200,
+        zIndex: 0,
+        selected: true,
+      };
+      setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), rfNode]);
+      commitNodeToY(rfNode);
+    },
+    [canvasId, setNodes, workspaceId, commitNodeToY],
   );
 
   const deleteSelected = useCallback(() => {
@@ -1242,6 +1318,24 @@ function CanvasEditorInner({
             <ToolButton label="Ramka" onClick={() => addShape("FRAME")}>
               <FrameIcon size={14} />
             </ToolButton>
+            {/* F12-K37: dodaj obraz — file picker → upload → IMAGE node. */}
+            <ToolButton
+              label="Obraz"
+              onClick={() => imageInputRef.current?.click()}
+            >
+              <ImageIcon size={14} />
+            </ToolButton>
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void handleImageUpload(f);
+                e.target.value = "";
+              }}
+            />
             {/* F10-W: contextual palette. In pen mode → pen ink colors +
                 size pickers. With a sticky selected → 8-color sticky
                 palette. Otherwise → general fill palette. */}

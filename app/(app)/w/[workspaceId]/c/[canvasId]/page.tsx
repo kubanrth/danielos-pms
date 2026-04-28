@@ -90,19 +90,36 @@ export default async function CanvasEditorPage({
         <CanvasEditorLazy
           workspaceId={workspaceId}
           canvasId={canvas.id}
-          initialNodes={canvas.nodes.map((n) => ({
-            id: n.id,
-            // F6a handles 3 shapes; legacy ICON nodes (future feature) fall
-            // back to RECTANGLE so their data survives round-trips.
-            shape: n.shape === "ICON" ? "RECTANGLE" : n.shape,
-            label: n.label,
-            x: n.x,
-            y: n.y,
-            width: n.width,
-            height: n.height,
-            colorHex: n.colorHex,
-            linkedTasks: linksByNode.get(n.id) ?? [],
-          }))}
+          initialNodes={canvas.nodes.map((n) => {
+            // F12-K37: dataJson zawiera reactions/locked/imagePath. Defensive
+            // unpacking — pole może być null (DbNull) albo Json object.
+            const meta =
+              n.dataJson && typeof n.dataJson === "object" && !Array.isArray(n.dataJson)
+                ? (n.dataJson as Record<string, unknown>)
+                : {};
+            const imagePath = typeof meta.imagePath === "string" ? meta.imagePath : null;
+            const reactions =
+              meta.reactions && typeof meta.reactions === "object"
+                ? (meta.reactions as Record<string, number>)
+                : undefined;
+            const locked = meta.locked === true;
+            return {
+              id: n.id,
+              // F6a handles 3 shapes; legacy ICON nodes (future feature) fall
+              // back to RECTANGLE so their data survives round-trips.
+              shape: n.shape === "ICON" ? "RECTANGLE" : n.shape,
+              label: n.label,
+              x: n.x,
+              y: n.y,
+              width: n.width,
+              height: n.height,
+              colorHex: n.colorHex,
+              linkedTasks: linksByNode.get(n.id) ?? [],
+              reactions,
+              locked,
+              imagePath,
+            };
+          })}
           initialEdges={canvas.edges.map((e) => ({
             id: e.id,
             fromNodeId: e.fromNodeId,

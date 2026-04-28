@@ -21,7 +21,10 @@ export type ShapeKind =
   | "CIRCLE"
   | "STICKY"
   | "FRAME"
-  | "TEXT";
+  | "TEXT"
+  // F12-K37: image upload do whiteboard. data.imagePath wskazuje storage
+  // key w Supabase bucket'cie attachments.
+  | "IMAGE";
 
 export interface ShapeNodeData {
   shape: ShapeKind;
@@ -39,6 +42,9 @@ export interface ShapeNodeData {
   // input zamiast labela (autofocus, blur/Enter zapisuje). Klient: prompt
   // dwukrotnym kliknięciem był 'dziwny', chce wpisywać 'od razu tam'.
   editing?: boolean;
+  // F12-K37: dla shape="IMAGE" — storage key w Supabase. Renderowane
+  // jako `/api/canvas-image/<key>` (route handler robi signed redirect).
+  imagePath?: string;
   [key: string]: unknown;
 }
 
@@ -225,6 +231,19 @@ export const ShapeNode = memo(function ShapeNode({
         colorHex={d.colorHex}
         label={label}
         editing={!!d.editing}
+        selected={!!selected}
+        locked={!!d.locked}
+      />
+    );
+  }
+
+  if (d.shape === "IMAGE") {
+    return (
+      <ImageShape
+        nodeId={id}
+        width={d.width}
+        height={d.height}
+        imagePath={d.imagePath ?? null}
         selected={!!selected}
         locked={!!d.locked}
       />
@@ -764,6 +783,70 @@ function FrameShape({
           >
             {label || "frame"}
           </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// F12-K37: image node. data.imagePath = storage key w bucket'cie
+// attachments. Render via `/api/canvas-image/<key>` (signed redirect).
+// Resizable jak inne shape'y; brak label'a / colorHex.
+function ImageShape({
+  nodeId,
+  width,
+  height,
+  imagePath,
+  selected,
+  locked,
+}: {
+  nodeId: string;
+  width: number;
+  height: number;
+  imagePath: string | null;
+  selected: boolean;
+  locked: boolean;
+}) {
+  return (
+    <>
+      <ShapeResizer
+        nodeId={nodeId}
+        visible={selected && !locked}
+        minWidth={60}
+        minHeight={60}
+        keepAspectRatio={false}
+      />
+      <ShapeHandles />
+      <div
+        style={{
+          width,
+          height,
+          borderRadius: 8,
+          overflow: "hidden",
+          boxShadow: selected
+            ? "0 0 0 2px color-mix(in oklch, var(--primary) 40%, transparent), 0 8px 20px -10px rgba(10,10,40,0.2)"
+            : "0 1px 2px rgba(10,10,40,0.05), 0 8px 20px -10px rgba(10,10,40,0.15)",
+          background: imagePath ? "transparent" : "var(--muted)",
+        }}
+        className="grid place-items-center"
+      >
+        {imagePath ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/api/canvas-image/${encodeURI(imagePath)}`}
+            alt=""
+            draggable={false}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              userSelect: "none",
+            }}
+          />
+        ) : (
+          <span className="font-mono text-[0.7rem] uppercase tracking-[0.14em] text-muted-foreground">
+            ładowanie obrazu…
+          </span>
         )}
       </div>
     </>

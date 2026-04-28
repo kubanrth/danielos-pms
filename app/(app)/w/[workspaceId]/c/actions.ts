@@ -2,10 +2,20 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { randomBytes } from "node:crypto";
+import { z } from "zod";
 import { db } from "@/lib/db";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { requireWorkspaceAction, requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { writeAudit } from "@/lib/audit";
+import {
+  ATTACHMENTS_BUCKET,
+  MAX_ATTACHMENT_BYTES,
+  createSignedDownloadUrl,
+  createSignedUploadUrl,
+  isImageMime,
+  supabaseAdmin,
+} from "@/lib/storage";
 import {
   createCanvasSchema,
   deleteCanvasSchema,
@@ -18,10 +28,12 @@ import {
 // F10-W2/W3: collapse the node's optional reactions + locked flags into
 // a JSON blob for ProcessNode.dataJson. Returns DbNull when nothing
 // non-default is set so we don't bloat rows with empty objects.
+// F12-K37: imagePath dla shape="IMAGE" też tu się ląduje.
 function nodeMeta(n: NodeSnapshotInput): Prisma.InputJsonValue | typeof Prisma.DbNull {
   const meta: Record<string, unknown> = {};
   if (n.reactions && Object.keys(n.reactions).length > 0) meta.reactions = n.reactions;
   if (n.locked) meta.locked = true;
+  if (n.imagePath) meta.imagePath = n.imagePath;
   if (Object.keys(meta).length === 0) return Prisma.DbNull;
   return meta as Prisma.InputJsonValue;
 }
@@ -288,4 +300,105 @@ export async function getCanvasSnapshotAction(id: string) {
     db.processEdge.findMany({ where: { canvasId: id } }),
   ]);
   return { nodes, edges };
+}
+
+// F12-K37: image upload do whiteboard. Pattern jak `requestBriefImageUploadAction`:
+// klient żąda signed URL → PUT pliku → osadza imagePath w node.data.imagePath →
+// rendering przez `/api/canvas-image/<path>` z signed-redirect (handler weryfikuje
+// workspace membership na każdy request, więc signed URL nigdy nie wycieka do JSON'a).
+
+const uploadImageSchema = z.object({
+  canvasId: z.string().min(1),
+  filename: z.string().trim().min(1).max(200),
+  contentType: z.string().min(1).max(100),
+  sizeBytes: z.number().int().positive().max(MAX_ATTACHMENT_BYTES),
+});
+
+export type CanvasImageUploadResult =
+  | { ok: true; uploadUrl: string; storageKey: string; publicSrc: string }
+  | { ok: false; error: string };
+
+function sanitizeFilename(name: string): string {
+  return (
+    name
+      .replace(/[\\/]/g, "_")
+      .replace(/[^\w.\-]/g, "_")
+      .replace(/_+/g, "_")
+      .slice(-120) || "image"
+  );
+}
+
+export async function requestCanvasImageUploadAction(
+  canvasId: string,
+  filename: string,
+  contentType: string,
+  sizeBytes: number,
+): Promise<CanvasImageUploadResult> {
+  const parsed = uploadImageSchema.safeParse({ canvasId, filename, contentType, sizeBytes });
+  if (!parsed.success) {
+    return { ok: false, error: "Nieprawidłowe parametry pliku." };
+  }
+  if (!isImageMime(parsed.data.contentType)) {
+    return { ok: false, error: "Wymagany obraz (PNG / JPEG / WebP / GIF)." };
+  }
+
+  const canvas = await db.processCanvas.findUnique({
+    where: { id: parsed.data.canvasId },
+    select: { id: true, workspaceId: true },
+  });
+  if (!canvas) return { ok: false, error: "Whiteboard nie istnieje." };
+
+  await requireWorkspaceAction(canvas.workspaceId, "task.update");
+
+  const safe = sanitizeFilename(parsed.data.filename);
+  const rand = randomBytes(9).toString("base64url");
+  const storageKey = `w/${canvas.workspaceId}/canvas/${canvas.id}/${rand}-${safe}`;
+
+  try {
+    const signed = await createSignedUploadUrl(storageKey);
+    return {
+      ok: true,
+      uploadUrl: signed.signedUrl,
+      storageKey,
+      publicSrc: `/api/canvas-image/${encodeURI(storageKey)}`,
+    };
+  } catch (err) {
+    console.warn("[canvas-image] signed upload failed", err);
+    return { ok: false, error: "Nie udało się przygotować uploadu." };
+  }
+}
+
+// Wywoływane TYLKO z `/api/canvas-image/[...path]/route.ts` — handler dostaje
+// session.user.id, my walidujemy że storageKey wskazuje workspace gdzie user
+// jest member'em.
+export async function getCanvasImageDownloadUrl(
+  storageKey: string,
+  userId: string,
+): Promise<string | null> {
+  // Storage key form: w/<wid>/canvas/<canvasId>/<rand-name>
+  const match = storageKey.match(/^w\/([^/]+)\/canvas\//);
+  if (!match) return null;
+  const workspaceId = match[1];
+
+  const member = await db.workspaceMembership.findFirst({
+    where: { userId, workspaceId, workspace: { deletedAt: null } },
+    select: { id: true },
+  });
+  if (!member) return null;
+
+  // Sanity check — file musi istnieć w bucket'cie (storageObjectExists
+  // pattern, ale z Supabase listingu robotgo prosto).
+  try {
+    const sb = supabaseAdmin();
+    const { data } = await sb.storage
+      .from(ATTACHMENTS_BUCKET)
+      .list(storageKey.slice(0, storageKey.lastIndexOf("/")), {
+        search: storageKey.slice(storageKey.lastIndexOf("/") + 1),
+      });
+    if (!data || data.length === 0) return null;
+    return await createSignedDownloadUrl(storageKey, 3600);
+  } catch (err) {
+    console.warn("[canvas-image] download URL failed", err);
+    return null;
+  }
 }

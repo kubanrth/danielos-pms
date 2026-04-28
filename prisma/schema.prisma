@@ -912,6 +912,9 @@ enum NodeShape {
   FRAME
   // F10-W (Mural-feel): plain text — no fill, no border, just sized text.
   TEXT
+  // F12-K37: image node — colorHex pole nieużywane, dataJson trzyma
+  // { imagePath: string } (storage key w bucket'cie attachments).
+  IMAGE
 }
 
 // F10-W: free-drawing strokes (pen tool) on a canvas. Each row = one

@@ -9,6 +9,8 @@ export const NODE_SHAPES = [
   "FRAME",
   // F10-W: Mural-feel additions.
   "TEXT",
+  // F12-K37: image upload do whiteboard — data.imagePath = storage key.
+  "IMAGE",
 ] as const;
 export type NodeShape = (typeof NODE_SHAPES)[number];
 
@@ -50,6 +52,9 @@ const nodeSnapshotSchema = z.object({
   // ProcessNode.dataJson. Reactions: emoji → count map. Locked: bool.
   reactions: z.record(z.string().max(8), z.number().int().min(0).max(9999)).optional(),
   locked: z.boolean().optional(),
+  // F12-K37: dla shape="IMAGE" — Supabase Storage key (path relatywny do
+  // bucket'u attachments). Persistowany w ProcessNode.dataJson.imagePath.
+  imagePath: z.string().max(500).nullable().optional(),
 });
 
 const edgeSnapshotSchema = z.object({
