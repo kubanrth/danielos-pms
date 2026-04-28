@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import type { SidebarWorkspace } from "@/components/layout/sidebar";
 import { parseEnabledViews } from "@/lib/board-views";
 import { ReminderPopups } from "@/components/reminders/reminder-popups";
+import { NotificationToaster } from "@/components/notifications/notification-toaster";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -103,6 +104,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="flex min-w-0 flex-1 flex-col">{children}</div>
 
       <ReminderPopups
+        userId={user.id}
         initial={dueReminders.map((r) => ({
           id: r.id,
           title: r.title,
@@ -111,6 +113,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           isSelfAuthored: r.creator.id === session.user.id,
         }))}
       />
+      {/* F12-K35: globalny toast dla nowych notyfikacji (mention/assign/
+          poll/support). Niezależny od `<ReminderPopups>` — różne źródła
+          danych (Notification vs PersonalReminder), różne UX. */}
+      <NotificationToaster userId={user.id} />
     </div>
   );
 }

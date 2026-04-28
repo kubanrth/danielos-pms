@@ -796,6 +796,11 @@ model Notification {
   type      String
   payload   Json
   readAt    DateTime?
+  // F12-K35: notatka usera doklejona do auto-generowanej notyfikacji.
+  // Klient: 'zapisane powiadomienie musi mieć możliwość edycji'. System
+  // generuje treść z payload'u, ale user może dopisać własną adnotację
+  // (priorytet, kontekst, TODO) widoczną w inbox'ie.
+  userNote  String?
   createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -4,6 +4,7 @@ import { startTransition, useCallback, useEffect, useRef, useState } from "react
 import Link from "next/link";
 import { Bell, X } from "lucide-react";
 import { dismissReminderAction } from "@/app/(app)/my/reminders/actions";
+import { useUserRealtime } from "@/hooks/use-user-realtime";
 
 export interface DuePopup {
   id: string;
@@ -25,7 +26,13 @@ export interface DuePopup {
 //   - Visibility-change listener — gdy user wraca na taba, poll od razu
 //   - Custom event `reminder:created` z innych miejsc apki triggeruje
 //     manual refresh (createReminderAction po zapisie dispatch'uje go)
-export function ReminderPopups({ initial }: { initial: DuePopup[] }) {
+export function ReminderPopups({
+  initial,
+  userId,
+}: {
+  initial: DuePopup[];
+  userId: string;
+}) {
   // Client-side mirror so "dismiss" hides the card immediately — we
   // don't need to await the server round-trip to remove it visually.
   const [list, setList] = useState<DuePopup[]>(initial);
@@ -73,6 +80,21 @@ export function ReminderPopups({ initial }: { initial: DuePopup[] }) {
       window.removeEventListener("reminder:created", onReminderCreated);
     };
   }, [refetch]);
+
+  // F12-K35: subskrybuj user-realtime — gdy `reminder.due` przyjdzie
+  // (np. broadcast z innego miejsca apki / cron'a), refetchuj listę
+  // od razu zamiast czekać 20s na poll.
+  useUserRealtime(
+    userId,
+    useCallback(
+      (payload) => {
+        if (payload.kind === "reminder.due") {
+          void refetch();
+        }
+      },
+      [refetch],
+    ),
+  );
 
   if (list.length === 0) return null;
 

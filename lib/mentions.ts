@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { sendEmail } from "@/lib/email";
+import { broadcastUserChange } from "@/lib/realtime";
 
 // Walk a ProseMirror doc and collect every `mention` node's attrs.id.
 // Dedupes by id; ignores entries with non-string ids so a corrupt node
@@ -109,13 +110,25 @@ export async function syncCommentMentions(params: {
       snippet,
     } as const;
 
-    await db.notification.createMany({
-      data: notifyIds.map((userId) => ({
-        userId,
-        type: "comment.mention",
-        payload: payload as unknown as Prisma.InputJsonValue,
-      })),
-    });
+    // F12-K35: tworzymy per-user żeby dostać id'ki — `<UserToaster>` po
+    // realtime broadcast'cie pobiera szczegóły konkretnego notyfikacji.
+    const created = await Promise.all(
+      notifyIds.map((userId) =>
+        db.notification.create({
+          data: {
+            userId,
+            type: "comment.mention",
+            payload: payload as unknown as Prisma.InputJsonValue,
+          },
+          select: { id: true, userId: true },
+        }),
+      ),
+    );
+    await Promise.all(
+      created.map((n) =>
+        broadcastUserChange(n.userId, { kind: "notification.new", id: n.id }),
+      ),
+    );
 
     // Email — best-effort, non-blocking semantics (we still await so
     // server action returns after the promise settles, but we don't

@@ -7,6 +7,7 @@ import { Prisma } from "@/lib/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireWorkspaceAction, requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { writeAudit } from "@/lib/audit";
+import { broadcastUserChange } from "@/lib/realtime";
 import {
   ATTACHMENTS_BUCKET,
   MAX_ATTACHMENT_BYTES,
@@ -233,7 +234,7 @@ export async function updateSupportTicketAction(formData: FormData) {
     isClosedNow &&
     ticket.reporterId !== ctx.userId
   ) {
-    await db.notification.create({
+    const notif = await db.notification.create({
       data: {
         userId: ticket.reporterId,
         type: "support.resolved",
@@ -246,11 +247,17 @@ export async function updateSupportTicketAction(formData: FormData) {
           actorName: actor?.name ?? actor?.email ?? null,
         } as Prisma.InputJsonValue,
       },
+      select: { id: true, userId: true },
+    });
+    // F12-K35: realtime toast.
+    await broadcastUserChange(notif.userId, {
+      kind: "notification.new",
+      id: notif.id,
     });
   }
 
   if (newAssigneeId) {
-    await db.notification.create({
+    const notif = await db.notification.create({
       data: {
         userId: newAssigneeId,
         type: "support.assigned",
@@ -262,6 +269,11 @@ export async function updateSupportTicketAction(formData: FormData) {
           actorName: actor?.name ?? actor?.email ?? null,
         } as Prisma.InputJsonValue,
       },
+      select: { id: true, userId: true },
+    });
+    await broadcastUserChange(notif.userId, {
+      kind: "notification.new",
+      id: notif.id,
     });
   }
 

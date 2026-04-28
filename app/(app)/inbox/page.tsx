@@ -119,6 +119,8 @@ export default async function InboxPage() {
       type: n.type,
       createdAt: n.createdAt.toISOString(),
       unread: !n.readAt,
+      // F12-K35: user-editowalna adnotacja przy notyfikacji.
+      userNote: n.userNote,
       payload: {
         workspaceId: payload.workspaceId,
         taskId: payload.taskId,

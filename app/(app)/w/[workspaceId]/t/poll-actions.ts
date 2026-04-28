@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireWorkspaceAction } from "@/lib/workspace-guard";
 import { writeAudit } from "@/lib/audit";
+import { broadcastUserChange } from "@/lib/realtime";
 
 const createPollSchema = z.object({
   taskId: z.string().min(1),
@@ -60,20 +61,31 @@ export async function createPollAction(formData: FormData) {
     select: { userId: true },
   });
   if (members.length > 0) {
-    await db.notification.createMany({
-      data: members.map((m) => ({
-        userId: m.userId,
-        type: "poll.created",
-        payload: {
-          workspaceId: task.workspaceId,
-          taskId: parsed.data.taskId,
-          taskTitle: task.title,
-          boardName: task.board.name,
-          question: parsed.data.question,
-          authorName: null,
-        },
-      })),
-    });
+    // F12-K35: per-user create żeby dostać id'ki dla realtime broadcast'u.
+    const created = await Promise.all(
+      members.map((m) =>
+        db.notification.create({
+          data: {
+            userId: m.userId,
+            type: "poll.created",
+            payload: {
+              workspaceId: task.workspaceId,
+              taskId: parsed.data.taskId,
+              taskTitle: task.title,
+              boardName: task.board.name,
+              question: parsed.data.question,
+              authorName: null,
+            },
+          },
+          select: { id: true, userId: true },
+        }),
+      ),
+    );
+    await Promise.all(
+      created.map((n) =>
+        broadcastUserChange(n.userId, { kind: "notification.new", id: n.id }),
+      ),
+    );
   }
 
   await writeAudit({

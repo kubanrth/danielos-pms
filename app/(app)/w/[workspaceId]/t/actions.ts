@@ -6,7 +6,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { requireWorkspaceAction } from "@/lib/workspace-guard";
-import { broadcastWorkspaceChange } from "@/lib/realtime";
+import { broadcastUserChange, broadcastWorkspaceChange } from "@/lib/realtime";
 import { writeAudit } from "@/lib/audit";
 import {
   createTagSchema,
@@ -443,7 +443,7 @@ export async function toggleAssigneeAction(formData: FormData) {
         where: { id: ctx.userId },
         select: { name: true, email: true },
       });
-      await db.notification.create({
+      const notif = await db.notification.create({
         data: {
           userId: parsed.data.userId,
           type: "task.assigned",
@@ -457,6 +457,12 @@ export async function toggleAssigneeAction(formData: FormData) {
             actorName: actor?.name ?? actor?.email ?? null,
           } as Prisma.InputJsonValue,
         },
+        select: { id: true, userId: true },
+      });
+      // F12-K35: live toast w prawym górnym rogu recipienta.
+      await broadcastUserChange(notif.userId, {
+        kind: "notification.new",
+        id: notif.id,
       });
     }
   }

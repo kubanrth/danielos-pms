@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { broadcastUserChange } from "@/lib/realtime";
 
 async function currentUserId(): Promise<string | null> {
   const session = await auth();
@@ -48,7 +49,7 @@ export async function createReminderAction(formData: FormData) {
     if (!shared) return;
   }
 
-  await db.personalReminder.create({
+  const reminder = await db.personalReminder.create({
     data: {
       creatorId: userId,
       recipientId: parsed.data.recipientId,
@@ -56,7 +57,18 @@ export async function createReminderAction(formData: FormData) {
       body: parsed.data.body || null,
       dueAt: due,
     },
+    select: { id: true, recipientId: true, dueAt: true },
   });
+  // F12-K35: jeśli reminder ma due-at <= now (np. user kliknął 'za 5
+  // minut' i refreshuje 6 minut później; albo cross-device — recipient
+  // ma otwartą inną kartę), broadcastuj user-realtime żeby <ReminderPopups>
+  // refetchowało od razu zamiast czekać 20s na poll.
+  if (reminder.dueAt.getTime() <= Date.now()) {
+    await broadcastUserChange(reminder.recipientId, {
+      kind: "reminder.due",
+      id: reminder.id,
+    });
+  }
   revalidatePath("/my/reminders");
 }
 
