@@ -181,8 +181,17 @@ export function BriefEditor({
             className="flex-1 border-0 bg-transparent font-display text-[2.2rem] font-bold leading-tight tracking-[-0.02em] outline-none placeholder:text-muted-foreground/40"
           />
 
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            {/* F12-K33: Historia — automatyczne dzienne kopie. Widoczne dla
+                wszystkich (read-only userzy też mogą przeglądać kopie),
+                restore-button gated po stronie servera. */}
+            <BriefSnapshotsButton
+              briefId={brief.id}
+              workspaceId={brief.workspaceId}
+              canRestore={canEdit}
+            />
           {canEdit && (
-            <div className="ml-auto flex shrink-0 items-center gap-2">
+            <>
               {/* Header color picker */}
               <div className="relative">
                 <button
@@ -242,12 +251,6 @@ export function BriefEditor({
                 triggerClassName="inline-flex h-8 min-w-[160px] items-center justify-between gap-2 rounded-md border border-border bg-background px-2.5 text-[0.78rem] outline-none transition-colors hover:border-primary/60 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
               />
 
-              {/* F12-K33: Historia — automatyczne dzienne kopie. */}
-              <BriefSnapshotsButton
-                briefId={brief.id}
-                workspaceId={brief.workspaceId}
-              />
-
 
               <form
                 action={(fd) =>
@@ -267,8 +270,9 @@ export function BriefEditor({
                   <Trash2 size={14} />
                 </button>
               </form>
-            </div>
+            </>
           )}
+          </div>
         </div>
 
         <div className="font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted-foreground">
@@ -326,9 +330,11 @@ export function BriefEditor({
 function BriefSnapshotsButton({
   briefId,
   workspaceId: _workspaceId,
+  canRestore,
 }: {
   briefId: string;
   workspaceId: string;
+  canRestore: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -372,9 +378,10 @@ function BriefSnapshotsButton({
         onClick={toggle}
         aria-label="Historia briefu"
         title="Historia (auto-snapshoty dzienne)"
-        className="grid h-8 w-8 place-items-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
+        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
       >
-        <History size={14} />
+        <History size={13} />
+        <span>Historia</span>
       </button>
       {open && (
         <>
@@ -426,14 +433,16 @@ function BriefSnapshotsButton({
                           })}
                         </span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => restore(s.id, s.dayKey)}
-                        title={`Przywróć wersję z ${s.dayKey}`}
-                        className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted-foreground opacity-0 transition-opacity hover:border-primary/60 hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
-                      >
-                        <RotateCcw size={10} /> przywróć
-                      </button>
+                      {canRestore && (
+                        <button
+                          type="button"
+                          onClick={() => restore(s.id, s.dayKey)}
+                          title={`Przywróć wersję z ${s.dayKey}`}
+                          className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted-foreground opacity-0 transition-opacity hover:border-primary/60 hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+                        >
+                          <RotateCcw size={10} /> przywróć
+                        </button>
+                      )}
                     </div>
                   </li>
                 ))}
