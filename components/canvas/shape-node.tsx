@@ -45,6 +45,10 @@ export interface ShapeNodeData {
   // F12-K37: dla shape="IMAGE" — storage key w Supabase. Renderowane
   // jako `/api/canvas-image/<key>` (route handler robi signed redirect).
   imagePath?: string;
+  // F12-K37c: opcjonalny override koloru tekstu. Gdy null/undef,
+  // tekst jest auto-contrast (czarny na jasnym fillu, biały na ciemnym).
+  // Klient może wybrać explicit kolor (czerwony tytuł na białym fillu itp).
+  textColorHex?: string | null;
   [key: string]: unknown;
 }
 
@@ -228,7 +232,10 @@ export const ShapeNode = memo(function ShapeNode({
         nodeId={id}
         width={d.width}
         height={d.height}
-        colorHex={d.colorHex}
+        // F12-K37c: TEXT shape historycznie używał colorHex jako koloru
+        // tekstu. Nowy textColorHex bierze precedence — picker tekstu
+        // dotyczy tej samej "rzeczy" niezależnie od shape'a.
+        colorHex={d.textColorHex || d.colorHex}
         label={label}
         editing={!!d.editing}
         selected={!!selected}
@@ -250,7 +257,9 @@ export const ShapeNode = memo(function ShapeNode({
     );
   }
 
-  const textColor = textColorFor(d.colorHex);
+  // F12-K37c: text color = user-override (data.textColorHex) albo
+  // auto-contrast od fillu (textColorFor).
+  const textColor = d.textColorHex || textColorFor(d.colorHex);
   const accent = accentFor(d.colorHex);
   const selectedRing = selected
     ? "0 0 0 2px color-mix(in oklch, var(--primary) 40%, transparent)"
@@ -502,21 +511,46 @@ function DiamondShape({
   ringShadow: string;
   children: React.ReactNode;
 }) {
+  // F12-K37b: prawdziwy romb przez SVG polygon zamiast rotate(45deg).
+  // Klient: 'napraw ten kształt żeby to był romb' — rotacja całego diva
+  // dawała przekrzywiony rectangle (bounds wystawały poza shape, label
+  // był rotowany razem z fillem co dawało dziwny efekt rounded
+  // corner'ów). Polygon idealnie się dopasowuje do width/height.
+  const inset = 2; // marginesik na stroke żeby nie był przycinany krawędziami
+  const points = `${width / 2},${inset} ${width - inset},${height / 2} ${width / 2},${height - inset} ${inset},${height / 2}`;
   return (
     <div
       style={{
         width,
         height,
-        transform: "rotate(45deg)",
-        background: colorHex,
-        border: `2px solid ${accent}`,
-        borderRadius: 10,
-        boxShadow: `${ringShadow === "none" ? "" : ringShadow + ", "}0 8px 20px -10px rgba(10,10,40,0.2)`,
+        position: "relative",
+        boxShadow: ringShadow === "none" ? undefined : ringShadow,
         color: textColor,
       }}
       className="grid place-items-center"
     >
-      <div style={{ transform: "rotate(-45deg)" }}>{children}</div>
+      <svg
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        style={{
+          position: "absolute",
+          inset: 0,
+          filter: "drop-shadow(0 8px 20px rgba(10,10,40,0.2))",
+        }}
+        preserveAspectRatio="none"
+      >
+        <polygon
+          points={points}
+          fill={colorHex}
+          stroke={accent}
+          strokeWidth={2}
+          strokeLinejoin="round"
+        />
+      </svg>
+      <div className="pointer-events-none relative z-[1] grid place-items-center px-3 text-center">
+        {children}
+      </div>
     </div>
   );
 }

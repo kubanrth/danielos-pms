@@ -104,6 +104,8 @@ export interface EditorInitialNode {
   locked?: boolean;
   // F12-K37: shape="IMAGE" stores Supabase Storage key here.
   imagePath?: string | null;
+  // F12-K37c: explicit text color override (default = auto contrast).
+  textColorHex?: string | null;
 }
 
 export interface WorkspaceTaskOption {
@@ -233,6 +235,7 @@ function toRFNode(n: EditorInitialNode, workspaceId: string): RFNode {
       reactions: n.reactions,
       locked: n.locked,
       imagePath: n.imagePath ?? undefined,
+      textColorHex: n.textColorHex ?? undefined,
     },
     width: n.width,
     height: n.height,
@@ -394,6 +397,7 @@ function CanvasEditorInner({
             reactions: n.reactions,
             locked: n.locked,
             imagePath: n.imagePath ?? undefined,
+            textColorHex: n.textColorHex ?? undefined,
           },
           width: n.width,
           height: n.height,
@@ -497,6 +501,7 @@ function CanvasEditorInner({
           height: node.data.height,
           colorHex: node.data.colorHex,
           imagePath: node.data.imagePath ?? null,
+          textColorHex: node.data.textColorHex ?? null,
           reactions: node.data.reactions,
           locked: node.data.locked,
         });
@@ -805,6 +810,27 @@ function CanvasEditorInner({
         ns.map((n) => {
           if (!n.selected) return n;
           const next = { ...n, data: { ...n.data, colorHex: hex } };
+          touched.push(next);
+          return next;
+        }),
+      );
+      for (const n of touched) commitNodeToY(n);
+    },
+    [setNodes, commitNodeToY],
+  );
+
+  // F12-K37c: zmiana koloru TEKSTU na zaznaczonych shape'ach. `hex = null`
+  // = reset do auto-contrast (textColorFor od fillu).
+  const recolorTextSelected = useCallback(
+    (hex: string | null) => {
+      const touched: RFNode[] = [];
+      setNodes((ns) =>
+        ns.map((n) => {
+          if (!n.selected) return n;
+          const next = {
+            ...n,
+            data: { ...n.data, textColorHex: hex },
+          };
           touched.push(next);
           return next;
         }),
@@ -1403,10 +1429,17 @@ function CanvasEditorInner({
                     disabled={selectedNodes.length === 0}
                     className="h-5 w-5 rounded-full border border-border transition-transform hover:scale-110 disabled:cursor-not-allowed disabled:opacity-40"
                     style={{ background: c }}
-                    aria-label={`Kolor ${c}`}
-                    title={`Kolor ${c}`}
+                    aria-label={`Tło ${c}`}
+                    title={`Tło ${c}`}
                   />
                 ))}
+                {/* F12-K37c: text color picker — popover, oddzielny od fill.
+                    Klient: 'brakuje zmieniania koloru tekstu w pisaniu i w
+                    kółku/kwadracie'. */}
+                <TextColorPicker
+                  selectedNodes={selectedNodes}
+                  onPick={recolorTextSelected}
+                />
               </div>
             )}
 
@@ -2281,5 +2314,115 @@ function ControlButton({
     >
       {children}
     </button>
+  );
+}
+
+// F12-K37c: text color picker popover. Trigger pokazuje literkę 'A' z
+// underline'm w kolorze aktualnie ustawionego tekstu (albo 'auto'). Klik
+// otwiera panel z paletą + 'Auto' (= reset do contrast od fillu) + black/white.
+function TextColorPicker({
+  selectedNodes,
+  onPick,
+}: {
+  selectedNodes: RFNode[];
+  onPick: (hex: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as unknown as globalThis.Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  // Show currently selected text color (jeśli wszystkie selected nodes
+  // mają tę samą wartość — inaczej fallback).
+  const currentColor = (() => {
+    if (selectedNodes.length === 0) return null;
+    const first = selectedNodes[0]?.data.textColorHex ?? null;
+    const allSame = selectedNodes.every(
+      (n) => (n.data.textColorHex ?? null) === first,
+    );
+    return allSame ? first : null;
+  })();
+
+  const disabled = selectedNodes.length === 0;
+  // Popover palette = brand vibrant 8 + neutral black/white + auto.
+  const TEXT_PALETTE = [
+    ...PALETTE,
+    "#000000",
+    "#FFFFFF",
+  ];
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        disabled={disabled}
+        title="Kolor tekstu"
+        aria-label="Kolor tekstu"
+        className="inline-flex h-7 items-center gap-0.5 rounded-md border border-border bg-background px-1.5 transition-colors hover:border-primary/60 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <span className="font-display text-[0.78rem] font-bold leading-none">A</span>
+        <span
+          className="block h-1 w-3 rounded-sm"
+          style={{
+            background: currentColor ?? "linear-gradient(90deg, #FF3B30, #0A84FF)",
+            border: currentColor
+              ? "none"
+              : "1px solid var(--border)",
+          }}
+          aria-hidden
+        />
+      </button>
+      {open && !disabled && (
+        <div className="absolute left-0 top-[calc(100%+6px)] z-[60] flex w-[200px] flex-col gap-1.5 rounded-lg border border-border bg-popover p-2 shadow-[0_12px_32px_-12px_rgba(10,10,40,0.25)]">
+          <div className="flex flex-wrap gap-1.5">
+            {TEXT_PALETTE.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => {
+                  onPick(c);
+                  setOpen(false);
+                }}
+                className={`h-6 w-6 rounded-full border transition-transform hover:scale-110 ${
+                  currentColor === c
+                    ? "border-primary ring-2 ring-primary/30"
+                    : "border-border"
+                }`}
+                style={{ background: c }}
+                aria-label={`Kolor tekstu ${c}`}
+                title={c}
+              />
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              onPick(null);
+              setOpen(false);
+            }}
+            className={`mt-1 inline-flex h-7 items-center justify-center rounded-md border border-border bg-background px-2 font-mono text-[0.62rem] uppercase tracking-[0.14em] transition-colors hover:border-primary/60 ${
+              currentColor === null ? "border-primary text-primary" : "text-muted-foreground"
+            }`}
+          >
+            Auto (kontrast)
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

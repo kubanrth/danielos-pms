@@ -55,6 +55,8 @@ const nodeSnapshotSchema = z.object({
   // F12-K37: dla shape="IMAGE" — Supabase Storage key (path relatywny do
   // bucket'u attachments). Persistowany w ProcessNode.dataJson.imagePath.
   imagePath: z.string().max(500).nullable().optional(),
+  // F12-K37c: explicit text color override (#RRGGBB albo null = auto).
+  textColorHex: z.string().regex(HEX_RE).nullable().optional(),
 });
 
 const edgeSnapshotSchema = z.object({

@@ -44,6 +44,9 @@ export interface CanvasNodeValue {
   // F12-K37: dla shape="IMAGE" — Supabase Storage key (path relatywny
   // do bucket'u attachments). Renderowane przez `/api/canvas-image/<key>`.
   imagePath?: string | null;
+  // F12-K37c: explicit text color override. Gdy null/undef, ShapeNode
+  // używa auto-contrast od colorHex.
+  textColorHex?: string | null;
 }
 
 export interface CanvasEdgeValue {
@@ -117,6 +120,8 @@ function toNodeYMap(node: CanvasNodeValue): Y.Map<unknown> {
   if (node.locked) m.set("locked", true);
   // F12-K37: imagePath dla shape="IMAGE".
   if (node.imagePath) m.set("imagePath", node.imagePath);
+  // F12-K37c: explicit text color override.
+  if (node.textColorHex) m.set("textColorHex", node.textColorHex);
   return m;
 }
 
@@ -160,6 +165,12 @@ export function setNodeValue(
     const nextImagePath = node.imagePath ?? null;
     if (prevImagePath !== nextImagePath) {
       existing.set("imagePath", nextImagePath);
+    }
+    // F12-K37c: textColorHex sync.
+    const prevTextColor = existing.get("textColorHex") ?? null;
+    const nextTextColor = node.textColorHex ?? null;
+    if (prevTextColor !== nextTextColor) {
+      existing.set("textColorHex", nextTextColor);
     }
   } else {
     nodesMap.set(node.id, toNodeYMap(node));
@@ -233,6 +244,7 @@ export function readCanvasSnapshot(refs: CanvasYRefs): {
       height: asNumber(value.get("height"), 80),
       colorHex: asString(value.get("colorHex"), "#FFFFFF"),
       imagePath: asNullString(value.get("imagePath")) ?? undefined,
+      textColorHex: asNullString(value.get("textColorHex")) ?? undefined,
       reactions: Object.keys(reactions).length > 0 ? reactions : undefined,
       locked: value.get("locked") === true ? true : undefined,
     });

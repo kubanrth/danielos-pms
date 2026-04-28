@@ -98,6 +98,8 @@ export default async function CanvasEditorPage({
                 ? (n.dataJson as Record<string, unknown>)
                 : {};
             const imagePath = typeof meta.imagePath === "string" ? meta.imagePath : null;
+            const textColorHex =
+              typeof meta.textColorHex === "string" ? meta.textColorHex : null;
             const reactions =
               meta.reactions && typeof meta.reactions === "object"
                 ? (meta.reactions as Record<string, number>)
@@ -118,6 +120,7 @@ export default async function CanvasEditorPage({
               reactions,
               locked,
               imagePath,
+              textColorHex,
             };
           })}
           initialEdges={canvas.edges.map((e) => ({

@@ -34,6 +34,8 @@ function nodeMeta(n: NodeSnapshotInput): Prisma.InputJsonValue | typeof Prisma.D
   if (n.reactions && Object.keys(n.reactions).length > 0) meta.reactions = n.reactions;
   if (n.locked) meta.locked = true;
   if (n.imagePath) meta.imagePath = n.imagePath;
+  // F12-K37c: text color override w ProcessNode.dataJson.
+  if (n.textColorHex) meta.textColorHex = n.textColorHex;
   if (Object.keys(meta).length === 0) return Prisma.DbNull;
   return meta as Prisma.InputJsonValue;
 }
