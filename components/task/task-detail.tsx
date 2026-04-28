@@ -27,16 +27,8 @@ import { RecurrencePicker } from "@/components/task/recurrence-picker";
 import { PortalDropdown } from "@/components/ui/portal-dropdown";
 import { Bell, Flag } from "lucide-react";
 
-const TAG_COLORS = [
-  "#EF4444",
-  "#F59E0B",
-  "#10B981",
-  "#3B82F6",
-  "#8B5CF6",
-  "#EC4899",
-  "#64748B",
-  "#14B8A6",
-];
+// F12-K36: paleta tagów przeniesiona do `lib/colors.ts` (BRAND_PALETTE).
+import { TAG_PALETTE as TAG_COLORS } from "@/lib/colors";
 
 export interface TaskDetailProps {
   workspaceId: string;

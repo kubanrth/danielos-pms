@@ -16,16 +16,11 @@ interface Column {
 
 // F12-K1: exported jako single source of truth dla wszystkich
 // status-color picker'ów (tabela, kanban, status-picker w komórkach).
-export const PRESET_COLORS = [
-  "#64748B",
-  "#F59E0B",
-  "#3B82F6",
-  "#10B981",
-  "#8B5CF6",
-  "#EC4899",
-  "#EF4444",
-  "#14B8A6",
-];
+// F12-K36: paleta przeniesiona do `lib/colors.ts` (BRAND_PALETTE) —
+// re-eksport pod tą samą nazwą żeby istniejące importy (kanban-board)
+// działały bez zmian.
+import { STATUS_PALETTE } from "@/lib/colors";
+export const PRESET_COLORS = STATUS_PALETTE;
 
 export function StatusColumnManager({
   workspaceId,

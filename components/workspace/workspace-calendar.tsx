@@ -34,10 +34,8 @@ export interface WorkspaceCalendarEvent {
   creatorName: string;
 }
 
-const PALETTE = [
-  "#7B68EE", "#10B981", "#F59E0B", "#EF4444",
-  "#3B82F6", "#EC4899", "#14B8A6", "#64748B",
-];
+// F12-K36: paleta z `lib/colors.ts` (BRAND_PALETTE).
+import { EVENT_PALETTE as PALETTE } from "@/lib/colors";
 
 export function WorkspaceCalendar({
   workspaceId,

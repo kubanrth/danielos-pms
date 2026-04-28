@@ -28,16 +28,8 @@ export interface StatusOption {
   colorHex: string;
 }
 
-const PRESET_COLORS = [
-  "#10B981",
-  "#F59E0B",
-  "#3B82F6",
-  "#8B5CF6",
-  "#EC4899",
-  "#EF4444",
-  "#14B8A6",
-  "#64748B",
-];
+// F12-K36: paleta z `lib/colors.ts` (BRAND_PALETTE).
+import { STATUS_PALETTE as PRESET_COLORS } from "@/lib/colors";
 
 export function StatusPicker({
   taskId,

@@ -4,23 +4,16 @@
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
-// Pastel accent palette — each entity gets a stable color derived from
-// its id so re-orderings don't reshuffle hues across renders.
-export const TIMELINE_PALETTE = [
-  "#7B68EE",
-  "#FF02F0",
-  "#14B8A6",
-  "#F59E0B",
-  "#3B82F6",
-  "#EF4444",
-  "#10B981",
-  "#8B5CF6",
-];
+// Each entity gets a stable color derived from its id so re-orderings
+// don't reshuffle hues across renders.
+// F12-K36: paleta przeniesiona do `lib/colors.ts` (BRAND_PALETTE).
+export { TIMELINE_PALETTE } from "@/lib/colors";
+import { TIMELINE_PALETTE as PALETTE } from "@/lib/colors";
 
 export function colorFor(id: string): string {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return TIMELINE_PALETTE[h % TIMELINE_PALETTE.length];
+  return PALETTE[h % PALETTE.length];
 }
 
 export interface TimelineItem {
