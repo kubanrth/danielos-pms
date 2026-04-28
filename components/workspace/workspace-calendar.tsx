@@ -10,6 +10,8 @@ import {
   CalendarMonthGrid,
   type CalendarEvent,
 } from "@/components/my/calendar/month-grid";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export interface WorkspaceCalendarTask {
   id: string;
@@ -280,7 +282,7 @@ function NewEventForm({
       <input type="hidden" name="workspaceId" value={workspaceId} />
       <input type="hidden" name="color" value={color} />
       <div className="flex flex-wrap items-end gap-3">
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-[220px] flex-col gap-1">
           <span className="eyebrow">Tytuł</span>
           <input
             name="title"
@@ -293,29 +295,28 @@ function NewEventForm({
         </div>
         <div className="flex flex-col gap-1">
           <span className="eyebrow">Start</span>
-          <input
+          <DateTimePicker
             name="startAt"
-            type="datetime-local"
-            required
-            className="h-9 rounded-md border border-border bg-background px-2 font-mono text-[0.78rem] outline-none focus:border-primary"
+            defaultValue={null}
+            placeholder="Wybierz start"
+            label="Start wydarzenia"
           />
         </div>
         <div className="flex flex-col gap-1">
           <span className="eyebrow">Koniec</span>
-          <input
+          <DateTimePicker
             name="endAt"
-            type="datetime-local"
-            required
-            className="h-9 rounded-md border border-border bg-background px-2 font-mono text-[0.78rem] outline-none focus:border-primary"
+            defaultValue={null}
+            placeholder="Wybierz koniec"
+            label="Koniec wydarzenia"
           />
         </div>
-        <label className="flex items-center gap-1.5 self-end pb-1 text-[0.78rem] text-muted-foreground">
-          <input
-            type="checkbox"
+        <label className="flex items-center gap-2 self-end pb-2 text-[0.84rem] text-muted-foreground">
+          <Checkbox
             name="allDay"
             checked={allDay}
+            ariaLabel="Cały dzień"
             onChange={(e) => setAllDay(e.target.checked)}
-            className="h-3.5 w-3.5 accent-[var(--primary)]"
           />
           cały dzień
         </label>

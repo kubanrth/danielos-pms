@@ -17,6 +17,8 @@ export function Checkbox({
   size = "md",
   disabled,
   className,
+  name,
+  value,
 }: {
   checked: boolean;
   indeterminate?: boolean;
@@ -26,6 +28,11 @@ export function Checkbox({
   size?: "sm" | "md";
   disabled?: boolean;
   className?: string;
+  // F12-K32: native form integration. Gdy 'name' jest set, underlying
+  // input wysyła "on" przez FormData (zachowanie natywnego checkboxa) —
+  // formy z action={...} dostają standardowy submit.
+  name?: string;
+  value?: string;
 }) {
   const px = size === "sm" ? 14 : 16;
   const dim =
@@ -36,6 +43,8 @@ export function Checkbox({
     >
       <input
         type="checkbox"
+        name={name}
+        value={value}
         aria-label={ariaLabel}
         checked={checked}
         disabled={disabled}
