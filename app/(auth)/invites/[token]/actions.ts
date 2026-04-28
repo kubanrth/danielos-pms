@@ -1,6 +1,7 @@
 "use server";
 
 import bcrypt from "bcrypt";
+import { redirect } from "next/navigation";
 import { auth, signIn } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { acceptInviteSchema } from "@/lib/schemas/invitation";
@@ -143,17 +144,25 @@ export async function acceptInviteAction(
     },
   });
 
-  // Sign in — if already logged in as same email, skip. Otherwise perform fresh sign-in.
+  // F12-K38: po akceptacji ZAWSZE redirect do workspace'u. Wcześniej, gdy
+  // user był już zalogowany jako ten sam email, action zwracał { ok: true }
+  // bez redirect'u — formularz po prostu sat w pendingu i klient widział
+  // 'jakby nic się nie stało' (i przy refreshu strony zaproszenia
+  // pokazywał się 'already-used' error). Teraz:
+  //  - już zalogowany jako invitation.email → redirect do /w/<id>
+  //  - inaczej → signIn z redirectTo (next-auth handle redirect)
   const session = await auth();
+  const target = `/w/${invitation.workspaceId}`;
   if (session?.user?.email === invitation.email) {
-    return { ok: true };
+    // redirect() throws NEXT_REDIRECT — Next.js przejmuje response.
+    redirect(target);
   }
 
   try {
     await signIn("credentials", {
       email: invitation.email,
       password: parsed.data.password,
-      redirectTo: `/w/${invitation.workspaceId}`,
+      redirectTo: target,
     });
     return { ok: true }; // unreachable — signIn redirects
   } catch (error) {

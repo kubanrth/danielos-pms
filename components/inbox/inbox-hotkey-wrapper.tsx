@@ -167,11 +167,12 @@ function NotificationRow({
   const isPoll = type === "poll.created";
   // F12-K21: render notyfikacji o przypisaniu do task'a.
   const isAssigned = type === "task.assigned";
-  // F12-K25/K26: support notyfikacje.
+  // F12-K25/K26/K38: support notyfikacje.
   const isSupportResolved = type === "support.resolved";
   const isSupportAssigned = type === "support.assigned";
+  const isSupportCreated = type === "support.created";
   const href =
-    isSupportResolved || isSupportAssigned
+    isSupportResolved || isSupportAssigned || isSupportCreated
       ? payload.workspaceId
         ? `/w/${payload.workspaceId}/support`
         : "/inbox"
@@ -243,6 +244,18 @@ function NotificationRow({
         </span>
         .
       </>
+    ) : isSupportCreated ? (
+      <>
+        Nowe zgłoszenie od{" "}
+        <span className="font-semibold text-foreground">
+          {payload.actorName ?? "użytkownika"}
+        </span>
+        :{" "}
+        <span className="font-semibold text-foreground">
+          {payload.ticketTitle ?? "?"}
+        </span>
+        .
+      </>
     ) : (
       <span className="text-muted-foreground">{type}</span>
     );
@@ -283,7 +296,9 @@ function NotificationRow({
               ? "bg-emerald-500/10 text-emerald-500"
               : isSupportAssigned
                 ? "bg-blue-500/10 text-blue-500"
-                : "bg-primary/10 text-primary"
+                : isSupportCreated
+                  ? "bg-rose-500/10 text-rose-500"
+                  : "bg-primary/10 text-primary"
         }`}
         aria-hidden
       >
@@ -292,6 +307,8 @@ function NotificationRow({
         ) : isAssigned || isSupportAssigned ? (
           <UserPlus size={14} />
         ) : isSupportResolved ? (
+          <CheckCircle2 size={14} />
+        ) : isSupportCreated ? (
           <CheckCircle2 size={14} />
         ) : (
           <AtSign size={14} />

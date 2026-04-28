@@ -98,6 +98,7 @@ export default async function InvitePage({
           token={invitation.token}
           email={invitation.email}
           isExistingUser={isExistingUser}
+          workspaceId={invitation.workspaceId}
         />
       </main>
 

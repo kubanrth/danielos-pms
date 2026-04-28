@@ -182,6 +182,14 @@ export async function getNotificationForToastAction(input: {
       body = ticketTitle ?? null;
       if (workspaceId && ticketId) href = `/w/${workspaceId}/support`;
       break;
+    case "support.created":
+      // F12-K38: nowe zgłoszenie supportu — toast dla każdego workspace
+      // member'a poza reporter'em.
+      iconKind = "support";
+      title = `Nowe zgłoszenie od ${actorName ?? "użytkownika"}`;
+      body = ticketTitle ?? null;
+      if (workspaceId) href = `/w/${workspaceId}/support`;
+      break;
     default:
       title = n.type;
   }

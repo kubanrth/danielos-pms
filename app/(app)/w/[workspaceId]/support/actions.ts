@@ -77,6 +77,49 @@ export async function createSupportTicketAction(
       isUrgent: parsed.data.isUrgent,
     },
   });
+
+  // F12-K38: notify wszystkich workspace member'ów (poza reporter'em) o
+  // nowym zgłoszeniu. Klient: 'dodaj takie same indykatory jak przy
+  // powiadomieniach do supportu, jak pojawi się zgłoszenie to ma pisać'.
+  const reporter = await db.user.findUnique({
+    where: { id: ctx.userId },
+    select: { name: true, email: true },
+  });
+  const members = await db.workspaceMembership.findMany({
+    where: {
+      workspaceId: parsed.data.workspaceId,
+      userId: { not: ctx.userId },
+    },
+    select: { userId: true },
+  });
+  if (members.length > 0) {
+    const created = await Promise.all(
+      members.map((m) =>
+        db.notification.create({
+          data: {
+            userId: m.userId,
+            type: "support.created",
+            payload: {
+              workspaceId: parsed.data.workspaceId,
+              ticketId: ticket.id,
+              ticketTitle: parsed.data.title,
+              priority: parsed.data.priority,
+              isUrgent: parsed.data.isUrgent,
+              actorId: ctx.userId,
+              actorName: reporter?.name ?? reporter?.email ?? null,
+            } as Prisma.InputJsonValue,
+          },
+          select: { id: true, userId: true },
+        }),
+      ),
+    );
+    await Promise.all(
+      created.map((n) =>
+        broadcastUserChange(n.userId, { kind: "notification.new", id: n.id }),
+      ),
+    );
+  }
+
   await writeAudit({
     workspaceId: parsed.data.workspaceId,
     objectType: "SupportTicket",

@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, startTransition } from "react";
+import { useActionState, startTransition, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   acceptInviteAction,
   type AcceptInviteState,
@@ -10,15 +11,28 @@ export function AcceptInviteForm({
   token,
   email,
   isExistingUser,
+  workspaceId,
 }: {
   token: string;
   email: string;
   isExistingUser: boolean;
+  workspaceId: string;
 }) {
+  const router = useRouter();
   const [state, formAction, pending] = useActionState<AcceptInviteState, FormData>(
     acceptInviteAction,
     null,
   );
+
+  // F12-K38: client-side fallback. Server zazwyczaj redirect()'uje przy
+  // ok=true (`signIn(...redirectTo)` lub `redirect("/w/<id>")`), ale
+  // jeśli z jakiegoś powodu odpowiedź wraca z ok:true bez redirect'u —
+  // klient od razu nawiguje do workspace'u zamiast utknąć na pendingu.
+  useEffect(() => {
+    if (state?.ok) {
+      router.replace(`/w/${workspaceId}`);
+    }
+  }, [state, router, workspaceId]);
 
   const fieldErrors = !state?.ok ? state?.fieldErrors : undefined;
   const formError = !state?.ok ? state?.error : undefined;
