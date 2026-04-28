@@ -6,7 +6,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   Background,
-  Controls,
+  ConnectionMode,
   MarkerType,
   MiniMap,
   addEdge,
@@ -34,9 +34,11 @@ import {
   LayoutTemplate,
   Link2,
   Lock,
+  Maximize2,
   Minus as MinusIcon,
   MousePointer2,
   MoveRight as ArrowIcon,
+  Plus as PlusIcon,
   Pencil,
   Save,
   Square as SquareIcon,
@@ -447,6 +449,28 @@ function CanvasEditorInner({
     return () => wrap.removeEventListener("mousemove", onMove);
   }, [canEdit, reactFlow, myCursorIdentity]);
 
+  // F12-K37: nasłuch custom-eventu z ShapeNode po inline-edit / resize.
+  // RF nie emituje data-delta'ów przez onNodesChange, więc shape-node
+  // dispatch'uje 'canvas-node:commit' żeby wymusić sync do Yjs.
+  useEffect(() => {
+    if (!canEdit) return;
+    const onCommit = (e: Event) => {
+      const ce = e as CustomEvent<{ nodeId: string }>;
+      const id = ce.detail?.nodeId;
+      if (!id) return;
+      // setNodes z funkcją żeby dostać aktualny state — odczyt z closure'a
+      // nodes mógłby być stale.
+      setNodes((ns) => {
+        const target = ns.find((n) => n.id === id);
+        if (target) commitNodeToY(target);
+        return ns;
+      });
+    };
+    window.addEventListener("canvas-node:commit", onCommit);
+    return () => window.removeEventListener("canvas-node:commit", onCommit);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canEdit]);
+
   const commitNodeToY = useCallback(
     (node: RFNode) => {
       yRefs.ydoc.transact(() => {
@@ -557,12 +581,17 @@ function CanvasEditorInner({
           height: defaults.height,
           linkedTasks: [],
           workspaceId,
+          // F12-K37: ustawiamy editing=true od razu — node renderuje
+          // contentEditable z autofocus, klient może wpisywać natychmiast
+          // bez podwójnego kliknięcia.
+          editing: true,
         },
         width: defaults.width,
         height: defaults.height,
         zIndex: shape === "FRAME" ? -10 : 0,
+        selected: true,
       };
-      setNodes((ns) => [...ns, rfNode]);
+      setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), rfNode]);
       commitNodeToY(rfNode);
     },
     [setNodes, workspaceId, commitNodeToY],
@@ -677,19 +706,21 @@ function CanvasEditorInner({
     for (const n of touched) commitNodeToY(n);
   }, [setNodes, commitNodeToY]);
 
+  // F12-K37: rename = ustaw flagę editing=true na zaznaczonym node'cie.
+  // ShapeNode (zawiera contentEditable + autofocus) odpala edit mode
+  // od razu po renderze. window.prompt usunięty — klient zgłosił że
+  // wpisywanie tekstu w prompt'cie było 'dziwne'.
   const renameSelected = useCallback(() => {
     const target = nodes.find((n) => n.selected);
     if (!target) return;
-    const next = window.prompt("Etykieta węzła", target.data.label ?? "");
-    if (next === null) return;
-    const nextLabel = next.trim() || null;
     setNodes((ns) =>
       ns.map((n) =>
-        n.id === target.id ? { ...n, data: { ...n.data, label: nextLabel } } : n,
+        n.id === target.id
+          ? { ...n, data: { ...n.data, editing: true } }
+          : n,
       ),
     );
-    commitNodeToY({ ...target, data: { ...target.data, label: nextLabel } });
-  }, [nodes, setNodes, commitNodeToY]);
+  }, [nodes, setNodes]);
 
   const recolorSelected = useCallback(
     (hex: string) => {
@@ -1062,11 +1093,23 @@ function CanvasEditorInner({
         // F10-W2: smoothstep edges route around obstacles cleanly (90° bends),
         // much closer to Mural's connector behaviour than raw bezier.
         defaultEdgeOptions={{ type: "smoothstep" }}
+        // F12-K37: connectionMode=Loose pozwala upuścić strzałkę na DOWOLNY
+        // handle (target lub source) — wcześniej można było tylko na top/left,
+        // bo right/bottom były source-only.
+        connectionMode={ConnectionMode.Loose}
         // F10-W: marquee/lasso selection on left-drag (Mural-style),
         // pan with middle/right or Space+drag. Disabled in pen mode so
         // the overlay can capture pointer events.
         selectionOnDrag={canEdit && toolMode === "select"}
         panOnDrag={toolMode === "select" ? [1, 2] : false}
+        // F12-K37: pan kółkiem/trackpadem (klient: 'nawigacja po tym jest
+        // mega rozjebana'). Default RF12 = scroll = zoom; my flippujemy.
+        panOnScroll
+        zoomOnScroll={false}
+        // Pinch (ctrl/cmd + scroll) dalej zoomuje — to jest standardowy
+        // gesture na trackpadzie.
+        zoomOnPinch
+        zoomOnDoubleClick={false}
         // Snap to 8px grid for clean alignment.
         snapToGrid={canEdit && toolMode === "select"}
         snapGrid={[SNAP_STEP, SNAP_STEP]}
@@ -1121,7 +1164,10 @@ function CanvasEditorInner({
         onPaneClick={() => setContextMenu(null)}
       >
         <Background gap={24} size={1} />
-        <Controls />
+        {/* F12-K37: custom controls — natywne <Controls /> z react-flow miało
+            jasne tło zawsze, w dark mode niewidoczne (klient: 'przy zmianie
+            trybu na ciemny przyciski plus/minus nie zmieniają koloru'). */}
+        <CanvasZoomControls />
         <MiniMap pannable zoomable className="!bg-card" />
         <StrokeViewportLayer strokes={strokes} />
         <AlignmentGuides vx={guides.vx} hy={guides.hy} />
@@ -2094,6 +2140,52 @@ function CtxItem({
     >
       <span className="grid h-4 w-4 place-items-center">{icon}</span>
       <span className="flex-1 truncate">{label}</span>
+    </button>
+  );
+}
+
+// F12-K37: custom zoom controls — natywne <Controls /> z react-flow
+// nie ma dark-mode parity (białe na jasnym tle, niewidoczne w dark
+// mode). Tu używamy bg-card/border-border/text-muted-foreground które
+// poprawnie się przełączają przez --css vars.
+function CanvasZoomControls() {
+  const rf = useReactFlow();
+  return (
+    <div
+      className="absolute bottom-4 left-4 z-[5] flex flex-col gap-1 rounded-lg border border-border bg-card/95 p-1 shadow-lg backdrop-blur"
+      data-canvas-controls=""
+    >
+      <ControlButton label="Powiększ" onClick={() => rf.zoomIn()}>
+        <PlusIcon size={14} />
+      </ControlButton>
+      <ControlButton label="Pomniejsz" onClick={() => rf.zoomOut()}>
+        <MinusIcon size={14} />
+      </ControlButton>
+      <ControlButton label="Dopasuj" onClick={() => rf.fitView({ padding: 0.2, duration: 200 })}>
+        <Maximize2 size={14} />
+      </ControlButton>
+    </div>
+  );
+}
+
+function ControlButton({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+    >
+      {children}
     </button>
   );
 }
