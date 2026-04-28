@@ -13,6 +13,15 @@ export interface CalendarEvent {
   statusColor: string | null;
   startAt: string | null;
   stopAt: string | null;
+  // F12-K31: kalendarz workspace'u miesza taski + custom WorkspaceEvent.
+  // Klik tasku → nav do /t/<id> (Link). Klik eventu → callback (parent
+  // otwiera dialog ze szczegółami). Default = "task" żeby /my/calendar
+  // nie musiał ustawiać niczego.
+  kind?: "task" | "event";
+  // Raw entity id bez prefixu (poprzednie kody używały prefiksu
+  // "task:<id>" / "event:<id>" w polu `id`, co rozwalało route'y bo
+  // /t/task:<id> nie istnieje). To pole dostaje czysty id encji.
+  entityId?: string;
 }
 
 const PL_DAY_HEADERS = ["Pon", "Wt", "Śr", "Cz", "Pt", "Sob", "Niedz"];
@@ -60,7 +69,15 @@ function eventSpansDay(ev: CalendarEvent, day: Date): boolean {
   return sameDay(anchor, day);
 }
 
-export function CalendarMonthGrid({ events }: { events: CalendarEvent[] }) {
+export function CalendarMonthGrid({
+  events,
+  onEventClick,
+}: {
+  events: CalendarEvent[];
+  // F12-K31: parent może obsłużyć klik w event-kind (dialog ze
+  // szczegółami WorkspaceEvent'u). Task-kind dalej linkuje przez <Link>.
+  onEventClick?: (entityId: string) => void;
+}) {
   const today = new Date();
   const [cursor, setCursor] = useState<{ year: number; month: number }>({
     year: today.getFullYear(),
@@ -181,22 +198,45 @@ export function CalendarMonthGrid({ events }: { events: CalendarEvent[] }) {
                   cell.date.getDate()
                 )}
               </div>
-              {dayEvents.slice(0, 3).map((ev) => (
-                <Link
-                  key={ev.id}
-                  href={`/w/${ev.workspaceId}/t/${ev.id}`}
-                  title={`${ev.title} — ${ev.workspaceName} / ${ev.boardName}`}
-                  className="truncate rounded-sm px-1.5 py-0.5 text-[0.68rem] font-medium transition-colors hover:brightness-95"
-                  style={{
-                    background: ev.statusColor
-                      ? `${ev.statusColor}22`
-                      : "var(--primary)/10",
-                    color: ev.statusColor ?? "var(--primary)",
-                  }}
-                >
-                  {ev.title}
-                </Link>
-              ))}
+              {dayEvents.slice(0, 3).map((ev) => {
+                const isEvent = ev.kind === "event";
+                // Fallback do `ev.id` (legacy callsites) gdyby nie ustawiono
+                // entityId — usuwamy prefix "task:" / "event:" defensywnie.
+                const rawId = ev.entityId ?? ev.id.replace(/^(task|event):/, "");
+                const className =
+                  "truncate rounded-sm px-1.5 py-0.5 text-left text-[0.68rem] font-medium transition-colors hover:brightness-95";
+                const style = {
+                  background: ev.statusColor
+                    ? `${ev.statusColor}22`
+                    : "var(--primary)/10",
+                  color: ev.statusColor ?? "var(--primary)",
+                };
+                if (isEvent) {
+                  return (
+                    <button
+                      key={ev.id}
+                      type="button"
+                      onClick={() => onEventClick?.(rawId)}
+                      title={`${ev.title} — ${ev.workspaceName} / ${ev.boardName}`}
+                      className={className}
+                      style={style}
+                    >
+                      {ev.title}
+                    </button>
+                  );
+                }
+                return (
+                  <Link
+                    key={ev.id}
+                    href={`/w/${ev.workspaceId}/t/${rawId}`}
+                    title={`${ev.title} — ${ev.workspaceName} / ${ev.boardName}`}
+                    className={className}
+                    style={style}
+                  >
+                    {ev.title}
+                  </Link>
+                );
+              })}
               {showOverflow && (
                 <span className="px-1 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground">
                   +{dayEvents.length - 3} więcej
