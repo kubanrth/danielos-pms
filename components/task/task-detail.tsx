@@ -24,6 +24,8 @@ import { SendEmailDialog } from "@/components/task/send-email-dialog";
 import { assignTaskToMilestoneAction } from "@/app/(app)/w/[workspaceId]/b/[boardId]/milestone-actions";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { RecurrencePicker } from "@/components/task/recurrence-picker";
+import { PortalDropdown } from "@/components/ui/portal-dropdown";
+import { Bell, Flag } from "lucide-react";
 
 const TAG_COLORS = [
   "#EF4444",
@@ -218,29 +220,11 @@ export function TaskDetail({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="eyebrow">Przypomnienie</span>
-          <select
-            name="reminderOffset"
-            defaultValue={task.reminderOffset ?? "none"}
-            disabled={!canEdit}
-            className="h-8 appearance-none rounded-full border border-border bg-background px-3 font-mono text-[0.7rem] uppercase tracking-[0.12em] outline-none focus:border-primary disabled:cursor-not-allowed"
-          >
-            <option value="none">— brak —</option>
-            <option value="1h">1 godz. przed końcem</option>
-            <option value="4h">4 godz. przed końcem</option>
-            <option value="1d">1 dzień przed</option>
-            <option value="3d">3 dni przed</option>
-          </select>
-          {task.reminderAt && (
-            <span className="font-mono text-[0.66rem] uppercase tracking-[0.12em] text-muted-foreground">
-              wyśle się {new Date(task.reminderAt).toLocaleString("pl-PL", {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })}
-            </span>
-          )}
-        </div>
+        <ReminderField
+          defaultValue={task.reminderOffset ?? "none"}
+          reminderAt={task.reminderAt}
+          disabled={!canEdit}
+        />
 
         {/* F11-17 (#24): recurring tasks. Template task (rule != null)
             spawns instances via cron daily at 00:05 UTC. Instances
@@ -407,33 +391,46 @@ function MilestoneSection({
   const router = useRouter();
   const [value, setValue] = useState<string>(currentMilestoneId ?? "");
 
+  // F12-K30: PortalDropdown zamiast natywnego <select>. Sentinel "__none__"
+  // bo PortalDropdown traktuje pustego stringa jako 'no selection' (i nie
+  // dałoby się go wybrać jako "Brak"). Convert in/out na granicy.
+  const NONE = "__none__";
+  const handleChange = (next: string) => {
+    const persisted = next === NONE ? "" : next;
+    setValue(persisted); // optimistic — UI nie czeka na server
+    const fd = new FormData();
+    fd.set("taskId", taskId);
+    fd.set("milestoneId", persisted);
+    startTransition(async () => {
+      await assignTaskToMilestoneAction(fd);
+      router.refresh();
+    });
+  };
+
   return (
     <section className="flex flex-col gap-3">
-      <span className="eyebrow">Milestone</span>
+      <span className="eyebrow inline-flex items-center gap-1.5">
+        <Flag size={11} />
+        Milestone
+      </span>
       <div className="flex items-center gap-2">
-        <select
-          value={value}
+        <PortalDropdown<string>
+          ariaLabel="Wybierz milestone"
           disabled={!canEdit}
-          onChange={(e) => {
-            const next = e.target.value;
-            setValue(next); // optimistic — UI nie czeka na server
-            const fd = new FormData();
-            fd.set("taskId", taskId);
-            fd.set("milestoneId", next);
-            startTransition(async () => {
-              await assignTaskToMilestoneAction(fd);
-              router.refresh();
-            });
-          }}
-          className="h-9 min-w-[220px] appearance-none rounded-md border border-border bg-background px-3 font-mono text-[0.82rem] uppercase tracking-[0.12em] outline-none focus:border-primary disabled:opacity-60"
-        >
-          <option value="">— brak —</option>
-          {milestones.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.title}
-            </option>
-          ))}
-        </select>
+          width={280}
+          placeholder="— brak —"
+          emptyHint="Utwórz milestone w roadmapie"
+          value={value === "" ? NONE : value}
+          onChange={handleChange}
+          options={[
+            { value: NONE, label: "— brak —" },
+            ...milestones.map((m) => ({
+              value: m.id,
+              label: m.title,
+            })),
+          ]}
+          triggerClassName="inline-flex h-9 min-w-[260px] items-center justify-between gap-2 rounded-md border border-border bg-background px-3 text-[0.86rem] outline-none transition-colors hover:border-primary/60 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+        />
         {milestones.length === 0 && (
           <span className="font-mono text-[0.64rem] uppercase tracking-[0.12em] text-muted-foreground">
             utwórz milestone w roadmapie
@@ -441,6 +438,54 @@ function MilestoneSection({
         )}
       </div>
     </section>
+  );
+}
+
+// F12-K30: hidden-input + PortalDropdown żeby reminderOffset dalej trafiał
+// do FormData submitu (parent form). Native <select> w form'ie miało
+// natywny dropdown, który klient zgłosił jako brzydki UX (mac-native
+// styling, dark-mode broken).
+function ReminderField({
+  defaultValue,
+  reminderAt,
+  disabled,
+}: {
+  defaultValue: string;
+  reminderAt: string | null;
+  disabled: boolean;
+}) {
+  const [value, setValue] = useState<string>(defaultValue);
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <span className="eyebrow inline-flex items-center gap-1.5">
+        <Bell size={11} />
+        Przypomnienie
+      </span>
+      <input type="hidden" name="reminderOffset" value={value} />
+      <PortalDropdown<string>
+        ariaLabel="Wybierz czas przypomnienia"
+        disabled={disabled}
+        width={240}
+        value={value}
+        onChange={setValue}
+        options={[
+          { value: "none", label: "— brak —" },
+          { value: "1h", label: "1 godz. przed końcem" },
+          { value: "4h", label: "4 godz. przed końcem" },
+          { value: "1d", label: "1 dzień przed" },
+          { value: "3d", label: "3 dni przed" },
+        ]}
+      />
+      {reminderAt && (
+        <span className="font-mono text-[0.66rem] uppercase tracking-[0.12em] text-muted-foreground">
+          wyśle się{" "}
+          {new Date(reminderAt).toLocaleString("pl-PL", {
+            dateStyle: "medium",
+            timeStyle: "short",
+          })}
+        </span>
+      )}
+    </div>
   );
 }
 

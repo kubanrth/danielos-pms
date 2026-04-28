@@ -13,10 +13,13 @@
 import { startTransition, useState } from "react";
 import { Repeat } from "lucide-react";
 import { setTaskRecurrenceAction } from "@/app/(app)/w/[workspaceId]/t/recurrence-actions";
+import { PortalDropdown } from "@/components/ui/portal-dropdown";
 
 type Rule = { freq: "daily" | "weekly" | "monthly"; day?: number };
 
 const WEEKDAYS = ["Niedz.", "Pon.", "Wt.", "Śr.", "Czw.", "Pt.", "Sob."];
+
+type Freq = "none" | "daily" | "weekly" | "monthly";
 
 export function RecurrencePicker({
   taskId,
@@ -45,58 +48,62 @@ export function RecurrencePicker({
         : `Co miesiąc, ${draft.day ?? 1}. dnia`
     : "Brak";
 
+  // F12-K30: PortalDropdown zamiast natywnego <select>. Trzy oddzielne
+  // dropdowny: freq → opcjonalnie weekday/monthday. Sentinel string'i
+  // dla numeric day'a, żeby działało z generycznym typem PortalDropdown.
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="eyebrow inline-flex items-center gap-1">
+    <div className="flex flex-wrap items-center gap-3">
+      <span className="eyebrow inline-flex items-center gap-1.5">
         <Repeat size={11} />
         Powtarzaj
       </span>
-      <select
+      <PortalDropdown<Freq>
+        ariaLabel="Częstotliwość powtarzania"
+        disabled={disabled}
+        width={200}
         value={draft?.freq ?? "none"}
-        onChange={(e) => {
-          const v = e.target.value;
+        onChange={(v) => {
           if (v === "none") return persist(null);
           if (v === "daily") return persist({ freq: "daily" });
-          if (v === "weekly") return persist({ freq: "weekly", day: draft?.day ?? 1 });
-          if (v === "monthly") return persist({ freq: "monthly", day: draft?.day ?? 1 });
+          if (v === "weekly")
+            return persist({ freq: "weekly", day: draft?.day ?? 1 });
+          if (v === "monthly")
+            return persist({ freq: "monthly", day: draft?.day ?? 1 });
         }}
-        disabled={disabled}
-        className="h-8 rounded-full border border-border bg-background px-3 font-mono text-[0.7rem] uppercase tracking-[0.12em] outline-none focus:border-primary disabled:cursor-not-allowed"
-      >
-        <option value="none">— nigdy —</option>
-        <option value="daily">codziennie</option>
-        <option value="weekly">co tydzień</option>
-        <option value="monthly">co miesiąc</option>
-      </select>
+        options={[
+          { value: "none", label: "— nigdy —" },
+          { value: "daily", label: "Codziennie" },
+          { value: "weekly", label: "Co tydzień" },
+          { value: "monthly", label: "Co miesiąc" },
+        ]}
+      />
 
       {draft?.freq === "weekly" && (
-        <select
-          value={draft.day ?? 1}
-          onChange={(e) => persist({ freq: "weekly", day: Number(e.target.value) })}
+        <PortalDropdown<string>
+          ariaLabel="Dzień tygodnia"
           disabled={disabled}
-          className="h-8 rounded-full border border-border bg-background px-3 font-mono text-[0.7rem] uppercase tracking-[0.12em] outline-none focus:border-primary disabled:cursor-not-allowed"
-        >
-          {WEEKDAYS.map((d, i) => (
-            <option key={i} value={i}>
-              {d}
-            </option>
-          ))}
-        </select>
+          width={180}
+          value={String(draft.day ?? 1)}
+          onChange={(v) => persist({ freq: "weekly", day: Number(v) })}
+          options={WEEKDAYS.map((d, i) => ({
+            value: String(i),
+            label: d,
+          }))}
+        />
       )}
 
       {draft?.freq === "monthly" && (
-        <select
-          value={draft.day ?? 1}
-          onChange={(e) => persist({ freq: "monthly", day: Number(e.target.value) })}
+        <PortalDropdown<string>
+          ariaLabel="Dzień miesiąca"
           disabled={disabled}
-          className="h-8 rounded-full border border-border bg-background px-3 font-mono text-[0.7rem] uppercase tracking-[0.12em] outline-none focus:border-primary disabled:cursor-not-allowed"
-        >
-          {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
-            <option key={d} value={d}>
-              {d}.
-            </option>
-          ))}
-        </select>
+          width={140}
+          value={String(draft.day ?? 1)}
+          onChange={(v) => persist({ freq: "monthly", day: Number(v) })}
+          options={Array.from({ length: 31 }, (_, i) => i + 1).map((d) => ({
+            value: String(d),
+            label: `${d}. dnia`,
+          }))}
+        />
       )}
 
       {draft && (
