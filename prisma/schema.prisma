@@ -168,6 +168,9 @@ model Workspace {
   creativeBriefs       CreativeBrief[]
   // F11-22: workspace-level calendar events.
   events               WorkspaceEvent[]
+  // F12-K34: dzienne backupy — JSON snapshot wszystkich workspace-scoped
+  // tabel, dostępny dla superadmina w /admin/backups.
+  backups              WorkspaceBackup[]
 
   @@index([ownerId])
   @@index([deletedAt])
@@ -538,35 +541,11 @@ model CreativeBrief {
   updatedAt   DateTime            @updatedAt
   deletedAt   DateTime?
 
-  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  creator   User            @relation("BriefCreator", fields: [creatorId], references: [id])
-  snapshots BriefSnapshot[]
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator   User      @relation("BriefCreator", fields: [creatorId], references: [id])
 
   @@index([workspaceId, deletedAt])
   @@index([creatorId])
-}
-
-// F12-K33: dzienne snapshoty briefów. Każda akcja `updateBriefAction`
-// upsertuje snapshot dla bieżącej daty (Europe/Warsaw) — w efekcie
-// ostatnia wersja danego dnia zostaje zachowana, a starsze dni są
-// nietknięte. Klient: 'potrzebuję mieć miejsce, gdzie tworzy się
-// automatyczna kopia z dnia'.
-model BriefSnapshot {
-  id          String              @id @default(cuid())
-  briefId     String
-  // YYYY-MM-DD w strefie Europe/Warsaw — unique key dla 1-snapshot/dzień.
-  dayKey      String
-  title       String
-  contentJson Json?
-  status      CreativeBriefStatus
-  emoji       String?
-  headerColor String?
-  createdAt   DateTime            @default(now())
-
-  brief CreativeBrief @relation(fields: [briefId], references: [id], onDelete: Cascade)
-
-  @@unique([briefId, dayKey])
-  @@index([briefId])
 }
 
 // F11-20 (#23): support tickets — internal helpdesk. Każdy member
@@ -1209,4 +1188,27 @@ model SystemFlag {
   value     Json
   updatedAt DateTime @updatedAt
   updatedBy String?
+}
+
+// F12-K34: dzienne snapshoty całego workspace'u. Cron `/api/cron/workspace-backup`
+// uderza raz dziennie i serializuje wszystkie workspace-scoped tabele do
+// JSON-a, który ląduje w Supabase Storage (bucket `attachments`,
+// key `w/<wid>/backups/<dayKey>.json`). Ten model jest tylko indexem —
+// pozwala szybko wylistować backupy w `/admin/backups` bez listingu storage'u.
+model WorkspaceBackup {
+  id          String   @id @default(cuid())
+  workspaceId String
+  // YYYY-MM-DD w strefie Europe/Warsaw — unique key (1 backup/dzień).
+  dayKey      String
+  storageKey  String
+  sizeBytes   Int
+  // Shallow countery per-tabela ({ boards: 5, tasks: 47, … }) do quick-stats
+  // w UI panelu admina — bez pobierania pełnego JSON-a.
+  modelCounts Json
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, dayKey])
+  @@index([workspaceId, createdAt(sort: Desc)])
 }

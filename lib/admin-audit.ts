@@ -17,7 +17,11 @@ export type AdminAuditAction =
   | "user.unbanned"
   | "user.deleted"
   | "workspace.forceDeleted"
-  | "workspace.restored";
+  | "workspace.restored"
+  // F12-K34: workspace backup operations.
+  | "workspace.backup.manual"
+  | "workspace.backup.bulk"
+  | "workspace.backup.downloaded";
 
 export type AdminAuditTargetType = "User" | "Workspace";
 

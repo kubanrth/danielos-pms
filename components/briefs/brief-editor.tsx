@@ -2,11 +2,10 @@
 
 import { startTransition, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, History, RotateCcw, Smile, Trash2, X } from "lucide-react";
+import { ArrowLeft, Smile, Trash2 } from "lucide-react";
 import {
   deleteBriefAction,
   requestBriefImageUploadAction,
-  restoreBriefSnapshotAction,
   updateBriefAction,
 } from "@/app/(app)/w/[workspaceId]/briefs/actions";
 import {
@@ -14,7 +13,6 @@ import {
   type RichTextDoc,
 } from "@/components/task/rich-text-editor";
 import { PortalDropdown } from "@/components/ui/portal-dropdown";
-import { useRouter } from "next/navigation";
 
 type Status = "DRAFT" | "IN_REVIEW" | "APPROVED" | "ARCHIVED";
 
@@ -181,17 +179,8 @@ export function BriefEditor({
             className="flex-1 border-0 bg-transparent font-display text-[2.2rem] font-bold leading-tight tracking-[-0.02em] outline-none placeholder:text-muted-foreground/40"
           />
 
-          <div className="ml-auto flex shrink-0 items-center gap-2">
-            {/* F12-K33: Historia — automatyczne dzienne kopie. Widoczne dla
-                wszystkich (read-only userzy też mogą przeglądać kopie),
-                restore-button gated po stronie servera. */}
-            <BriefSnapshotsButton
-              briefId={brief.id}
-              workspaceId={brief.workspaceId}
-              canRestore={canEdit}
-            />
           {canEdit && (
-            <>
+            <div className="ml-auto flex shrink-0 items-center gap-2">
               {/* Header color picker */}
               <div className="relative">
                 <button
@@ -251,7 +240,6 @@ export function BriefEditor({
                 triggerClassName="inline-flex h-8 min-w-[160px] items-center justify-between gap-2 rounded-md border border-border bg-background px-2.5 text-[0.78rem] outline-none transition-colors hover:border-primary/60 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
               />
 
-
               <form
                 action={(fd) =>
                   startTransition(async () => {
@@ -270,9 +258,8 @@ export function BriefEditor({
                   <Trash2 size={14} />
                 </button>
               </form>
-            </>
+            </div>
           )}
-          </div>
         </div>
 
         <div className="font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted-foreground">
@@ -321,161 +308,4 @@ export function BriefEditor({
       </div>
     </div>
   );
-}
-
-// F12-K33: button "Historia" → portal popover z listą dziennych
-// snapshotów + restore button per row. Lazy-loadujemy listę dopiero po
-// pierwszym otwarciu popovera, żeby nie ciągnąć danych których user
-// nigdy nie zobaczy.
-function BriefSnapshotsButton({
-  briefId,
-  workspaceId: _workspaceId,
-  canRestore,
-}: {
-  briefId: string;
-  workspaceId: string;
-  canRestore: boolean;
-}) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [snapshots, setSnapshots] = useState<
-    { id: string; dayKey: string; createdAt: string }[] | null
-  >(null);
-
-  const load = async () => {
-    setLoading(true);
-    const { listBriefSnapshotsAction } = await import(
-      "@/app/(app)/w/[workspaceId]/briefs/actions"
-    );
-    const res = await listBriefSnapshotsAction(briefId);
-    if (res.ok) setSnapshots(res.snapshots);
-    setLoading(false);
-  };
-
-  const toggle = () => {
-    if (!open && snapshots === null) void load();
-    setOpen((o) => !o);
-  };
-
-  const restore = async (snapshotId: string, dayKey: string) => {
-    if (!confirm(`Przywrócić wersję z dnia ${dayKey}? Bieżący stan zostanie zapisany jako dzisiejszy snapshot.`)) {
-      return;
-    }
-    const fd = new FormData();
-    fd.set("snapshotId", snapshotId);
-    startTransition(async () => {
-      await restoreBriefSnapshotAction(fd);
-      router.refresh();
-      setOpen(false);
-    });
-  };
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={toggle}
-        aria-label="Historia briefu"
-        title="Historia (auto-snapshoty dzienne)"
-        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
-      >
-        <History size={13} />
-        <span>Historia</span>
-      </button>
-      {open && (
-        <>
-          <button
-            type="button"
-            aria-label="Zamknij"
-            onClick={() => setOpen(false)}
-            className="fixed inset-0 z-40 cursor-default"
-          />
-          <div className="absolute right-0 top-[calc(100%+6px)] z-50 w-[300px] rounded-xl border border-border bg-popover p-2 shadow-[0_18px_40px_-12px_rgba(10,10,40,0.3)]">
-            <div className="mb-1.5 flex items-center justify-between px-1.5">
-              <span className="font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted-foreground">
-                Historia · automatyczne kopie
-              </span>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label="Zamknij"
-                className="grid h-5 w-5 place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              >
-                <X size={11} />
-              </button>
-            </div>
-            {loading && (
-              <p className="px-2 py-3 text-[0.78rem] text-muted-foreground">
-                Wczytywanie…
-              </p>
-            )}
-            {!loading && snapshots && snapshots.length === 0 && (
-              <p className="px-2 py-3 text-[0.78rem] text-muted-foreground">
-                Jeszcze brak kopii. Każda zmiana w briefie automatycznie tworzy
-                jedną kopię na dzień.
-              </p>
-            )}
-            {!loading && snapshots && snapshots.length > 0 && (
-              <ul className="flex flex-col gap-0.5">
-                {snapshots.map((s) => (
-                  <li key={s.id}>
-                    <div className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-[0.84rem] hover:bg-accent">
-                      <div className="flex min-w-0 flex-1 flex-col">
-                        <span className="truncate font-medium">
-                          {formatDayKey(s.dayKey)}
-                        </span>
-                        <span className="font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted-foreground">
-                          ostatnia zmiana{" "}
-                          {new Date(s.createdAt).toLocaleTimeString("pl-PL", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                      </div>
-                      {canRestore && (
-                        <button
-                          type="button"
-                          onClick={() => restore(s.id, s.dayKey)}
-                          title={`Przywróć wersję z ${s.dayKey}`}
-                          className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted-foreground opacity-0 transition-opacity hover:border-primary/60 hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
-                        >
-                          <RotateCcw size={10} /> przywróć
-                        </button>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function formatDayKey(dayKey: string): string {
-  // dayKey format: "YYYY-MM-DD" — render w pl-PL: "28 kwietnia 2026"
-  const [y, m, d] = dayKey.split("-").map(Number);
-  if (!y || !m || !d) return dayKey;
-  const date = new Date(y, m - 1, d);
-  const today = new Date();
-  const isToday =
-    today.getFullYear() === y &&
-    today.getMonth() === m - 1 &&
-    today.getDate() === d;
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const isYesterday =
-    yesterday.getFullYear() === y &&
-    yesterday.getMonth() === m - 1 &&
-    yesterday.getDate() === d;
-  if (isToday) return "Dzisiaj";
-  if (isYesterday) return "Wczoraj";
-  return date.toLocaleDateString("pl-PL", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
 }

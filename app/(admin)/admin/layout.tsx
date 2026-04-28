@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck, Users, Layers, ScrollText, ArrowLeft, Gavel } from "lucide-react";
+import { ShieldCheck, Users, Layers, ScrollText, ArrowLeft, Database, Gavel } from "lucide-react";
 import { requireSuperAdmin } from "@/lib/admin-guard";
 import { AdminNavItem } from "@/components/admin/admin-nav-item";
 
@@ -29,6 +29,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <AdminNavItem href="/admin/workspaces" label="Przestrzenie" icon={<Layers size={14} />} />
           <AdminNavItem href="/admin/audit" label="Audyt workspace" icon={<ScrollText size={14} />} />
           <AdminNavItem href="/admin/actions" label="Akcje admina" icon={<Gavel size={14} />} />
+          <AdminNavItem href="/admin/backups" label="Backupy" icon={<Database size={14} />} />
         </nav>
 
         <div className="mt-auto border-t border-sidebar-border pt-3">
