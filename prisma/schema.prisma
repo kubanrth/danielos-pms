@@ -465,6 +465,15 @@ model Task {
   recurrenceRule        Json?
   recurrenceParentId    String?
   recurrenceLastSpawnAt DateTime?
+  // F12-K40: per-task time tracking. Klient: 'do każdego zadania muszę
+  // dodać start/stop'. Trzy stany:
+  //   - Idle:      timerStartedAt=null, timerCompletedAt=null  → "Rozpocznij"
+  //   - Running:   timerStartedAt set                          → "Zatrzymaj"+"Zakończ"
+  //   - Completed: timerCompletedAt set                        → locked, brak przycisków
+  // Akumulator zachowuje się przez pause/resume cykle.
+  timeTrackedSeconds    Int       @default(0)
+  timerStartedAt        DateTime?
+  timerCompletedAt      DateTime?
   rowOrder              Float     @default(0)
   version               Int       @default(1)
   createdAt             DateTime  @default(now())

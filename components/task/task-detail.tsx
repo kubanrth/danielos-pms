@@ -14,6 +14,7 @@ import {
 } from "@/app/(app)/w/[workspaceId]/t/actions";
 import { type RichTextDoc } from "@/components/task/rich-text-editor";
 import { DescriptionSection } from "@/components/task/description-section";
+import { TaskTimer } from "@/components/task/task-timer";
 import { CommentsSection, type CommentItem } from "@/components/task/comments-section";
 import { ActivityLog, type ActivityEntry } from "@/components/task/activity-log";
 import { AttachmentsSection, type AttachmentItem } from "@/components/task/attachments-section";
@@ -46,6 +47,10 @@ export interface TaskDetailProps {
     // F11-17: recurrence rule (cron spawns instances daily at 00:05 UTC).
     recurrenceRule: { freq: "daily" | "weekly" | "monthly"; day?: number } | null;
     recurrenceParentId: string | null;
+    // F12-K40: time tracking — accumulated seconds + ISO timer state.
+    timeTrackedSeconds: number;
+    timerStartedAt: string | null;
+    timerCompletedAt: string | null;
   };
   statusColumns: { id: string; name: string; colorHex: string }[];
   milestones: { id: string; title: string; startAt: string; stopAt: string }[];
@@ -258,6 +263,15 @@ export function TaskDetail({
           </div>
         )}
       </form>
+
+      {/* F12-K40: time tracking — Rozpocznij/Zatrzymaj/Zakończ. */}
+      <TaskTimer
+        taskId={task.id}
+        accumulatedSeconds={task.timeTrackedSeconds}
+        startedAt={task.timerStartedAt}
+        completedAt={task.timerCompletedAt}
+        canEdit={canEdit}
+      />
 
       {/* Description — own save flow (view/edit modes) */}
       <DescriptionSection

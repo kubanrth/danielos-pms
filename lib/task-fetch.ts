@@ -158,6 +158,14 @@ export async function fetchTaskDetail(
             })
           : null,
       recurrenceParentId: task.recurrenceParentId,
+      // F12-K40: time tracking — komponent TaskTimer odczytuje te 3 pola.
+      timeTrackedSeconds: task.timeTrackedSeconds,
+      timerStartedAt: task.timerStartedAt
+        ? task.timerStartedAt.toISOString()
+        : null,
+      timerCompletedAt: task.timerCompletedAt
+        ? task.timerCompletedAt.toISOString()
+        : null,
     },
     milestones: task.board.milestones.map((m) => ({
       id: m.id,
