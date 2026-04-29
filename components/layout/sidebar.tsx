@@ -51,7 +51,11 @@ export interface SidebarWorkspace {
   openSupportCount?: number;
 }
 
-const STORAGE_KEY = "danielos.sidebar.collapsed";
+// F12-K41c: bumped key od ".collapsed" → ".collapsed.v2". Klient miał
+// stary collapsed=1 z poprzednich sesji w localStorage; nowy key
+// = ignoring tego state'u i startujemy expanded jak default. User
+// dalej może zwijać przez chevron — nowe ustawienie persistuje pod v2.
+const STORAGE_KEY = "danielos.sidebar.collapsed.v2";
 
 export function Sidebar({
   user,
