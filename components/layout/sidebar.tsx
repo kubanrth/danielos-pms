@@ -179,9 +179,15 @@ export function Sidebar({
       // sidebar zawsze ma dokładnie wysokość viewportu (jego własny
       // overflow-y na .nav scrollu wewnątrz). overflow-hidden zapobiega
       // przeciekaniu zawartości poza widok kiedy collapse anim jest mid.
-      // F12-K41: dual-mode — na mobile fixed drawer (z translate-x), na
-      // md+ sticky inline. data-mobile-open=true odsłania drawer na mobile.
-      className="group/sidebar fixed inset-y-0 left-0 z-40 flex h-dvh w-[280px] flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[transform,width] duration-200 data-[mobile-open=false]:-translate-x-full data-[mobile-open=true]:translate-x-0 md:sticky md:top-0 md:z-auto md:translate-x-0 md:self-start data-[collapsed=true]:md:w-[68px] data-[collapsed=false]:md:w-[248px]"
+      //
+      // F12-K41 + F12-K41b: dual-mode — mobile drawer (max-md) vs
+      // desktop sticky (md+). KRYTYCZNE: wszystkie reguły mobile drawer
+      // używają `max-md:` prefix'a, żeby NIE leciały na desktop. Inaczej
+      // `data-[mobile-open=false]:-translate-x-full` (specyficzność 0,2,0)
+      // bije `md:translate-x-0` (0,1,0) i sidebar zostaje schowany na
+      // desktop'ie. `max-md:` generuje regułę tylko w `@media (max-width)`
+      // więc na md+ rules po prostu nie istnieją.
+      className="group/sidebar flex h-dvh flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[transform,width] duration-200 max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:w-[280px] max-md:data-[mobile-open=false]:-translate-x-full max-md:data-[mobile-open=true]:translate-x-0 md:sticky md:top-0 md:self-start data-[collapsed=true]:md:w-[68px] data-[collapsed=false]:md:w-[248px]"
     >
       {/* Top: profile + collapse toggle */}
       <div className="flex items-center justify-between gap-2 border-b border-sidebar-border px-3 py-3">
