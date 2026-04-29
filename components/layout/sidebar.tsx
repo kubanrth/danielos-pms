@@ -18,10 +18,12 @@ import {
   Inbox,
   Layers,
   LogOut,
+  Menu,
   Plus,
   Settings,
   ShieldCheck,
   StickyNote,
+  X,
 } from "lucide-react";
 import type { Role } from "@/lib/generated/prisma/enums";
 import { signOutAction } from "@/app/(app)/actions";
@@ -63,9 +65,40 @@ export function Sidebar({
   const pathname = usePathname();
   const activeWorkspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;
   const [collapsed, setCollapsed] = useState(false);
+  // F12-K41: mobile drawer state. Na desktopie sidebar jest zawsze
+  // visible (sticky inline w flex'ie); na mobile (md-) sidebar jest
+  // domyślnie schowany (translate-x-[-100%]) i otwierany przyciskiem
+  // hamburger w prawym górnym rogu.
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(
     new Set(activeWorkspaceId ? [activeWorkspaceId] : []),
   );
+
+  // Auto-close drawer przy zmianie route'a — nie chcemy żeby drawer
+  // zostawał otwarty po klik'u w link.
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  // Esc zamyka drawer.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [mobileOpen]);
+
+  // Block body scroll gdy mobile drawer otwarty (lepszy UX).
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [mobileOpen]);
 
   // Expand active workspace when navigating to it.
   useEffect(() => {
@@ -109,14 +142,46 @@ export function Sidebar({
   const initials = (user.name ?? user.email).slice(0, 2).toUpperCase();
 
   return (
-    <aside
+    <>
+      {/* F12-K41: mobile-only hamburger button. Pokazuje się tylko gdy
+          sidebar jest schowany (drawer zamknięty). Zawiera Menu icon →
+          klik otwiera drawer. Przycisk X w samym drawer (top-right
+          obok kolaps button) zamyka. */}
+      {!mobileOpen && (
+        <button
+          type="button"
+          onClick={() => setMobileOpen(true)}
+          aria-label="Otwórz menu"
+          // F12-K41: z-[80] — wyżej niż NotificationToaster (z-70) i
+          // ReminderPopups (z-60), żeby toast'y nie zasłaniały hamburger'a
+          // gdy lecą w prawym górnym rogu.
+          className="fixed right-3 top-3 z-[80] grid h-10 w-10 place-items-center rounded-lg border border-border bg-card/95 text-foreground shadow-lg backdrop-blur transition-colors hover:bg-accent md:hidden"
+        >
+          <Menu size={18} />
+        </button>
+      )}
+
+      {/* Mobile backdrop — zamyka drawer na klik. */}
+      {mobileOpen && (
+        <button
+          type="button"
+          aria-label="Zamknij menu"
+          onClick={() => setMobileOpen(false)}
+          className="fixed inset-0 z-30 bg-foreground/40 backdrop-blur-sm md:hidden"
+        />
+      )}
+
+      <aside
       data-collapsed={collapsed ? "true" : "false"}
+      data-mobile-open={mobileOpen ? "true" : "false"}
       // F12-K9: sticky top-0 + self-start trzymają sidebar pinned do
       // góry viewportu kiedy długa strona scrolluje. h-dvh sprawia że
       // sidebar zawsze ma dokładnie wysokość viewportu (jego własny
       // overflow-y na .nav scrollu wewnątrz). overflow-hidden zapobiega
       // przeciekaniu zawartości poza widok kiedy collapse anim jest mid.
-      className="group/sidebar sticky top-0 self-start flex h-dvh flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground data-[collapsed=true]:w-[68px] data-[collapsed=false]:w-[248px] transition-[width] duration-200"
+      // F12-K41: dual-mode — na mobile fixed drawer (z translate-x), na
+      // md+ sticky inline. data-mobile-open=true odsłania drawer na mobile.
+      className="group/sidebar fixed inset-y-0 left-0 z-40 flex h-dvh w-[280px] flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[transform,width] duration-200 data-[mobile-open=false]:-translate-x-full data-[mobile-open=true]:translate-x-0 md:sticky md:top-0 md:z-auto md:translate-x-0 md:self-start data-[collapsed=true]:md:w-[68px] data-[collapsed=false]:md:w-[248px]"
     >
       {/* Top: profile + collapse toggle */}
       <div className="flex items-center justify-between gap-2 border-b border-sidebar-border px-3 py-3">
@@ -144,10 +209,20 @@ export function Sidebar({
           )}
         </Link>
         <div className="flex shrink-0 items-center gap-1">
+          {/* F12-K41: mobile X (zamyka drawer) — schowany na md+. */}
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            className="grid h-7 w-7 shrink-0 place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground md:hidden"
+            aria-label="Zamknij menu"
+          >
+            <X size={14} />
+          </button>
+          {/* Desktop chevron — collapse/expand sidebar, schowany na mobile. */}
           <button
             type="button"
             onClick={() => setCollapsed((v) => !v)}
-            className="grid h-7 w-7 shrink-0 place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+            className="hidden h-7 w-7 shrink-0 place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground md:grid"
             aria-label={collapsed ? "Rozwiń panel" : "Zwiń panel"}
           >
             {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
@@ -404,6 +479,7 @@ export function Sidebar({
         </form>
       </div>
     </aside>
+    </>
   );
 }
 

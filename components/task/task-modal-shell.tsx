@@ -27,18 +27,20 @@ export function TaskModalShell({ children }: { children: React.ReactNode }) {
           className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[720px] flex-col overflow-y-auto border-l border-border bg-background shadow-[0_24px_48px_-12px_rgba(0,0,0,0.25)] data-[closed]:translate-x-full data-[open]:translate-x-0 transition-transform duration-200"
           initialFocus={undefined}
         >
-          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/95 px-8 py-3 backdrop-blur">
+          {/* F12-K41: padding sm:px-8 — na mobile (~360-400px szerokości
+              drawer = full width) px-8 było za szerokie. */}
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/95 px-4 py-3 backdrop-blur sm:px-8">
             <BaseDialog.Title className="eyebrow">Szczegóły zadania</BaseDialog.Title>
             <button
               type="button"
               onClick={close}
-              className="grid h-8 w-8 place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="grid h-9 w-9 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               aria-label="Zamknij"
             >
-              <X size={16} />
+              <X size={18} />
             </button>
           </div>
-          <div className="flex-1 px-8 py-8">{children}</div>
+          <div className="flex-1 px-4 py-6 sm:px-8 sm:py-8">{children}</div>
         </BaseDialog.Popup>
       </BaseDialog.Portal>
     </BaseDialog.Root>
