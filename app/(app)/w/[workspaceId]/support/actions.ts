@@ -133,6 +133,9 @@ export async function createSupportTicketAction(
     },
   });
   revalidatePath(`/w/${parsed.data.workspaceId}/support`);
+  // F12-K38: layout-level revalidate żeby badge supportu w sidebar'ze
+  // dla wszystkich userów odświeżył się przy następnej nawigacji.
+  revalidatePath("/", "layout");
   return { ok: true, ticketId: ticket.id };
 }
 
@@ -329,6 +332,9 @@ export async function updateSupportTicketAction(formData: FormData) {
     diff: data as Record<string, string | number | boolean | null>,
   });
   revalidatePath(`/w/${ticket.workspaceId}/support`);
+  // F12-K38: status zmienione → liczba otwartych zgłoszeń zmienia się →
+  // sidebar badge musi się przeliczyć.
+  if (parsed.data.status) revalidatePath("/", "layout");
 }
 
 // F12-K25: attachments dla ticketów. Reuse Supabase Storage flow z

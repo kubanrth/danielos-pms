@@ -13,7 +13,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   // Read fresh User to ensure sidebar avatar/name reflect recent profile changes
   // (JWT session is cached; DB is source of truth).
-  const [user, memberships, unreadNotifs, dueReminders] = await Promise.all([
+  const [user, memberships, unreadNotifs, openSupportTickets, dueReminders] = await Promise.all([
     db.user.findUnique({
       where: { id: session.user.id },
       select: { id: true, email: true, name: true, avatarUrl: true, isSuperAdmin: true },
@@ -50,6 +50,21 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     db.notification.count({
       where: { userId: session.user.id, readAt: null },
     }),
+    // F12-K38: licznik aktywnych zgłoszeń supportu per workspace, do
+    // badge'a w sidebar'ze. OPEN+IN_PROGRESS — RESOLVED/CLOSED nie są
+    // 'do załatwienia'. Group-by jest jednym zapytaniem niezależnie od
+    // liczby workspace'ów (vs N+1 count per ws).
+    db.supportTicket.groupBy({
+      by: ["workspaceId"],
+      where: {
+        status: { in: ["OPEN", "IN_PROGRESS"] },
+        workspace: {
+          deletedAt: null,
+          memberships: { some: { userId: session.user.id } },
+        },
+      },
+      _count: true,
+    }),
     // Active reminder popups — due + not dismissed. Capped so a runaway
     // creator can't DoS the recipient's top-right corner.
     db.personalReminder.findMany({
@@ -66,6 +81,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     }),
   ]);
   if (!user) redirect("/secure-access-portal");
+
+  const supportCountByWs = new Map<string, number>(
+    openSupportTickets.map((row) => [
+      row.workspaceId,
+      typeof row._count === "number" ? row._count : 0,
+    ]),
+  );
 
   const workspaces: SidebarWorkspace[] = memberships.map((m) => {
     // F12-K8: per-board visibility filter. ADMINs bypass; everyone else
@@ -85,6 +107,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       enabledViews: parseEnabledViews(m.workspace.enabledViews).map((v) =>
         v.toUpperCase(),
       ) as SidebarWorkspace["enabledViews"],
+      openSupportCount: supportCountByWs.get(m.workspace.id) ?? 0,
     };
   });
 

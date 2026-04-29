@@ -44,6 +44,9 @@ export interface SidebarWorkspace {
   role: Role;
   boards: { id: string; name: string }[];
   enabledViews: Array<"TABLE" | "KANBAN" | "ROADMAP" | "GANTT" | "WHITEBOARD">;
+  // F12-K38: licznik aktywnych zgłoszeń supportu (status=OPEN, IN_PROGRESS;
+  // bez RESOLVED/CLOSED). Renderowany jako badge przy linku Support.
+  openSupportCount?: number;
 }
 
 const STORAGE_KEY = "danielos.sidebar.collapsed";
@@ -333,6 +336,7 @@ export function Sidebar({
                       icon={<LifeBuoy size={11} />}
                       label="Support"
                       active={pathname.startsWith(`/w/${ws.id}/support`)}
+                      badge={ws.openSupportCount}
                     />
                     <WsSubLink
                       href={`/w/${ws.id}/briefs`}
@@ -412,11 +416,14 @@ function WsSubLink({
   icon,
   label,
   active,
+  badge,
 }: {
   href: string;
   icon: React.ReactNode;
   label: string;
   active: boolean;
+  // F12-K38: opcjonalny licznik (np. otwarte zgłoszenia supportu).
+  badge?: number;
 }) {
   return (
     <Link
@@ -431,6 +438,11 @@ function WsSubLink({
         />
       )}
       {icon} {label}
+      {badge !== undefined && badge > 0 && (
+        <span className="ml-auto grid h-4 min-w-[16px] place-items-center rounded-full bg-primary px-1 font-mono text-[0.58rem] font-bold tracking-normal text-primary-foreground">
+          {badge > 99 ? "99+" : badge}
+        </span>
+      )}
     </Link>
   );
 }
