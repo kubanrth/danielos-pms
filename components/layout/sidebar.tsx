@@ -194,7 +194,17 @@ export function Sidebar({
       className="group/sidebar flex h-dvh flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[transform,width] duration-200 max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:w-[280px] max-md:data-[mobile-open=false]:-translate-x-full max-md:data-[mobile-open=true]:translate-x-0 md:sticky md:top-0 md:self-start data-[collapsed=true]:md:w-[68px] data-[collapsed=false]:md:w-[248px]"
     >
       {/* Top: profile + collapse toggle */}
-      <div className="flex items-center justify-between gap-2 border-b border-sidebar-border px-3 py-3">
+      {/* F12-K41d: gdy collapsed, header przełącza się w pion (avatar
+          na górze, chevron pod nim). Inaczej w row 68px szerokości
+          chevron był 'overflow-clipped' przez parent overflow-hidden i
+          klient nie miał jak rozwinąć sidebar'a z powrotem. */}
+      <div
+        className={`flex gap-2 border-b border-sidebar-border px-3 py-3 ${
+          collapsed
+            ? "flex-col items-center"
+            : "items-center justify-between"
+        }`}
+      >
         <Link
           href="/profile"
           className="flex min-w-0 items-center gap-2.5 rounded-sm px-1.5 py-1 transition-colors hover:bg-sidebar-accent focus-visible:bg-sidebar-accent focus-visible:outline-none"
