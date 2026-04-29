@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { requireWorkspaceAction } from "@/lib/workspace-guard";
 import { broadcastUserChange, broadcastWorkspaceChange } from "@/lib/realtime";
+import { sendNotificationEmail } from "@/lib/notify-email";
 import { writeAudit } from "@/lib/audit";
 import {
   createTagSchema,
@@ -463,6 +464,20 @@ export async function toggleAssigneeAction(formData: FormData) {
       await broadcastUserChange(notif.userId, {
         kind: "notification.new",
         id: notif.id,
+      });
+      // F12-K39: email do recipient'a.
+      const actorLabel = actor?.name ?? actor?.email ?? "Ktoś";
+      await sendNotificationEmail({
+        to: { userId: parsed.data.userId },
+        subject: `Przypisanie do zadania: ${task.title}`,
+        eyebrow: "Przypisanie do zadania",
+        attribution: `od ${actorLabel}`,
+        title: task.title,
+        body: `${actorLabel} przypisał(a) Cię do zadania${
+          board?.name ? ` na tablicy ${board.name}` : ""
+        }. Otwórz zadanie, żeby zobaczyć szczegóły, status i komentarze.`,
+        ctaLabel: "Otwórz zadanie",
+        ctaPath: `/w/${task.workspaceId}/t/${task.id}`,
       });
     }
   }

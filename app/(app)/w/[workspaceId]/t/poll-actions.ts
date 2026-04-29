@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { requireWorkspaceAction } from "@/lib/workspace-guard";
 import { writeAudit } from "@/lib/audit";
 import { broadcastUserChange } from "@/lib/realtime";
+import { sendNotificationEmail } from "@/lib/notify-email";
 
 const createPollSchema = z.object({
   taskId: z.string().min(1),
@@ -84,6 +85,20 @@ export async function createPollAction(formData: FormData) {
     await Promise.all(
       created.map((n) =>
         broadcastUserChange(n.userId, { kind: "notification.new", id: n.id }),
+      ),
+    );
+    // F12-K39: email do każdego workspace member'a (poza autorem).
+    await Promise.all(
+      created.map((n) =>
+        sendNotificationEmail({
+          to: { userId: n.userId },
+          subject: `Nowe głosowanie w zadaniu: ${task.title}`,
+          eyebrow: "Nowe głosowanie",
+          title: task.title,
+          body: `W zadaniu na tablicy ${task.board.name} pojawiło się nowe głosowanie: "${parsed.data.question}". Przejdź i oddaj głos.`,
+          ctaLabel: "Przejdź do głosowania",
+          ctaPath: `/w/${task.workspaceId}/t/${parsed.data.taskId}`,
+        }),
       ),
     );
   }

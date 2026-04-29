@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { requireWorkspaceAction, requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { writeAudit } from "@/lib/audit";
 import { broadcastUserChange } from "@/lib/realtime";
+import { sendNotificationEmail } from "@/lib/notify-email";
 import {
   ATTACHMENTS_BUCKET,
   MAX_ATTACHMENT_BYTES,
@@ -116,6 +117,24 @@ export async function createSupportTicketAction(
     await Promise.all(
       created.map((n) =>
         broadcastUserChange(n.userId, { kind: "notification.new", id: n.id }),
+      ),
+    );
+    // F12-K39: email do każdego member'a.
+    const actorLabel = reporter?.name ?? reporter?.email ?? "Ktoś";
+    await Promise.all(
+      created.map((n) =>
+        sendNotificationEmail({
+          to: { userId: n.userId },
+          subject: `Nowe zgłoszenie: ${parsed.data.title}`,
+          eyebrow: "Nowe zgłoszenie supportu",
+          attribution: `od ${actorLabel}`,
+          title: parsed.data.title,
+          body: `${actorLabel} zgłosił(a) nowy ticket o priorytecie ${parsed.data.priority}${
+            parsed.data.isUrgent ? " (NATYCHMIAST)" : ""
+          }. Otwórz panel supportu, żeby zobaczyć opis i przypisać sprawę.`,
+          ctaLabel: "Zobacz zgłoszenia",
+          ctaPath: `/w/${parsed.data.workspaceId}/support`,
+        }),
       ),
     );
   }
@@ -300,6 +319,19 @@ export async function updateSupportTicketAction(formData: FormData) {
       kind: "notification.new",
       id: notif.id,
     });
+    // F12-K39: email reporter'owi.
+    const statusLabel = parsed.data.status === "RESOLVED" ? "rozwiązane" : "zamknięte";
+    const actorLabel = actor?.name ?? actor?.email ?? "admin";
+    await sendNotificationEmail({
+      to: { userId: ticket.reporterId },
+      subject: `Twoje zgłoszenie ${statusLabel}: ${ticket.title}`,
+      eyebrow: `Zgłoszenie ${statusLabel}`,
+      attribution: `przez ${actorLabel}`,
+      title: ticket.title,
+      body: `Twoje zgłoszenie zostało ${statusLabel} przez ${actorLabel}. Sprawdź szczegóły w panelu supportu — możesz odpowiedzieć lub otworzyć kolejne, jeśli sprawa nie jest faktycznie zakończona.`,
+      ctaLabel: "Zobacz zgłoszenie",
+      ctaPath: `/w/${ticket.workspaceId}/support`,
+    });
   }
 
   if (newAssigneeId) {
@@ -320,6 +352,18 @@ export async function updateSupportTicketAction(formData: FormData) {
     await broadcastUserChange(notif.userId, {
       kind: "notification.new",
       id: notif.id,
+    });
+    // F12-K39: email do new assignee.
+    const actorLabel = actor?.name ?? actor?.email ?? "Ktoś";
+    await sendNotificationEmail({
+      to: { userId: newAssigneeId },
+      subject: `Przypisanie do zgłoszenia: ${ticket.title}`,
+      eyebrow: "Przypisanie do zgłoszenia",
+      attribution: `od ${actorLabel}`,
+      title: ticket.title,
+      body: `${actorLabel} przypisał(a) Cię do zgłoszenia supportu. Otwórz panel, żeby zobaczyć opis, priorytet i odpowiedzieć reporterowi.`,
+      ctaLabel: "Otwórz zgłoszenie",
+      ctaPath: `/w/${ticket.workspaceId}/support`,
     });
   }
 
