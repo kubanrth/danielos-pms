@@ -212,21 +212,37 @@ export async function updateTaskAction(
 
 export async function deleteTaskAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
-  const workspaceId = String(formData.get("workspaceId") ?? "");
-  if (!id || !workspaceId) return;
-  const ctx = await requireWorkspaceAction(workspaceId, "task.delete");
+  const formWorkspaceId = String(formData.get("workspaceId") ?? "");
+  if (!id || !formWorkspaceId) return;
+
+  // F12-K43 H1: zamiast ufać workspaceId z form'y, fetch'ujemy task'a
+  // z DB i guardujemy na jego REALNY workspaceId. Bez tego user z
+  // task.delete w workspace A mógł wysłać id task'a z workspace B
+  // (gdzie nie jest member'em) i guard sprawdzał A — IDOR.
+  const existing = await db.task.findUnique({
+    where: { id },
+    select: { id: true, workspaceId: true, deletedAt: true },
+  });
+  if (!existing || existing.deletedAt) return;
+  // Defensive: form workspaceId musi się zgadzać z tym w bazie.
+  if (existing.workspaceId !== formWorkspaceId) return;
+
+  const ctx = await requireWorkspaceAction(existing.workspaceId, "task.delete");
 
   await db.task.update({ where: { id }, data: { deletedAt: new Date() } });
   await writeAudit({
-    workspaceId,
+    workspaceId: existing.workspaceId,
     objectType: "Task",
     objectId: id,
     actorId: ctx.userId,
     action: "task.deleted",
   });
-  revalidatePath(`/w/${workspaceId}`);
-  await broadcastWorkspaceChange(workspaceId, { type: "task.changed", taskId: id });
-  redirect(`/w/${workspaceId}`);
+  revalidatePath(`/w/${existing.workspaceId}`);
+  await broadcastWorkspaceChange(existing.workspaceId, {
+    type: "task.changed",
+    taskId: id,
+  });
+  redirect(`/w/${existing.workspaceId}`);
 }
 
 // F10-X T2.2: bulk operations from the table multi-select toolbar.
