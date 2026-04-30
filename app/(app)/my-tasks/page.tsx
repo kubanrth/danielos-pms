@@ -25,10 +25,17 @@ async function loadAssignments(
     sort: SortMode;
   },
 ) {
+  // F12-K42: filtrujemy też po workspace.deletedAt + board.deletedAt.
+  // Soft-delete workspace'a/boardu nie cascade'uje na taski, więc bez
+  // tego 'Zadania dla Ciebie' pokazywało stare assignment'y → klik
+  // dawał 404 bo route /w/<wid>/t/<tid> nie znajdował aktywnego task'a
+  // (workspace zniknął). Identyczny fix jak dla /my/calendar w F12-K29.
   const where: Prisma.TaskAssigneeWhereInput = {
     userId,
     task: {
       deletedAt: null,
+      workspace: { deletedAt: null },
+      board: { deletedAt: null },
       ...(filters.search
         ? { title: { contains: filters.search, mode: "insensitive" as const } }
         : {}),
@@ -100,7 +107,16 @@ export default async function MyTasksPage({
     // Dedupe boards for the filter pills, only those the user actually has
     // assignments on.
     db.taskAssignee.findMany({
-      where: { userId, task: { deletedAt: null } },
+      // F12-K42: ten sam filtr co loadAssignments — board pickle pills
+      // muszą zawierać tylko żywe boardy z żywych workspace'ów.
+      where: {
+        userId,
+        task: {
+          deletedAt: null,
+          workspace: { deletedAt: null },
+          board: { deletedAt: null },
+        },
+      },
       select: {
         task: {
           select: {

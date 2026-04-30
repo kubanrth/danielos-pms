@@ -115,7 +115,15 @@ export default async function MyTodoPage({
       ? await db.taskAssignee.findMany({
           where: {
             userId,
-            task: { deletedAt: null },
+            // F12-K42: filtruj też po workspace.deletedAt + board.deletedAt
+            // (analogicznie do /my-tasks i /my/calendar). Soft-delete nie
+            // cascade'uje na taski, bez tego stare assignment'y leaknęłyby
+            // i klik dawałby 404.
+            task: {
+              deletedAt: null,
+              workspace: { deletedAt: null },
+              board: { deletedAt: null },
+            },
           },
           orderBy: { task: { updatedAt: "desc" } },
           take: 60,
