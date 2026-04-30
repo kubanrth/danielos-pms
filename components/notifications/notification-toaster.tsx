@@ -61,9 +61,13 @@ export function NotificationToaster({ userId }: { userId: string }) {
 
   // Auto-dismiss timer — co 1s sprawdza czy któryś toast przekroczył TTL
   // (i nie jest hovered).
+  // F12-K44 P5: pause interval gdy tab jest hidden — bez tego tika w tle
+  // i triggeruje re-renders mimo że user nie widzi UI. Pattern z
+  // reminder-popups.tsx (visibilitychange listener).
   useEffect(() => {
     if (items.length === 0) return;
-    const id = setInterval(() => {
+    let id: ReturnType<typeof setInterval> | null = null;
+    const tick = () => {
       setItems((prev) => {
         const now = Date.now();
         return prev.filter(
@@ -72,8 +76,31 @@ export function NotificationToaster({ userId }: { userId: string }) {
             now - t.shownAt < AUTO_DISMISS_MS,
         );
       });
-    }, 1_000);
-    return () => clearInterval(id);
+    };
+    const start = () => {
+      if (id !== null) return;
+      id = setInterval(tick, 1_000);
+    };
+    const stop = () => {
+      if (id === null) return;
+      clearInterval(id);
+      id = null;
+    };
+    if (document.visibilityState === "visible") start();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        // Wracamy z tła — od razu czyść stale toasty.
+        tick();
+        start();
+      } else {
+        stop();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [items.length]);
 
   const dismiss = (id: string) => {

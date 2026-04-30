@@ -60,7 +60,10 @@ export function ReminderPopups({
     // Immediate poll po mount żeby świeże remindery pojawiły się bez
     // czekania na pierwsze interval-tick.
     void refetch();
-    const id = setInterval(refetch, 20_000);
+    // F12-K44 P4: poll co 60s (było 20s). Mamy realtime (useUserRealtime
+    // z eventem reminder.due) jako primary mechanism — poll to fallback
+    // dla awarii Supabase Realtime. 3× mniej network noise + battery.
+    const id = setInterval(refetch, 60_000);
 
     const onVisibility = () => {
       if (document.visibilityState === "visible") void refetch();

@@ -200,7 +200,9 @@ export async function updateTaskAction(
     diff: { title: updated.title },
   });
 
-  revalidatePath(`/w/${updated.workspaceId}`);
+  // F12-K44 P6: tylko task page revalidate. Workspace overview dostaje
+  // refresh przez broadcastWorkspaceChange + router.refresh w klientach
+  // — podwójny revalidate był kosztownym duplikatem.
   revalidatePath(`/w/${updated.workspaceId}/t/${updated.id}`);
   await broadcastWorkspaceChange(updated.workspaceId, {
     type: "task.changed",
@@ -401,7 +403,9 @@ export async function patchTaskAction(formData: FormData) {
     diff: data as Prisma.InputJsonValue,
   });
 
-  revalidatePath(`/w/${updated.workspaceId}`);
+  // F12-K44 P6: dropujemy revalidatePath('/w/<wid>') — task page revalidate
+  // + layout-level (board) revalidate już pokrywają wszystkie views.
+  // Workspace overview łapie zmianę przez broadcastWorkspaceChange.
   revalidatePath(`/w/${updated.workspaceId}/t/${updated.id}`);
   // F12-K4: layout-level revalidation covers /table + /kanban + /v/[viewId]
   // + /roadmap + /gantt with one call. Without it, edits made in the task
