@@ -17,6 +17,7 @@ import {
 import { requireWorkspaceAction } from "@/lib/workspace-guard";
 import { writeAudit } from "@/lib/audit";
 import { sendEmail } from "@/lib/email";
+import { escapeHtml } from "@/lib/html-escape";
 import { checkLimit } from "@/lib/rate-limit";
 
 type FieldErrors = { email?: string; role?: string };
@@ -411,11 +412,4 @@ export async function removeMemberAction(formData: FormData) {
   revalidatePath(`/w/${workspaceId}/members`);
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
+// F12-K43 L4: escapeHtml przeniesiona do lib/html-escape.ts (html-escaper).

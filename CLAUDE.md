@@ -36,6 +36,33 @@ ClickUp-like SaaS dla klienta DANIELOS. Pełna funkcjonalna aplikacja (workspace
 - `/secure-access-portal` — endpoint logowania wg briefa.
 - **NIE jest mechanizmem bezpieczeństwa** — realne security: rate limit (Upstash) + 2FA (F8) + email verification.
 
+## Procedura rotacji sekretów (incident response)
+
+Jeśli `AUTH_SECRET`, `CRON_SECRET`, `RESEND_API_KEY` albo `SUPABASE_SECRET_KEY` wycieknie:
+
+**`AUTH_SECRET`** — wszystkie aktywne JWT sessions zostaną invalidated, każdy user musi się ponownie zalogować.
+1. Wygeneruj nowy: `openssl rand -base64 32`
+2. Vercel → Settings → Environment Variables → zmień `AUTH_SECRET` na nową wartość (Production + Preview + Development)
+3. Redeploy main branch (env-vary łapane przy build'cie)
+4. Wszyscy zalogowani userzy dostaną 401 przy następnym requeście — natywny logout flow ich przeprowadzi przez logowanie ponownie
+
+**`CRON_SECRET`** — invaliduje wszystkie pending Vercel cron jobs do następnego deploy'u.
+1. Vercel → Settings → Environment Variables → zmień `CRON_SECRET`
+2. Redeploy żeby cron jobs wzięły nową wartość
+3. Sprawdź /api/cron/send-reminders manualnie (curl z nowym Bearer'em) że zwraca 200
+
+**`RESEND_API_KEY`** — pierwsze co: w Resend dashboard usuń stary klucz (wszystkie wysłki z niego natychmiast bouncują).
+1. Resend → API Keys → usuń compromised klucz
+2. Wygeneruj nowy "DANIELOS Production v2"
+3. Vercel env → update `RESEND_API_KEY` → redeploy
+4. Smoke test: trigger task assignment → email powinien dojść
+
+**`SUPABASE_SECRET_KEY`** — najpoważniejsze, daje pełen dostęp do bucket'ów i postgres.
+1. Supabase Dashboard → Settings → API → Roll Service Role Key
+2. Stara wartość natychmiast invalidated po stronie Supabase
+3. Vercel env → update `SUPABASE_SECRET_KEY` → redeploy
+4. Smoke test: upload attachmentu (request signed URL działa)
+
 ## Testy manualne (Faza 0)
 1. `npm run dev` — aplikacja nasłuchuje na :3100.
 2. `npm run db:migrate` — migracja działa (wymaga DATABASE_URL).

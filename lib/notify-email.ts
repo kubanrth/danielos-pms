@@ -10,6 +10,7 @@
 import "server-only";
 import { db } from "@/lib/db";
 import { sendEmail } from "@/lib/email";
+import { escapeHtml as escape } from "@/lib/html-escape";
 
 interface NotifyEmailInput {
   // Recipient — albo pełny obiekt (mamy z poprzedniego query), albo
@@ -82,11 +83,4 @@ function renderNotificationHtml(p: {
 </body></html>`;
 }
 
-function escape(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
+// F12-K43 L4: escape przeniesione do lib/html-escape.ts.

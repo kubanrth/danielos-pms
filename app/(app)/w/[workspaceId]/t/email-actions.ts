@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { requireWorkspaceAction } from "@/lib/workspace-guard";
 import { sendEmail, type EmailAttachment } from "@/lib/email";
 import { downloadAttachmentBuffer } from "@/lib/storage";
+import { escapeHtml as escape } from "@/lib/html-escape";
 import { writeAudit } from "@/lib/audit";
 import { checkLimit } from "@/lib/rate-limit";
 
@@ -68,13 +69,7 @@ function renderTaskHtml(task: {
 </body></html>`;
 }
 
-function escape(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
+// F12-K43 L4: escape przeniesione do lib/html-escape.ts (html-escaper).
 
 // Very lightweight ProseMirror → HTML for the email body. We only handle
 // paragraph + text + bullet/ordered list + heading + bold/italic/code.

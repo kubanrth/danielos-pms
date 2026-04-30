@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { sendEmail } from "@/lib/email";
 import { isCronAuthorized } from "@/lib/cron-auth";
+import { escapeHtml as escape } from "@/lib/html-escape";
 
 // Vercel Cron hits this endpoint every 15 minutes (see vercel.json).
 // We gate by Bearer token to prevent public abuse.
@@ -111,15 +112,8 @@ async function runSweep(now: Date) {
   };
 }
 
-function escape(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
 // F12-K43 L1: timing-safe authorization — zob. lib/cron-auth.ts.
+// F12-K43 L4: escape przeniesione do lib/html-escape.ts.
 
 export async function GET(req: Request) {
   if (!isCronAuthorized(req)) return new NextResponse("Unauthorized", { status: 401 });

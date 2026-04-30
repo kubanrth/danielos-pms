@@ -2,6 +2,8 @@ import { db } from "@/lib/db";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { sendEmail } from "@/lib/email";
 import { broadcastUserChange } from "@/lib/realtime";
+// F12-K43 L4: shared HTML escape (zob. lib/html-escape.ts).
+import { escapeHtml } from "@/lib/html-escape";
 
 // Walk a ProseMirror doc and collect every `mention` node's attrs.id.
 // Dedupes by id; ignores entries with non-string ids so a corrupt node
@@ -180,11 +182,3 @@ function mentionEmailHtml(args: {
 </body></html>`.trim();
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
