@@ -197,6 +197,12 @@ export interface EditorInitialStroke {
   points: number[];
 }
 
+// F12-K44 P7: NodeTypes map jest static — dependency [] w useMemo
+// niepotrzebny, hoisting do module-level oszczędza alloc + porównanie
+// referencji per render. Stabilna referencja = React Flow nie reset'uje
+// internal state przy każdym renderze parent'a.
+const REACT_FLOW_NODE_TYPES: NodeTypes = { shape: ShapeNode };
+
 function cuidish(): string {
   // Small client-side id with enough entropy for a short editor session.
   // The server re-accepts the same id on save so we keep RF ↔ DB identity.
@@ -302,7 +308,8 @@ function CanvasEditorInner({
 }) {
   const router = useRouter();
   const reactFlow = useReactFlow();
-  const nodeTypes: NodeTypes = useMemo(() => ({ shape: ShapeNode }), []);
+  // F12-K44 P7: zob. REACT_FLOW_NODE_TYPES (module-level const).
+  const nodeTypes = REACT_FLOW_NODE_TYPES;
   const flowWrapperRef = useRef<HTMLDivElement>(null);
   // F12-K37: file picker dla 'Dodaj obraz' button.
   const imageInputRef = useRef<HTMLInputElement>(null);

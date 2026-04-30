@@ -865,11 +865,18 @@ function ImageShape({
         className="grid place-items-center"
       >
         {imagePath ? (
+          // F12-K44 P8: loading="lazy" + decoding="async" — Next.js Image
+          // niemożliwy bo /api/canvas-image robi signed redirect (Image
+          // optimization wymaga static URL). Browser-native lazy + async
+          // decode redukuje main-thread blocking przy dużych canvasach
+          // z wieloma obrazami.
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={`/api/canvas-image/${encodeURI(imagePath)}`}
             alt=""
             draggable={false}
+            loading="lazy"
+            decoding="async"
             style={{
               width: "100%",
               height: "100%",
