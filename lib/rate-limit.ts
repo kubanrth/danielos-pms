@@ -16,6 +16,10 @@ import { Redis } from "@upstash/redis";
 
 export type LimiterName =
   | "auth.login"
+  // F12-K43 M4: dedykowany limit na recovery codes — login z TOTP fallback
+  // przeszedł 10 prób bcrypt'a per request. User z 10 leaked codes mógłby
+  // burn'ować je bez jakiegokolwiek alarmu.
+  | "auth.recoveryCode"
   | "comment.create"
   | "task.create"
   | "task.sendEmail"
@@ -33,6 +37,10 @@ const SPECS: Record<LimiterName, LimiterSpec> = {
   // brute force one address and an unrelated user's attempts aren't
   // blocked by someone else's mistakes.
   "auth.login": { tokens: 5, window: "15 m", friendly: "5 prób na 15 minut" },
+  // 3 próby na 30 minut — typowy user wpisuje recovery code raz; więcej
+  // prób = wskazuje na brute force. Tokens=3 < liczba codes (10), więc
+  // user który zgubi pamięć nie może wszystkich na raz testować.
+  "auth.recoveryCode": { tokens: 3, window: "30 m", friendly: "3 próby na 30 minut" },
   "comment.create": { tokens: 30, window: "1 m", friendly: "30 komentarzy/min" },
   "task.create": { tokens: 30, window: "1 m", friendly: "30 zadań/min" },
   "task.sendEmail": { tokens: 10, window: "1 h", friendly: "10 wysyłek/godz" },

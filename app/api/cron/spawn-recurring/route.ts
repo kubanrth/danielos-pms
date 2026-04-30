@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { isCronAuthorized } from "@/lib/cron-auth";
 
 // F11-17 (#24): Vercel Cron hits this once a day. For every task with
 // `recurrenceRule` set, decide whether today matches the rule and a
@@ -112,15 +113,10 @@ async function runSweep(now: Date) {
   return { templates: templates.length, spawned, skipped };
 }
 
-function authorized(req: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  const auth = req.headers.get("authorization") ?? "";
-  return auth === `Bearer ${secret}`;
-}
+// F12-K43 L1: timing-safe authorization — zob. lib/cron-auth.ts.
 
 export async function GET(req: Request) {
-  if (!authorized(req)) return new NextResponse("Unauthorized", { status: 401 });
+  if (!isCronAuthorized(req)) return new NextResponse("Unauthorized", { status: 401 });
   try {
     const result = await runSweep(new Date());
     return NextResponse.json({ ok: true, ...result });

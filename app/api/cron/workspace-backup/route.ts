@@ -10,16 +10,10 @@ import {
   buildWorkspaceBackup,
   polishDayKey,
 } from "@/lib/workspace-backup";
-
-function authorized(req: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  const auth = req.headers.get("authorization") ?? "";
-  return auth === `Bearer ${secret}`;
-}
+import { isCronAuthorized } from "@/lib/cron-auth";
 
 export async function GET(req: Request) {
-  if (!authorized(req)) {
+  if (!isCronAuthorized(req)) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 

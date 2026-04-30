@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { sendEmail } from "@/lib/email";
+import { isCronAuthorized } from "@/lib/cron-auth";
 
 // Vercel Cron hits this endpoint every 15 minutes (see vercel.json).
 // We gate by Bearer token to prevent public abuse.
@@ -118,15 +119,10 @@ function escape(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function authorized(req: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  const auth = req.headers.get("authorization") ?? "";
-  return auth === `Bearer ${secret}`;
-}
+// F12-K43 L1: timing-safe authorization — zob. lib/cron-auth.ts.
 
 export async function GET(req: Request) {
-  if (!authorized(req)) return new NextResponse("Unauthorized", { status: 401 });
+  if (!isCronAuthorized(req)) return new NextResponse("Unauthorized", { status: 401 });
   try {
     const result = await runSweep(new Date());
     return NextResponse.json({ ok: true, ...result });

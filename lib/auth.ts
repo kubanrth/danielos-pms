@@ -76,6 +76,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
           const totpDelta = verifyTotpToken(user.totpSecret, submitted);
           if (totpDelta === null) {
+            // F12-K43 M4: per-user rate limit dla recovery codes. Bez
+            // tego user z leaked-codes mógł burn'ować 10 prób bez
+            // detekcji (każdy request to bcrypt × 10).
+            const rcRl = await checkLimit("auth.recoveryCode", user.id);
+            if (!rcRl.ok) return null;
             // Fall back to recovery codes. Fetch only unused ones.
             const codes = await db.totpRecoveryCode.findMany({
               where: { userId: user.id, usedAt: null },
