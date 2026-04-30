@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
@@ -369,6 +369,12 @@ export function BoardTable({
 
   // Pipeline: filter → sort. Grouping happens at render time so each
   // group keeps the same sort.
+  // F12-K44 P3: search debounce przez useDeferredValue (React 19). Bez
+  // tego każdy keystroke trigger'ował filter + sort 500 rows synchronously
+  // → odczuwalny lag przy szybkim pisaniu. useDeferredValue defer'uje
+  // re-compute do interactive idle, input pozostaje responsywny.
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+
   const filteredSorted = useMemo(() => {
     const valueOf = (t: BoardTableTask, columnId: string): string => {
       if (columnId === "title") return t.title;
@@ -381,8 +387,8 @@ export function BoardTable({
     if (filters.length > 0) {
       rows = rows.filter((t) => filters.every((f) => matchesFilter(f, valueOf(t, f.columnId))));
     }
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
+    if (deferredSearchQuery.trim()) {
+      const q = deferredSearchQuery.trim().toLowerCase();
       rows = rows.filter((t) => {
         if (t.title.toLowerCase().includes(q)) return true;
         for (const v of Object.values(t.customValues)) {
@@ -400,7 +406,7 @@ export function BoardTable({
       );
     }
     return rows;
-  }, [tasks, filters, tableSort, searchQuery]);
+  }, [tasks, filters, tableSort, deferredSearchQuery]);
 
   const columns = useMemo(
     () => [
@@ -1004,11 +1010,18 @@ export function BoardTable({
               // F10-B: when grouped, the row model is partitioned by
               // bucket — each bucket gets a colored header row, then the
               // matching subset of TanStack rows underneath.
-              groupedRows.map((bucket) => {
-                const bucketRows = table
-                  .getRowModel()
-                  .rows.filter((r) => bucket.rows.some((t) => t.id === r.original.id));
-                if (bucketRows.length === 0) return null;
+              // F12-K44 P2: zamiast filter() per bucket (O(N×M)), budujemy
+              // raz Map<rowId, RowModel> i czytamy bucket'y O(N). Z 500
+              // rows × 5 buckets to było 2500 iteracji per render —
+              // teraz ~500 + 5×O(1) = 505.
+              (() => {
+                const rowModel = table.getRowModel().rows;
+                const rowById = new Map(rowModel.map((r) => [r.original.id, r]));
+                return groupedRows.map((bucket) => {
+                  const bucketRows = bucket.rows
+                    .map((t) => rowById.get(t.id))
+                    .filter((r): r is (typeof rowModel)[number] => Boolean(r));
+                  if (bucketRows.length === 0) return null;
                 return (
                   <GroupBucket
                     key={bucket.key}
@@ -1114,7 +1127,8 @@ export function BoardTable({
                     })}
                   </GroupBucket>
                 );
-              })
+              });
+              })()
             )}
             {canEdit && (
               <AddRowInline

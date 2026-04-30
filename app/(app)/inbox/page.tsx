@@ -61,16 +61,27 @@ export default async function InboxPage() {
   const session = await auth();
   const userId = session!.user.id;
 
-  // F12-K43 M3: filtruj notyfikacje wskazujące na usunięte/niedostępne
-  // workspace'y. delete workspace'u nie cascade'uje na Notification
-  // (payload to JSON, brak FK), więc bez tego klik na starą notyfikację
-  // dawał 404 (po fix'ie /my-tasks z F12-K42 to ostatni leak point).
-  const activeMemberships = await db.workspaceMembership.findMany({
-    where: { userId, workspace: { deletedAt: null } },
-    select: { workspaceId: true },
+  // F12-K43 M3 + F12-K44 P1: pojedyncze zapytanie membership'ów. Wcześniej
+  // były dwa fetch'e (active workspaces dla filter'a notyfikacji + full
+  // roster dla assign hotkey'a). Pełen roster ZAWIERA active workspace'y,
+  // więc jedno query wystarczy — derywujemy oba sety in-memory.
+  const memberships = await db.workspaceMembership.findMany({
+    where: {
+      workspace: {
+        deletedAt: null,
+        memberships: { some: { userId } },
+      },
+    },
+    include: {
+      user: {
+        select: { id: true, name: true, email: true, avatarUrl: true },
+      },
+    },
   });
   const activeWorkspaceIds = new Set(
-    activeMemberships.map((m) => m.workspaceId),
+    memberships
+      .filter((m) => m.userId === userId)
+      .map((m) => m.workspaceId),
   );
 
   const allNotifications = await loadNotifications(userId);
@@ -111,15 +122,6 @@ export default async function InboxPage() {
   // popup can offer the full roster regardless of which workspace the
   // task belongs to. toggleAssigneeAction re-validates per-workspace
   // server-side.
-  const memberships = await db.workspaceMembership.findMany({
-    where: {
-      workspace: {
-        deletedAt: null,
-        memberships: { some: { userId } },
-      },
-    },
-    include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
-  });
   const memberMap = new Map<string, { id: string; name: string | null; email: string; avatarUrl: string | null }>();
   for (const m of memberships) {
     if (!memberMap.has(m.user.id)) memberMap.set(m.user.id, m.user);
