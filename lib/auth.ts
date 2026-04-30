@@ -110,6 +110,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
+    // F12-K43 M1: explicit redirect callback. trustHost=true sprawi że
+    // Auth.js domyślnie ufa Host header'owi z requestu — atakujący mógłby
+    // teoretycznie zmusić signIn(redirectTo: 'https://evil.com') do
+    // przepuszczenia external URL'a. Tu wymusamy: tylko relative
+    // ścieżki ALBO same-origin z naszą APP_BASE_URL.
+    redirect: async ({ url, baseUrl }) => {
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      try {
+        const target = new URL(url, baseUrl);
+        const allowed = process.env.APP_BASE_URL || baseUrl;
+        const allowedOrigin = new URL(allowed).origin;
+        if (target.origin === allowedOrigin) return target.toString();
+      } catch {
+        /* invalid URL → fallthrough do baseUrl */
+      }
+      return baseUrl;
+    },
     jwt: async ({ token, user }) => {
       if (user) {
         token.id = user.id;

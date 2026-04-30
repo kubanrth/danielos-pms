@@ -14,6 +14,7 @@ import {
   MAX_ATTACHMENT_BYTES,
   createSignedUploadUrl,
   isAllowedMime,
+  storageObjectExists,
   supabaseAdmin,
 } from "@/lib/storage";
 
@@ -464,6 +465,16 @@ export async function confirmSupportAttachmentUploadAction(input: {
   });
   if (!ticket) return { ok: false, error: "Zgłoszenie nie istnieje." };
   const ctx = await requireWorkspaceMembership(ticket.workspaceId);
+
+  // F12-K43 M2: weryfikacja że plik faktycznie został zapisany do
+  // storage'u przed insert'em DB row'a. Bez tego klient może wymusić
+  // signed URL, ZAMIAST PUT'ować od razu wołać confirm i zostawić
+  // orphan row wskazujący na pusty storageKey. Pattern z task
+  // attachment'ów (t/attachment-actions.ts).
+  const exists = await storageObjectExists(parsed.data.storageKey);
+  if (!exists) {
+    return { ok: false, error: "Plik nie został przesłany." };
+  }
 
   await db.supportTicketAttachment.create({
     data: {

@@ -61,7 +61,26 @@ export default async function InboxPage() {
   const session = await auth();
   const userId = session!.user.id;
 
-  const notifications = await loadNotifications(userId);
+  // F12-K43 M3: filtruj notyfikacje wskazujące na usunięte/niedostępne
+  // workspace'y. delete workspace'u nie cascade'uje na Notification
+  // (payload to JSON, brak FK), więc bez tego klik na starą notyfikację
+  // dawał 404 (po fix'ie /my-tasks z F12-K42 to ostatni leak point).
+  const activeMemberships = await db.workspaceMembership.findMany({
+    where: { userId, workspace: { deletedAt: null } },
+    select: { workspaceId: true },
+  });
+  const activeWorkspaceIds = new Set(
+    activeMemberships.map((m) => m.workspaceId),
+  );
+
+  const allNotifications = await loadNotifications(userId);
+  const notifications = allNotifications.filter((n) => {
+    const ws = (n.payload as { workspaceId?: string } | null)?.workspaceId;
+    // Notyfikacje bez workspace context (np. ogólne) — keep.
+    // Notyfikacje wskazujące na żywy workspace user'a — keep.
+    // Notyfikacje wskazujące na nie-membera lub deleted workspace — drop.
+    return !ws || activeWorkspaceIds.has(ws);
+  });
 
   // Pre-fetch assignees for every task referenced in the feed — the
   // hotkey popup needs these to highlight already-assigned people.
