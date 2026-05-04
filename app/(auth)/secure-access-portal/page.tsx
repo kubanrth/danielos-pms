@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = {
-  title: "Wejście · DANIELOS",
+  title: "Wejście · FLOVLY",
 };
 
 export default async function SecureAccessPortalPage({
@@ -28,10 +28,10 @@ export default async function SecureAccessPortalPage({
       <header className="flex items-center justify-between px-8 pt-8 md:px-14 md:pt-10">
         <div className="flex items-center gap-2">
           <span className="grid h-7 w-7 place-items-center rounded-md bg-brand-gradient text-white font-display text-[0.82rem] font-bold">
-            D
+            F
           </span>
           <span className="font-display text-[1rem] font-semibold tracking-[-0.01em]">
-            DANIELOS
+            FLOVLY
           </span>
         </div>
         <span className="eyebrow hidden md:inline">secure access portal</span>

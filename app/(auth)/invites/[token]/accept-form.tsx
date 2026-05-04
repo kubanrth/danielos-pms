@@ -88,7 +88,7 @@ export function AcceptInviteForm({
         />
         <span className="font-mono text-[0.66rem] uppercase tracking-[0.14em] text-muted-foreground">
           {isExistingUser
-            ? "Wpisz hasło od swojego istniejącego konta DANIELOS"
+            ? "Wpisz hasło od swojego istniejącego konta FLOVLY"
             : "Minimum 8 znaków"}
         </span>
         {fieldErrors?.password && (

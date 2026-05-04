@@ -166,8 +166,8 @@ export async function inviteMemberAction(
   const res = await sendEmail({
     to: invitation.email,
     subject: board
-      ? `Zaproszenie do tablicy ${board.name} · DANIELOS PMS`
-      : `Zaproszenie do ${workspace.name} · DANIELOS PMS`,
+      ? `Zaproszenie do tablicy ${board.name} · FLOVLY`
+      : `Zaproszenie do ${workspace.name} · FLOVLY`,
     html: `
       <div style="font-family:system-ui,sans-serif;max-width:520px">
         <h1 style="font-weight:600">Jesteś zaproszona/y do ${escapeHtml(workspace.name)}</h1>

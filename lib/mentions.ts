@@ -178,7 +178,7 @@ function mentionEmailHtml(args: {
   <p><strong>${escapeHtml(args.authorName)}</strong> oznaczył(a) Cię w komentarzu do zadania
      <strong>${escapeHtml(args.taskTitle)}</strong> w przestrzeni <em>${escapeHtml(args.workspaceName)}</em>.</p>
   <p><a href="${fullUrl}" style="display:inline-block;padding:10px 18px;background:#7B68EE;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">Otwórz zadanie</a></p>
-  <p style="color:#666;font-size:12px;margin-top:24px;">DANIELOS PMS</p>
+  <p style="color:#666;font-size:12px;margin-top:24px;">FLOVLY</p>
 </body></html>`.trim();
 }
 

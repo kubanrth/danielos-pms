@@ -77,7 +77,7 @@ export function CreateTaskButton({
                 required
                 autoFocus
                 maxLength={200}
-                placeholder="np. Zaprojektować logo DANIELOS"
+                placeholder="np. Zaprojektować logo FLOVLY"
                 aria-invalid={!!fieldError}
                 className="h-10 border-b border-border bg-transparent pb-1 text-[1rem] outline-none focus:border-primary aria-[invalid=true]:border-destructive"
               />

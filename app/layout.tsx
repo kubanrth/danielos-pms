@@ -23,7 +23,7 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "DANIELOS · System Zarządzania Projektami",
+  title: "FLOVLY · System Zarządzania Projektami",
   description: "Wewnętrzny system zarządzania projektami.",
   robots: { index: false, follow: false },
 };

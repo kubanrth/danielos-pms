@@ -11,7 +11,7 @@ import { Secret, TOTP } from "otpauth";
 import bcrypt from "bcrypt";
 import crypto from "node:crypto";
 
-const ISSUER = "DANIELOS PMS";
+const ISSUER = "FLOVLY";
 const DIGITS = 6;
 const PERIOD = 30;
 const WINDOW = 1; // accept previous + current + next 30s slice

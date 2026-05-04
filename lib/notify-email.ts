@@ -77,7 +77,7 @@ function renderNotificationHtml(p: {
       <a href="${p.ctaUrl}" style="display:inline-block;padding:10px 18px;background:linear-gradient(135deg,#7B68EE,#BA68C8);color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">${escape(p.ctaLabel)} →</a>
     </div>
     <div style="padding:14px 24px;border-top:1px solid #F1F5F9;background:#FAFBFC">
-      <p style="margin:0;color:#94A3B8;font-size:11px;line-height:1.5">DANIELOS PMS · Otrzymujesz tę wiadomość, ponieważ jesteś członkiem przestrzeni roboczej.</p>
+      <p style="margin:0;color:#94A3B8;font-size:11px;line-height:1.5">FLOVLY · Otrzymujesz tę wiadomość, ponieważ jesteś członkiem przestrzeni roboczej.</p>
     </div>
   </div>
 </body></html>`;

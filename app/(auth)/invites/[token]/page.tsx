@@ -69,10 +69,10 @@ export default async function InvitePage({
       <header className="flex items-center justify-between px-8 pt-8 md:px-14 md:pt-10">
         <div className="flex items-center gap-2">
           <span className="grid h-7 w-7 place-items-center rounded-md bg-brand-gradient text-white font-display text-[0.82rem] font-bold">
-            D
+            F
           </span>
           <span className="font-display text-[1rem] font-semibold tracking-[-0.01em]">
-            DANIELOS
+            FLOVLY
           </span>
         </div>
         <span className="eyebrow hidden md:inline">zaproszenie</span>
@@ -89,7 +89,7 @@ export default async function InvitePage({
             {invitation.inviter.name ?? invitation.inviter.email} zaprasza Cię jako{" "}
             <span className="font-mono text-foreground">{invitation.role.toLowerCase()}</span>.
             {isExistingUser
-              ? " Wygląda na to, że masz już konto w DANIELOS — wpisz hasło, żeby dołączyć."
+              ? " Wygląda na to, że masz już konto w FLOVLY — wpisz hasło, żeby dołączyć."
               : " Ustaw hasło, aby założyć konto i dołączyć."}
           </p>
         </div>

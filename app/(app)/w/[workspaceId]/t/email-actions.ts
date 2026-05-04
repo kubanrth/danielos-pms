@@ -52,7 +52,7 @@ function renderTaskHtml(task: {
 <body style="font-family:ui-sans-serif,system-ui,sans-serif;color:#0F172A;background:#F8FAFC;padding:24px">
   <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;border:1px solid #E2E8F0;overflow:hidden">
     <div style="padding:20px 24px;border-bottom:1px solid #E2E8F0">
-      <div style="font-family:ui-monospace,monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#64748B">Zadanie z DANIELOS PMS</div>
+      <div style="font-family:ui-monospace,monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#64748B">Zadanie z FLOVLY</div>
       <h1 style="margin:8px 0 0;font-size:22px;line-height:1.2">${escape(task.title)}</h1>
       <div style="margin-top:8px"><span style="display:inline-block;padding:2px 10px;border-radius:999px;background:${task.statusColor}22;color:${task.statusColor};font-family:ui-monospace,monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase">${escape(task.statusName ?? "brak statusu")}</span></div>
     </div>
@@ -191,7 +191,7 @@ export async function sendTaskByEmailAction(
     assignees: task.assignees.map((a) => a.user.name ?? a.user.email),
     note: parsed.data.note ?? null,
     attachmentLinks: overflowLinks,
-    senderName: senderUser?.name ?? senderUser?.email ?? "Ktoś z DANIELOS PMS",
+    senderName: senderUser?.name ?? senderUser?.email ?? "Ktoś z FLOVLY",
   });
 
   const result = await sendEmail({
