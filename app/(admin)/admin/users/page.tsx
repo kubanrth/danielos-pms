@@ -43,12 +43,12 @@ export default async function AdminUsersPage({
   const users = await loadUsers(query);
 
   return (
-    <main className="flex-1 px-8 py-10 md:px-14 md:py-14">
-      <div className="mx-auto flex max-w-6xl flex-col gap-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
+    <main className="flex-1 px-4 py-6 md:px-14 md:py-14">
+      <div className="mx-auto flex max-w-6xl flex-col gap-5 md:gap-6">
+        <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-end md:justify-between md:gap-4">
           <div className="flex flex-col gap-2">
             <span className="eyebrow">Użytkownicy</span>
-            <h1 className="font-display text-[2rem] font-bold leading-[1.1] tracking-[-0.03em]">
+            <h1 className="font-display text-[1.5rem] font-bold leading-[1.1] tracking-[-0.03em] md:text-[2rem]">
               {users.length} {plPlural(users.length, "konto", "konta", "kont")}
             </h1>
           </div>
@@ -58,19 +58,19 @@ export default async function AdminUsersPage({
               type="search"
               defaultValue={query}
               placeholder="szukaj po email / imię…"
-              className="h-9 w-[260px] rounded-md border border-border bg-card px-3 text-[0.88rem] outline-none focus:border-primary"
+              className="h-9 w-full rounded-md border border-border bg-card px-3 text-[0.88rem] outline-none focus:border-primary md:w-[260px]"
             />
             <button
               type="submit"
-              className="inline-flex h-9 items-center rounded-md border border-border bg-card px-3 font-mono text-[0.7rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:text-foreground"
+              className="inline-flex h-9 shrink-0 items-center rounded-md border border-border bg-card px-3 font-mono text-[0.7rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:text-foreground"
             >
               Szukaj
             </button>
           </form>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-          <table className="w-full text-left">
+        <div className="overflow-hidden rounded-xl border border-border bg-card"><div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-left">
             <thead className="border-b border-border bg-muted/50">
               <tr className="font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted-foreground">
                 <th className="px-4 py-2">Użytkownik</th>
@@ -87,6 +87,7 @@ export default async function AdminUsersPage({
               ))}
             </tbody>
           </table>
+          </div>
           {users.length === 0 && (
             <p className="px-4 py-8 text-center text-[0.88rem] text-muted-foreground">
               {query ? "Brak dopasowań." : "Brak użytkowników."}

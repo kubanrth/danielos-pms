@@ -843,7 +843,9 @@ export function BoardTable({
                   {canEdit && (
                     // F12-K29: bg-card (było bg-muted/95) — pełna nieprzezroczystość
                     // żeby tło BoardShell (gradient/obraz) nie przebijało za checkboxem.
-                    <th className="sticky left-0 top-0 z-30 h-10 w-10 bg-card px-2 shadow-[1px_0_0_0_var(--border)]">
+                    // F12-K47e: na mobile sticky pinning wyłączone (max-md:!static) —
+                    // klient nie mógł scrollować przez przypięte kolumny.
+                    <th className="sticky left-0 top-0 z-30 h-10 w-10 bg-card px-2 shadow-[1px_0_0_0_var(--border)] max-md:!static max-md:!shadow-none">
                       {(() => {
                         const allChecked =
                           table.getRowModel().rows.length > 0 &&
@@ -896,7 +898,7 @@ export function BoardTable({
                         key={header.id}
                         className={`group/th relative sticky top-0 h-10 px-4 text-left font-mono text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground ${
                           isPinned
-                            ? "z-20 bg-muted/95 shadow-[1px_0_0_0_var(--border)] backdrop-blur-sm"
+                            ? "z-20 bg-muted/95 shadow-[1px_0_0_0_var(--border)] backdrop-blur-sm max-md:!static max-md:!bg-transparent max-md:!shadow-none max-md:!backdrop-blur-none"
                             : ""
                         }`}
                         style={{
@@ -1048,7 +1050,7 @@ export function BoardTable({
                         >
                           {canEdit && (
                             <td
-                              className="sticky left-0 z-10 w-10 bg-card px-2 align-middle shadow-[1px_0_0_0_var(--border)]"
+                              className="sticky left-0 z-10 w-10 bg-card px-2 align-middle shadow-[1px_0_0_0_var(--border)] max-md:!static max-md:!shadow-none"
                               style={{
                                 background: isSelected ? "rgba(var(--primary-rgb,0,0,0),0.05)" : undefined,
                               }}
@@ -1109,7 +1111,7 @@ export function BoardTable({
                                   onFocus={() => setActiveCell({ row: visibleRowIdx, col: cIdx })}
                                   className={`px-4 py-2.5 align-middle outline-none ${
                                     isPinned
-                                      ? "sticky z-10 bg-card shadow-[1px_0_0_0_var(--border)]"
+                                      ? "sticky z-10 bg-card shadow-[1px_0_0_0_var(--border)] max-md:!static max-md:!bg-transparent max-md:!shadow-none"
                                       : ""
                                   } ${isActive ? "ring-2 ring-inset ring-primary/60" : ""}`}
                                   style={{

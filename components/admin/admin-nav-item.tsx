@@ -20,7 +20,7 @@ export function AdminNavItem({
     <Link
       href={href}
       data-active={active ? "true" : "false"}
-      className="group flex items-center gap-2 rounded-sm px-2 py-1.5 text-[0.88rem] text-sidebar-foreground transition-colors hover:bg-sidebar-accent data-[active=true]:bg-sidebar-accent data-[active=true]:text-foreground"
+      className="group flex shrink-0 items-center gap-2 rounded-sm px-2 py-1.5 text-[0.88rem] text-sidebar-foreground transition-colors hover:bg-sidebar-accent data-[active=true]:bg-sidebar-accent data-[active=true]:text-foreground"
     >
       <span className="shrink-0 text-muted-foreground group-hover:text-foreground group-data-[active=true]:text-foreground">
         {icon}

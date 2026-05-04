@@ -19,14 +19,14 @@ export default async function AdminDashboard() {
     ]);
 
   return (
-    <main className="flex-1 px-8 py-10 md:px-14 md:py-14">
-      <div className="mx-auto flex max-w-5xl flex-col gap-8">
+    <main className="flex-1 px-4 py-6 md:px-14 md:py-14">
+      <div className="mx-auto flex max-w-5xl flex-col gap-6 md:gap-8">
         <div className="flex flex-col gap-2">
           <span className="eyebrow">Panel admina</span>
-          <h1 className="font-display text-[2.2rem] font-bold leading-[1.1] tracking-[-0.03em]">
+          <h1 className="font-display text-[1.6rem] font-bold leading-[1.1] tracking-[-0.03em] md:text-[2.2rem]">
             Przegląd systemu.
           </h1>
-          <p className="max-w-[60ch] text-[0.95rem] leading-[1.55] text-muted-foreground">
+          <p className="max-w-[60ch] text-[0.88rem] leading-[1.5] text-muted-foreground md:text-[0.95rem] md:leading-[1.55]">
             Zarządzanie użytkownikami, przestrzeniami i globalny audyt — wszystko bez kontaktu
             z developerem.
           </p>
@@ -84,7 +84,7 @@ function StatCard({
         <span className="text-primary">{icon}</span>
         {label}
       </span>
-      <span className="font-display text-[1.8rem] font-bold tracking-[-0.02em]">
+      <span className="font-display text-[1.5rem] font-bold tracking-[-0.02em] md:text-[1.8rem]">
         {value.toLocaleString("pl-PL")}
       </span>
       {note && (
