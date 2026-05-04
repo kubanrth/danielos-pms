@@ -1,13 +1,39 @@
 import Link from "next/link";
-import { PencilRuler } from "lucide-react";
+import {
+  BarChart3,
+  ChevronRight,
+  GitBranch,
+  KanbanSquare,
+  Pencil,
+  PencilRuler,
+  Table2,
+} from "lucide-react";
 import { db } from "@/lib/db";
 import { requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { can } from "@/lib/permissions";
 import { CreateTaskButton } from "@/components/task/create-task-button";
 import { ViewSwitcher } from "@/components/view/view-switcher";
 import { AppShell } from "@/components/layout/app-shell";
-import { computeBoardEnabledViews, parseEnabledViews } from "@/lib/board-views";
+import {
+  computeBoardEnabledViews,
+  parseEnabledViews,
+  type ViewName,
+} from "@/lib/board-views";
 import { taskPl } from "@/lib/pluralize";
+
+// F12-K47c: mobile view-switcher renderowany jako iOS-style segmented
+// list (pełnowymiarowe rzędy z chevron'em). Definiuje icon+label+colorhint
+// dla każdego z 5 default views — sourcuje to samo co ViewSwitcher pills.
+const VIEW_META: Record<
+  ViewName,
+  { label: string; Icon: typeof Table2; accent: string }
+> = {
+  table: { label: "Tabela", Icon: Table2, accent: "text-primary/80" },
+  kanban: { label: "Kanban", Icon: KanbanSquare, accent: "text-amber-500" },
+  roadmap: { label: "Roadmapa", Icon: GitBranch, accent: "text-sky-500" },
+  gantt: { label: "Gantt", Icon: BarChart3, accent: "text-rose-500" },
+  whiteboard: { label: "Whiteboard", Icon: Pencil, accent: "text-emerald-500" },
+};
 
 export default async function WorkspaceOverviewPage({
   params,
@@ -66,7 +92,7 @@ export default async function WorkspaceOverviewPage({
 
   return (
     <AppShell>
-      <div className="flex flex-col gap-10">
+      <div className="flex flex-col gap-6 md:gap-10">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Metric label="Członkowie" value={memberCount} />
         <div className="flex items-center gap-2">
@@ -104,16 +130,53 @@ export default async function WorkspaceOverviewPage({
                 {board._count.tasks} {taskPl(board._count.tasks)}
               </span>
             </h2>
-            <ViewSwitcher
-              workspaceId={workspaceId}
-              boardId={board.id}
-              enabled={boardEnabled}
-            />
+            {/* F12-K47c: desktop pokazuje pill-bar; mobile pokazuje
+                full-width segmented list poniżej (ładniej niż wrapping
+                pills). */}
+            <div className="max-md:hidden">
+              <ViewSwitcher
+                workspaceId={workspaceId}
+                boardId={board.id}
+                enabled={boardEnabled}
+              />
+            </div>
           </div>
 
+          {/* Mobile-only segmented list of views — iOS-Settings style. */}
+          <ul className="md:hidden flex flex-col overflow-hidden rounded-xl border border-border bg-card">
+            {boardEnabled.map((view) => {
+              const meta = VIEW_META[view];
+              const Icon = meta.Icon;
+              return (
+                <li key={view} className="border-b border-border last:border-b-0">
+                  <Link
+                    href={`/w/${workspaceId}/b/${board.id}/${view}`}
+                    className="group flex items-center gap-3 px-4 py-3 transition-colors active:bg-accent/40"
+                  >
+                    <span
+                      className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-muted/50 ${meta.accent}`}
+                      aria-hidden
+                    >
+                      <Icon size={16} />
+                    </span>
+                    <span className="flex-1 font-display text-[0.98rem] font-semibold tracking-[-0.01em]">
+                      {meta.label}
+                    </span>
+                    <ChevronRight
+                      size={16}
+                      className="shrink-0 text-muted-foreground"
+                    />
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+
           {board.tasks.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
-              <p className="font-display text-[1.05rem] font-semibold">Brak zadań.</p>
+            <div className="rounded-xl border border-dashed border-border p-6 text-center text-muted-foreground md:p-8">
+              <p className="font-display text-[1rem] font-semibold md:text-[1.05rem]">
+                Brak zadań.
+              </p>
               <p className="mt-1 font-mono text-[0.7rem] uppercase tracking-[0.14em]">
                 zacznij od przycisku „Nowe zadanie” powyżej
               </p>
