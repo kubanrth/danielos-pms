@@ -91,24 +91,26 @@ export default async function WorkspaceOverviewPage({
           .map((v) => v.type);
         const boardEnabled = computeBoardEnabledViews(workspaceEnabled, boardDefaultTypes);
         return (
-        <section key={board.id} className="flex flex-col gap-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-display text-[1.5rem] font-bold leading-[1.15] tracking-[-0.02em]">
+        <section key={board.id} className="flex flex-col gap-4 md:gap-5">
+          <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center md:justify-between">
+            <h2 className="font-display text-[1.2rem] font-bold leading-[1.15] tracking-[-0.02em] md:text-[1.5rem]">
               <Link
                 href={`/w/${workspaceId}/b/${board.id}/table`}
                 className="transition-colors hover:text-primary"
               >
                 {board.name}
               </Link>
-              <span className="ml-3 font-mono text-[0.72rem] font-normal uppercase tracking-[0.14em] text-muted-foreground">
+              <span className="ml-3 font-mono text-[0.7rem] font-normal uppercase tracking-[0.14em] text-muted-foreground">
                 {board._count.tasks} {taskPl(board._count.tasks)}
               </span>
             </h2>
-            <ViewSwitcher
-              workspaceId={workspaceId}
-              boardId={board.id}
-              enabled={boardEnabled}
-            />
+            <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:overflow-visible md:px-0">
+              <ViewSwitcher
+                workspaceId={workspaceId}
+                boardId={board.id}
+                enabled={boardEnabled}
+              />
+            </div>
           </div>
 
           {board.tasks.length === 0 ? (

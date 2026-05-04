@@ -165,7 +165,7 @@ export function CalendarMonthGrid({
         {PL_DAY_HEADERS.map((d, i) => (
           <div
             key={d}
-            className={`border-b border-border bg-muted/40 px-3 py-2 font-mono text-[0.62rem] uppercase tracking-[0.16em] text-muted-foreground ${
+            className={`border-b border-border bg-muted/40 px-1.5 py-1.5 text-center font-mono text-[0.55rem] uppercase tracking-[0.12em] text-muted-foreground md:px-3 md:py-2 md:text-left md:text-[0.62rem] md:tracking-[0.16em] ${
               i >= 5 ? "text-primary/60" : ""
             }`}
           >
@@ -177,34 +177,37 @@ export function CalendarMonthGrid({
           const dayEvents = events.filter((e) => eventSpansDay(e, cell.date));
           const isToday = sameDay(cell.date, today);
           const isWeekend = mondayFirstDow(cell.date) >= 5;
-          const showOverflow = dayEvents.length > 3;
+          // F12-K47: mobile = max 2 visible events, reszta jako +N badge.
+          const showOverflow = dayEvents.length > 2;
 
           return (
             <div
               key={i}
-              className={`relative flex min-h-[104px] flex-col gap-1 border-b border-r border-border p-2 transition-colors ${
+              className={`relative flex min-h-[72px] flex-col gap-0.5 border-b border-r border-border p-1 transition-colors md:min-h-[104px] md:gap-1 md:p-2 ${
                 cell.inMonth ? "" : "bg-muted/20 text-muted-foreground/50"
               } ${isWeekend && cell.inMonth ? "bg-muted/5" : ""}`}
             >
               <div
                 data-today={isToday ? "true" : "false"}
-                className="font-mono text-[0.68rem] font-semibold data-[today=true]:text-primary"
+                className="font-mono text-[0.62rem] font-semibold data-[today=true]:text-primary md:text-[0.68rem]"
               >
                 {isToday ? (
-                  <span className="inline-grid h-5 w-5 place-items-center rounded-full bg-primary text-[0.66rem] text-primary-foreground">
+                  <span className="inline-grid h-5 w-5 place-items-center rounded-full bg-primary text-[0.6rem] text-primary-foreground md:text-[0.66rem]">
                     {cell.date.getDate()}
                   </span>
                 ) : (
                   cell.date.getDate()
                 )}
               </div>
-              {dayEvents.slice(0, 3).map((ev) => {
+              {/* F12-K47: na mobile pokazujemy max 2 eventy (wcześniej 3) +
+                  +N indicator — cells robi się czytelniejsze przy 50px szer. */}
+              {dayEvents.slice(0, 2).map((ev) => {
                 const isEvent = ev.kind === "event";
                 // Fallback do `ev.id` (legacy callsites) gdyby nie ustawiono
                 // entityId — usuwamy prefix "task:" / "event:" defensywnie.
                 const rawId = ev.entityId ?? ev.id.replace(/^(task|event):/, "");
                 const className =
-                  "truncate rounded-sm px-1.5 py-0.5 text-left text-[0.68rem] font-medium transition-colors hover:brightness-95";
+                  "truncate rounded-sm px-1 py-0.5 text-left text-[0.55rem] font-medium transition-colors hover:brightness-95 md:px-1.5 md:text-[0.68rem]";
                 const style = {
                   background: ev.statusColor
                     ? `${ev.statusColor}22`
@@ -238,8 +241,9 @@ export function CalendarMonthGrid({
                 );
               })}
               {showOverflow && (
-                <span className="px-1 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground">
-                  +{dayEvents.length - 3} więcej
+                <span className="px-1 font-mono text-[0.55rem] uppercase tracking-[0.12em] text-muted-foreground md:text-[0.6rem]">
+                  +{dayEvents.length - 2}
+                  <span className="hidden md:inline"> więcej</span>
                 </span>
               )}
             </div>

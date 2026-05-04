@@ -38,18 +38,20 @@ export function BoardHeader({
   return (
     // F11-5: extra (link folders) now spans full width — previously
     // shared row with title/viewswitcher → narrower than the table below.
+    // F12-K47: mobile — h2 mniejsze + ViewSwitcher horizontal-scroll
+    // (negative margin do brzegu ekranu) + actions w nowej linii.
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 flex-1 flex-col gap-2">
-          <h2 className="font-display text-[1.5rem] font-bold leading-[1.15] tracking-[-0.02em]">
+          <h2 className="font-display text-[1.2rem] font-bold leading-[1.15] tracking-[-0.02em] md:text-[1.5rem]">
             {board.name}
           </h2>
           {board.description && (
-            <p className="text-[0.9rem] leading-[1.55] text-muted-foreground">
+            <p className="text-[0.85rem] leading-[1.5] text-muted-foreground max-md:line-clamp-2 md:text-[0.9rem] md:leading-[1.55]">
               {board.description}
             </p>
           )}
-          <div className="flex flex-wrap items-center">
+          <div className="-mx-4 flex items-center overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:-mx-0 md:flex-wrap md:overflow-visible md:px-0">
             <ViewSwitcher
               workspaceId={workspaceId}
               boardId={boardId}
@@ -63,7 +65,11 @@ export function BoardHeader({
             {createViewButton}
           </div>
         </div>
-        {actions && <div className="flex items-center gap-2">{actions}</div>}
+        {actions && (
+          <div className="flex items-center gap-2 max-md:w-full max-md:flex-wrap">
+            {actions}
+          </div>
+        )}
       </div>
       {extra && <div className="w-full">{extra}</div>}
     </div>

@@ -34,14 +34,14 @@ export default async function CreativeBriefsListPage({
   });
 
   return (
-    <div className="flex flex-col gap-6 p-8">
-      <div className="flex items-start justify-between gap-4">
+    <div className="flex flex-col gap-5 p-4 md:gap-6 md:p-8">
+      <div className="flex flex-col items-start justify-between gap-4 md:flex-row">
         <div className="flex flex-col gap-2">
           <span className="eyebrow">Workspace</span>
-          <h1 className="font-display text-[2.2rem] font-bold leading-[1.1] tracking-[-0.03em]">
+          <h1 className="font-display text-[1.6rem] font-bold leading-[1.1] tracking-[-0.03em] md:text-[2.2rem]">
             <span className="text-brand-gradient">Creative</span> Board.
           </h1>
-          <p className="max-w-[60ch] text-[0.95rem] leading-[1.55] text-muted-foreground">
+          <p className="max-w-[60ch] text-[0.88rem] leading-[1.5] text-muted-foreground md:text-[0.95rem] md:leading-[1.55]">
             Strukturalne dokumenty projektowe — cele, grupa docelowa,
             deliverables, brand guidelines, referencje, timeline. Tabele,
             kolory, emoji, obrazy. Każdy nowy brief startuje z gotowego template&apos;a.

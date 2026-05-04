@@ -25,14 +25,14 @@ export default async function WorkspaceSettingsPage({
   const canDelete = can(ctx.role, "workspace.delete");
 
   return (
-    <div className="mx-auto flex max-w-[640px] flex-col gap-12">
+    <div className="mx-auto flex max-w-[640px] flex-col gap-8 md:gap-12">
       <section className="flex flex-col gap-5">
         <div className="flex flex-col gap-1.5">
           <span className="eyebrow">Ustawienia ogólne</span>
-          <h2 className="font-display text-[1.6rem] leading-[1.15] tracking-[-0.02em]">
+          <h2 className="font-display text-[1.3rem] leading-[1.15] tracking-[-0.02em] md:text-[1.6rem]">
             Podstawowe informacje
           </h2>
-          <p className="text-[0.92rem] leading-[1.55] text-muted-foreground">
+          <p className="text-[0.88rem] leading-[1.5] text-muted-foreground md:text-[0.92rem] md:leading-[1.55]">
             Zmiany są widoczne dla wszystkich członków przestrzeni.
           </p>
         </div>
@@ -44,10 +44,10 @@ export default async function WorkspaceSettingsPage({
       </section>
 
       {canDelete && (
-        <section className="flex flex-col gap-5 border-t border-border pt-10">
+        <section className="flex flex-col gap-5 border-t border-border pt-8 md:pt-10">
           <div className="flex flex-col gap-1.5">
             <span className="eyebrow text-destructive">Strefa niebezpieczna</span>
-            <h2 className="font-display text-[1.3rem] leading-[1.15] tracking-[-0.02em]">
+            <h2 className="font-display text-[1.15rem] leading-[1.15] tracking-[-0.02em] md:text-[1.3rem]">
               Usuń przestrzeń roboczą
             </h2>
           </div>

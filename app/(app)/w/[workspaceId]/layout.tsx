@@ -25,47 +25,49 @@ export default async function WorkspaceLayout({
 
   return (
     <>
-      <header className="flex flex-col gap-4 border-b border-border px-8 pb-6 pt-8 md:flex-row md:items-end md:justify-between md:px-14">
-        <div className="flex flex-col gap-2">
+      {/* F12-K47: mobile shell — kompaktowy padding + hide opisu + horizontal-
+          scroll nav. Desktop bez zmian. */}
+      <header className="flex flex-col gap-3 border-b border-border px-4 pb-4 pt-5 md:flex-row md:items-end md:justify-between md:gap-4 md:px-14 md:pb-6 md:pt-8">
+        <div className="flex flex-col gap-1.5 md:gap-2">
           <span className="eyebrow">Przestrzeń · /{workspace.slug}</span>
-          <h1 className="font-display text-[2rem] font-bold leading-[1.1] tracking-[-0.025em] text-foreground">
+          <h1 className="font-display text-[1.5rem] font-bold leading-[1.1] tracking-[-0.025em] text-foreground md:text-[2rem]">
             {workspace.name}
           </h1>
           {workspace.description && (
-            <p className="max-w-[64ch] text-[0.95rem] leading-[1.55] text-muted-foreground">
+            <p className="max-w-[64ch] text-[0.88rem] leading-[1.5] text-muted-foreground max-md:line-clamp-2 md:text-[0.95rem] md:leading-[1.55]">
               {workspace.description}
             </p>
           )}
         </div>
 
-        <nav className="flex items-center gap-6">
+        <nav className="-mx-4 flex items-center gap-4 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:gap-6 md:overflow-visible md:px-0">
           <Link
             href={`/w/${workspace.id}`}
-            className="eyebrow transition-colors hover:text-foreground focus-visible:text-foreground"
+            className="eyebrow shrink-0 transition-colors hover:text-foreground focus-visible:text-foreground"
           >
             Przegląd
           </Link>
           <Link
             href={`/w/${workspace.id}/members`}
-            className="eyebrow transition-colors hover:text-foreground focus-visible:text-foreground"
+            className="eyebrow shrink-0 transition-colors hover:text-foreground focus-visible:text-foreground"
           >
             Członkowie
           </Link>
           {canEditSettings && (
             <Link
               href={`/w/${workspace.id}/settings`}
-              className="eyebrow transition-colors hover:text-foreground focus-visible:text-foreground"
+              className="eyebrow shrink-0 transition-colors hover:text-foreground focus-visible:text-foreground"
             >
               Ustawienia
             </Link>
           )}
-          <span className="eyebrow text-muted-foreground/60">
+          <span className="eyebrow shrink-0 text-muted-foreground/60 max-md:hidden">
             Twoja rola: <span className="text-foreground">{ctx.role.toLowerCase()}</span>
           </span>
         </nav>
       </header>
 
-      <main className="flex-1 px-8 py-10 md:px-14">{children}</main>
+      <main className="flex-1 px-4 py-5 md:px-14 md:py-10">{children}</main>
       {modal}
     </>
   );

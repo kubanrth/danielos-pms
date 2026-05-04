@@ -81,13 +81,13 @@ export default async function MembersPage({
     : [];
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-10">
+    <div className="mx-auto flex max-w-4xl flex-col gap-6 md:gap-10">
       <div className="flex flex-col gap-2">
         <span className="eyebrow">Członkowie</span>
-        <h2 className="font-display text-[1.8rem] leading-[1.1] tracking-[-0.02em]">
+        <h2 className="font-display text-[1.4rem] leading-[1.1] tracking-[-0.02em] md:text-[1.8rem]">
           Kto pracuje w tej przestrzeni
         </h2>
-        <p className="text-[0.92rem] leading-[1.55] text-muted-foreground">
+        <p className="text-[0.88rem] leading-[1.5] text-muted-foreground md:text-[0.92rem] md:leading-[1.55]">
           Admini mogą zapraszać do całego workspace'a albo do konkretnej
           tablicy. Tablica może być publiczna (wszyscy widzą) lub prywatna
           (tylko wyraźnie dodani).
@@ -95,7 +95,7 @@ export default async function MembersPage({
       </div>
 
       {canManageBoardMembers && (
-        <nav className="flex items-center gap-1 border-b border-border">
+        <nav className="-mx-4 flex items-center gap-1 overflow-x-auto border-b border-border px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:overflow-visible md:px-0">
           <TabLink href={`/w/${workspaceId}/members`} active={activeTab === "workspace"}>
             Workspace
           </TabLink>

@@ -126,7 +126,7 @@ export function TaskDetail({
   };
 
   return (
-    <div className="flex flex-col gap-10">
+    <div className="flex flex-col gap-6 md:gap-10">
       {/* Meta: ID + actions */}
       <div className="flex items-center justify-between">
         <span className="font-mono text-[0.7rem] uppercase tracking-[0.14em] text-muted-foreground">
@@ -176,7 +176,7 @@ export function TaskDetail({
             readOnly={!canEdit}
             defaultValue={task.title}
             aria-invalid={!!fieldErrors?.title}
-            className="border-b border-border bg-transparent pb-2 font-display text-[1.8rem] leading-[1.15] tracking-[-0.02em] outline-none focus:border-primary aria-[invalid=true]:border-destructive"
+            className="border-b border-border bg-transparent pb-2 font-display text-[1.4rem] leading-[1.15] tracking-[-0.02em] outline-none focus:border-primary aria-[invalid=true]:border-destructive md:text-[1.8rem]"
           />
           {fieldErrors?.title && (
             <span className="font-mono text-[0.68rem] text-destructive">

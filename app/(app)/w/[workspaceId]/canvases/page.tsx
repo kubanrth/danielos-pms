@@ -34,14 +34,14 @@ export default async function CanvasesPage({
   const canDelete = can(ctx.role, "canvas.delete");
 
   return (
-    <main className="flex-1 px-8 py-12 md:px-14 md:py-16">
-      <div className="mx-auto flex max-w-5xl flex-col gap-10">
+    <main className="flex-1 px-4 py-6 md:px-14 md:py-16">
+      <div className="mx-auto flex max-w-5xl flex-col gap-6 md:gap-10">
         <div className="flex flex-col gap-2">
           <span className="eyebrow">Whiteboard</span>
-          <h1 className="font-display text-[2.2rem] font-bold leading-[1.1] tracking-[-0.03em]">
+          <h1 className="font-display text-[1.6rem] font-bold leading-[1.1] tracking-[-0.03em] md:text-[2.2rem]">
             Procesy. {canvases.length} {plPlural(canvases.length, "kanwa", "kanwy", "kanw")}.
           </h1>
-          <p className="max-w-[60ch] text-[0.95rem] leading-[1.55] text-muted-foreground">
+          <p className="max-w-[60ch] text-[0.88rem] leading-[1.5] text-muted-foreground md:text-[0.95rem] md:leading-[1.55]">
             Diagramy procesów, flowcharty, mapy myśli. Każda kanwa trzyma węzły i krawędzie
             w tej przestrzeni.
           </p>
