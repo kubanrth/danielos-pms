@@ -4,6 +4,7 @@ import { startTransition, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
+  ChevronLeft,
   Clock,
   Folder,
   FolderOpen,
@@ -12,6 +13,7 @@ import {
   Plus,
   RotateCcw,
   Search,
+  SquarePen,
   StickyNote,
   Trash2,
 } from "lucide-react";
@@ -61,12 +63,24 @@ export interface ActiveNote {
 // F9-15 + F11-23 (#14): Apple-Notes-like 3-column layout with iOS parity:
 // smart folders (Pinned/Recent/Trash), search, soft delete + restore,
 // rich text via Tiptap.
+//
+// F12-K45: mobile redesign 1:1 z iOS Notes — desktop dalej trzyma 3
+// kolumny obok siebie, ale na mobile pokazujemy TYLKO jeden "ekran"
+// na raz (folders → list → editor), z back-chevron'em w headerze i
+// pełną szerokością ekranu. Stan ekranu czytamy z URL params:
+//   - brak folderId i noteId   →  folders view
+//   - folderId (lub q)         →  list view
+//   - noteId                   →  editor view
+// Back chevron robi standardową Next.js navigation (router push) — Browser
+// Back History też naturalnie działa.
 export function NotesWorkspace({
   folders,
   notes,
   totalByFolder,
   selectedFolder,
   searchQuery,
+  hasFolderParam,
+  hasNoteParam,
   activeNote,
 }: {
   folders: NoteFolderRow[];
@@ -74,22 +88,46 @@ export function NotesWorkspace({
   totalByFolder: Record<string, number>;
   selectedFolder: string;
   searchQuery: string;
+  hasFolderParam: boolean;
+  hasNoteParam: boolean;
   activeNote: ActiveNote | null;
 }) {
+  // Mobile screen selection. Search query także liczy się jako "user
+  // wszedł w listę" — np. po wyszukaniu z folders view chcemy zostać
+  // w list view nawet bez folderId.
+  const mobileView: "folders" | "list" | "editor" = hasNoteParam
+    ? "editor"
+    : hasFolderParam || searchQuery
+      ? "list"
+      : "folders";
+
+  // Back nav from editor: wracamy do listy folderu z którego user wszedł.
+  // Jeśli nie było folderu w URL (rzadkie — auto-select pierwszej notki
+  // przy /my/notes), wracamy do folders.
+  const editorBackHref = hasFolderParam
+    ? `/my/notes?folderId=${selectedFolder}`
+    : "/my/notes";
+
   return (
     <div className="flex h-[calc(100dvh-0px)] overflow-hidden">
       <FoldersColumn
         folders={folders}
         totalByFolder={totalByFolder}
         selectedFolder={selectedFolder}
+        hideOnMobile={mobileView !== "folders"}
       />
       <NotesListColumn
         notes={notes}
         activeNoteId={activeNote?.id ?? null}
         selectedFolder={selectedFolder}
         searchQuery={searchQuery}
+        hideOnMobile={mobileView !== "list"}
       />
-      <EditorColumn note={activeNote} folders={folders} />
+      <EditorColumn
+        note={activeNote}
+        hideOnMobile={mobileView !== "editor"}
+        backHref={editorBackHref}
+      />
     </div>
   );
 }
@@ -100,20 +138,36 @@ function FoldersColumn({
   folders,
   totalByFolder,
   selectedFolder,
+  hideOnMobile,
 }: {
   folders: NoteFolderRow[];
   totalByFolder: Record<string, number>;
   selectedFolder: string;
+  hideOnMobile: boolean;
 }) {
   return (
-    <aside className="flex w-[240px] shrink-0 flex-col gap-2 overflow-y-auto border-r border-border bg-card/60 p-3">
-      <div className="px-2 pt-1 pb-2">
+    <aside
+      className={`flex w-full flex-col gap-2 overflow-y-auto border-r border-border bg-card/60 p-3 md:w-[240px] md:shrink-0 ${
+        hideOnMobile ? "max-md:hidden" : ""
+      }`}
+    >
+      {/* Mobile-only big iOS-style title */}
+      <div className="md:hidden flex items-center justify-between px-1 pb-3 pt-2">
+        <span className="font-display text-[1.7rem] font-bold tracking-[-0.02em]">
+          Foldery
+        </span>
+      </div>
+
+      {/* Desktop eyebrow */}
+      <div className="max-md:hidden px-2 pt-1 pb-2">
         <span className="eyebrow">Notatnik</span>
       </div>
 
       {/* F11-23: smart folders (iOS parity). Pinned + Recent + Trash. */}
+      {/* F12-K45: na mobile "Wszystkie" → ?folderId=all żeby tap przeskoczył
+          do listy (mobileView=list); desktop działa tak samo. */}
       <FolderLink
-        href="/my/notes"
+        href="/my/notes?folderId=all"
         active={selectedFolder === "all"}
         label="Wszystkie"
         count={totalByFolder.all ?? 0}
@@ -176,11 +230,13 @@ function FolderLink({
     <Link
       href={href}
       data-active={active ? "true" : "false"}
-      className="flex items-center gap-2 rounded-md px-2 py-1.5 text-[0.88rem] transition-colors hover:bg-accent/60 data-[active=true]:bg-primary/10 data-[active=true]:text-foreground"
+      className="flex items-center gap-2 rounded-md px-2 py-2.5 text-[0.95rem] transition-colors hover:bg-accent/60 data-[active=true]:bg-primary/10 data-[active=true]:text-foreground md:py-1.5 md:text-[0.88rem]"
     >
       {icon}
       <span className="flex-1 truncate">{label}</span>
-      <span className="font-mono text-[0.62rem] text-muted-foreground">{count}</span>
+      <span className="font-mono text-[0.7rem] text-muted-foreground md:text-[0.62rem]">
+        {count}
+      </span>
     </Link>
   );
 }
@@ -243,11 +299,13 @@ function FolderRow({
         href={`/my/notes?folderId=${folder.id}`}
         data-active={active ? "true" : "false"}
         onDoubleClick={() => setRenaming(true)}
-        className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-[0.88rem] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground data-[active=true]:bg-primary/10 data-[active=true]:text-foreground"
+        className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2.5 text-[0.95rem] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground data-[active=true]:bg-primary/10 data-[active=true]:text-foreground md:py-1.5 md:text-[0.88rem]"
       >
         <Folder size={13} className="text-primary/70 shrink-0" />
         <span className="flex-1 truncate">{folder.name}</span>
-        <span className="font-mono text-[0.62rem] text-muted-foreground">{count}</span>
+        <span className="font-mono text-[0.7rem] text-muted-foreground md:text-[0.62rem]">
+          {count}
+        </span>
       </Link>
       <form
         action={(fd) => startTransition(() => deleteNoteFolderAction(fd))}
@@ -258,7 +316,7 @@ function FolderRow({
           type="submit"
           aria-label="Usuń folder"
           title="Usuń folder"
-          className="grid h-5 w-5 shrink-0 place-items-center rounded-sm text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+          className="grid h-5 w-5 shrink-0 place-items-center rounded-sm text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100"
         >
           <Trash2 size={11} />
         </button>
@@ -286,16 +344,16 @@ function NewFolderForm() {
         required
         maxLength={80}
         placeholder="nowy folder"
-        className="h-8 flex-1 rounded-md border border-transparent bg-background px-2 text-[0.82rem] outline-none placeholder:text-muted-foreground/60 focus:border-primary/40"
+        className="h-9 flex-1 rounded-md border border-transparent bg-background px-2 text-[0.9rem] outline-none placeholder:text-muted-foreground/60 focus:border-primary/40 md:h-8 md:text-[0.82rem]"
       />
       <button
         type="submit"
         disabled={!name.trim()}
         aria-label="Dodaj folder"
         title="Dodaj folder (Enter)"
-        className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+        className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 md:h-7 md:w-7"
       >
-        <Plus size={12} />
+        <Plus size={14} />
       </button>
     </form>
   );
@@ -308,11 +366,13 @@ function NotesListColumn({
   activeNoteId,
   selectedFolder,
   searchQuery,
+  hideOnMobile,
 }: {
   notes: NoteListRow[];
   activeNoteId: string | null;
   selectedFolder: string;
   searchQuery: string;
+  hideOnMobile: boolean;
 }) {
   // F11-23: don't auto-target trash/pinned/recent for create — only
   // concrete folders pre-fill folderId on new notes.
@@ -329,26 +389,56 @@ function NotesListColumn({
   const [search, setSearch] = useState(searchQuery);
 
   // F11-23: debounced search → URL param so refreshes preserve query.
+  // F12-K45: zawsze ustawiaj folderId (incl. "all") gdy w trybie list,
+  // żeby mobile back-chevron zachował odpowiedni state.
   useEffect(() => {
     if (search === searchQuery) return;
     const h = setTimeout(() => {
       const params = new URLSearchParams();
-      if (selectedFolder && selectedFolder !== "all")
-        params.set("folderId", selectedFolder);
+      params.set("folderId", selectedFolder || "all");
       if (search.trim()) params.set("q", search.trim());
-      router.replace(`/my/notes${params.toString() ? `?${params}` : ""}`);
+      router.replace(`/my/notes?${params}`);
     }, 300);
     return () => clearTimeout(h);
   }, [search, searchQuery, selectedFolder, router]);
 
-  // Group by pinned vs. rest — matches Apple Notes grouping. Trash view
-  // skips the grouping (everything is "trashed").
+  const folderLabel = folderLabelFor(selectedFolder);
+
+  // F12-K45: pinned na górze + reszta time-grouped (iOS parity:
+  // "Dzisiaj" / "Wczoraj" / "Poprzednie 7 dni" / "Poprzednie 30 dni" /
+  // per-month). Trash nie grupuje (i tak wszystko "stale").
   const pinned = isTrash ? [] : notes.filter((n) => n.pinned);
   const rest = isTrash ? notes : notes.filter((n) => !n.pinned);
+  const timeGroups = groupNotesByTime(rest);
 
   return (
-    <aside className="flex w-[320px] shrink-0 flex-col overflow-hidden border-r border-border bg-background">
+    <aside
+      className={`flex w-full flex-col overflow-hidden border-r border-border bg-background md:w-[320px] md:shrink-0 ${
+        hideOnMobile ? "max-md:hidden" : ""
+      }`}
+    >
+      {/* Mobile-only: back chevron + folder label */}
+      <div className="md:hidden flex items-center gap-1 border-b border-border px-2 py-2">
+        <Link
+          href="/my/notes"
+          aria-label="Wróć do folderów"
+          className="flex items-center gap-1 rounded-md px-1 py-1 text-primary transition-colors hover:bg-accent"
+        >
+          <ChevronLeft size={22} />
+          <span className="font-mono text-[0.7rem] uppercase tracking-[0.14em]">
+            Foldery
+          </span>
+        </Link>
+      </div>
+
       <div className="flex flex-col gap-2 border-b border-border px-4 py-3">
+        {/* Mobile-only big iOS-style title for selected folder */}
+        <div className="md:hidden">
+          <span className="font-display text-[1.7rem] font-bold tracking-[-0.02em]">
+            {folderLabel}
+          </span>
+        </div>
+
         <div className="flex items-center justify-between">
           <span className="eyebrow">
             {isTrash
@@ -362,7 +452,7 @@ function NotesListColumn({
           {!isTrash ? (
             <form
               action={(fd) => startTransition(() => createNoteAction(fd))}
-              className="m-0"
+              className="m-0 max-md:hidden"
             >
               <input type="hidden" name="folderId" value={folderId} />
               <button
@@ -392,13 +482,13 @@ function NotesListColumn({
 
         {/* F11-23: search bar (Apple Notes parity). Filtruje po title +
             content (snippet). Debounced 300ms → URL param. */}
-        <div className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 transition-colors focus-within:border-primary/60">
-          <Search size={11} className="text-muted-foreground" />
+        <div className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1.5 transition-colors focus-within:border-primary/60 md:py-1">
+          <Search size={12} className="text-muted-foreground" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Szukaj…"
-            className="flex-1 bg-transparent text-[0.82rem] outline-none placeholder:text-muted-foreground/60"
+            className="flex-1 bg-transparent text-[0.92rem] outline-none placeholder:text-muted-foreground/60 md:text-[0.82rem]"
           />
           {search && (
             <button
@@ -413,7 +503,7 @@ function NotesListColumn({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto pb-24 md:pb-0">
         {notes.length === 0 ? (
           <div className="flex h-full min-h-[200px] flex-col items-center justify-center px-6 text-center">
             <StickyNote size={22} className="text-muted-foreground/60" />
@@ -428,44 +518,90 @@ function NotesListColumn({
           <>
             {pinned.length > 0 && (
               <>
-                <div className="px-4 pt-3 pb-1 font-mono text-[0.58rem] uppercase tracking-[0.16em] text-muted-foreground">
+                <div className="px-4 pt-3 pb-1 font-mono text-[0.62rem] uppercase tracking-[0.16em] text-muted-foreground md:text-[0.58rem]">
                   Przypięte
                 </div>
                 {pinned.map((n) => (
-                  <NoteCard key={n.id} note={n} active={n.id === activeNoteId} />
+                  <NoteCard
+                    key={n.id}
+                    note={n}
+                    active={n.id === activeNoteId}
+                    selectedFolder={selectedFolder}
+                  />
                 ))}
               </>
             )}
-            {rest.length > 0 && pinned.length > 0 && (
-              <div className="mt-1 px-4 pt-3 pb-1 font-mono text-[0.58rem] uppercase tracking-[0.16em] text-muted-foreground">
-                Pozostałe
+            {timeGroups.map((g) => (
+              <div key={g.key}>
+                <div className="px-4 pt-3 pb-1 font-mono text-[0.62rem] uppercase tracking-[0.16em] text-muted-foreground md:text-[0.58rem]">
+                  {g.label}
+                </div>
+                {g.notes.map((n) => (
+                  <NoteCard
+                    key={n.id}
+                    note={n}
+                    active={n.id === activeNoteId}
+                    selectedFolder={selectedFolder}
+                  />
+                ))}
               </div>
-            )}
-            {rest.map((n) => (
-              <NoteCard key={n.id} note={n} active={n.id === activeNoteId} />
             ))}
           </>
         )}
       </div>
+
+      {/* F12-K45: mobile-only bottom FAB — iOS parity (compose-button bottom right). */}
+      {!isTrash && (
+        <form
+          action={(fd) => startTransition(() => createNoteAction(fd))}
+          className="md:hidden fixed bottom-6 right-5 z-30 m-0"
+        >
+          <input type="hidden" name="folderId" value={folderId} />
+          <button
+            type="submit"
+            aria-label="Nowa notatka"
+            title="Nowa notatka"
+            className="grid h-14 w-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-[0_18px_40px_-12px_rgba(10,10,40,0.45)] transition-transform active:scale-95"
+          >
+            <SquarePen size={20} />
+          </button>
+        </form>
+      )}
     </aside>
   );
 }
 
-function NoteCard({ note, active }: { note: NoteListRow; active: boolean }) {
+function NoteCard({
+  note,
+  active,
+  selectedFolder,
+}: {
+  note: NoteListRow;
+  active: boolean;
+  selectedFolder: string;
+}) {
+  // F12-K45: link zawsze niesie folderId (ten z którego user wszedł),
+  // żeby back-chevron z editora wiedział dokąd wrócić.
+  const folderForBack =
+    selectedFolder && selectedFolder !== "all"
+      ? selectedFolder
+      : note.folderId
+        ? note.folderId
+        : "all";
   return (
     <Link
-      href={`/my/notes?noteId=${note.id}${note.folderId ? `&folderId=${note.folderId}` : ""}`}
+      href={`/my/notes?folderId=${folderForBack}&noteId=${note.id}`}
       data-active={active ? "true" : "false"}
-      className="block border-b border-border px-4 py-3 transition-colors hover:bg-accent/40 data-[active=true]:bg-primary/10"
+      className="block border-b border-border px-4 py-3 transition-colors hover:bg-accent/40 data-[active=true]:bg-primary/10 active:bg-accent/60"
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="truncate font-display text-[0.95rem] font-semibold leading-tight tracking-[-0.01em]">
+        <span className="truncate font-display text-[1rem] font-semibold leading-tight tracking-[-0.01em] md:text-[0.95rem]">
           {note.title || "Bez tytułu"}
         </span>
         {note.pinned && <Pin size={11} className="shrink-0 text-amber-500" />}
       </div>
-      <div className="mt-1 flex items-center gap-2 text-[0.78rem] text-muted-foreground">
-        <span className="shrink-0 font-mono text-[0.58rem] uppercase tracking-[0.14em]">
+      <div className="mt-1 flex items-center gap-2 text-[0.82rem] text-muted-foreground md:text-[0.78rem]">
+        <span className="shrink-0 font-mono text-[0.6rem] uppercase tracking-[0.14em] md:text-[0.58rem]">
           {formatShortDateTime(note.updatedAt)}
         </span>
         <span className="truncate">{note.snippet || "Brak dodatkowego tekstu"}</span>
@@ -478,14 +614,20 @@ function NoteCard({ note, active }: { note: NoteListRow; active: boolean }) {
 
 function EditorColumn({
   note,
-  folders,
+  hideOnMobile,
+  backHref,
 }: {
   note: ActiveNote | null;
-  folders: NoteFolderRow[];
+  hideOnMobile: boolean;
+  backHref: string;
 }) {
   if (!note) {
     return (
-      <section className="flex flex-1 items-center justify-center bg-background">
+      <section
+        className={`flex flex-1 items-center justify-center bg-background ${
+          hideOnMobile ? "max-md:hidden" : ""
+        }`}
+      >
         <div className="max-w-[320px] text-center text-muted-foreground">
           <StickyNote size={28} className="mx-auto text-muted-foreground/50" />
           <p className="mt-3 font-display text-[1rem] font-semibold text-foreground">
@@ -498,10 +640,25 @@ function EditorColumn({
       </section>
     );
   }
-  return <NoteEditor key={note.id} note={note} folders={folders} />;
+  return (
+    <NoteEditor
+      key={note.id}
+      note={note}
+      hideOnMobile={hideOnMobile}
+      backHref={backHref}
+    />
+  );
 }
 
-function NoteEditor({ note, folders }: { note: ActiveNote; folders: NoteFolderRow[] }) {
+function NoteEditor({
+  note,
+  hideOnMobile,
+  backHref,
+}: {
+  note: ActiveNote;
+  hideOnMobile: boolean;
+  backHref: string;
+}) {
   const [title, setTitle] = useState(note.title);
   const [doc, setDoc] = useState<RichTextDoc | null>(note.contentJson);
   const [savedAt, setSavedAt] = useState<string | null>(null);
@@ -528,8 +685,101 @@ function NoteEditor({ note, folders }: { note: ActiveNote; folders: NoteFolderRo
   }, [title, doc, note.id, note.title, note.contentJson, isTrashed]);
 
   return (
-    <section className="flex flex-1 flex-col overflow-hidden bg-background">
-      <header className="flex items-center gap-3 border-b border-border px-6 py-3">
+    <section
+      className={`flex flex-1 flex-col overflow-hidden bg-background ${
+        hideOnMobile ? "max-md:hidden" : ""
+      }`}
+    >
+      {/* Mobile-only: back chevron header */}
+      <div className="md:hidden flex items-center gap-1 border-b border-border px-2 py-2">
+        <Link
+          href={backHref}
+          aria-label="Wróć do listy notatek"
+          className="flex items-center gap-1 rounded-md px-1 py-1 text-primary transition-colors hover:bg-accent"
+        >
+          <ChevronLeft size={22} />
+          <span className="font-mono text-[0.7rem] uppercase tracking-[0.14em]">
+            Notatki
+          </span>
+        </Link>
+
+        {/* Mobile actions: pin + trash, na prawo (kompakt) */}
+        <div className="ml-auto flex items-center gap-1">
+          {isTrashed ? (
+            <>
+              <form
+                action={(fd) => startTransition(() => restoreNoteAction(fd))}
+                className="m-0"
+              >
+                <input type="hidden" name="id" value={note.id} />
+                <button
+                  type="submit"
+                  aria-label="Przywróć"
+                  title="Przywróć z kosza"
+                  className="grid h-9 w-9 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <RotateCcw size={16} />
+                </button>
+              </form>
+              <form
+                action={(fd) => startTransition(() => permanentDeleteNoteAction(fd))}
+                className="m-0"
+              >
+                <input type="hidden" name="id" value={note.id} />
+                <button
+                  type="submit"
+                  aria-label="Usuń trwale"
+                  title="Usuń na zawsze"
+                  className="grid h-9 w-9 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </form>
+            </>
+          ) : (
+            <>
+              <form
+                action={(fd) => startTransition(() => togglePinNoteAction(fd))}
+                className="m-0"
+              >
+                <input type="hidden" name="id" value={note.id} />
+                <input
+                  type="hidden"
+                  name="next"
+                  value={note.pinned ? "false" : "true"}
+                />
+                <button
+                  type="submit"
+                  aria-label={note.pinned ? "Odepnij" : "Przypnij"}
+                  title={note.pinned ? "Odepnij" : "Przypnij"}
+                  className="grid h-9 w-9 place-items-center rounded-md text-muted-foreground transition-colors hover:text-amber-500 data-[on=true]:text-amber-500"
+                  data-on={note.pinned ? "true" : "false"}
+                >
+                  {note.pinned ? <Pin size={16} /> : <PinOff size={16} />}
+                </button>
+              </form>
+
+              <form
+                action={(fd) => startTransition(() => deleteNoteAction(fd))}
+                className="m-0"
+              >
+                <input type="hidden" name="id" value={note.id} />
+                <button
+                  type="submit"
+                  aria-label="Usuń (do kosza)"
+                  title="Przenieś do kosza"
+                  className="grid h-9 w-9 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </form>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Desktop header — meta row + actions */}
+      <header className="max-md:hidden flex items-center gap-3 border-b border-border px-6 py-3">
         <span className="font-mono text-[0.58rem] uppercase tracking-[0.14em] text-muted-foreground">
           {formatLongDateTime(note.updatedAt)}
         </span>
@@ -613,24 +863,36 @@ function NoteEditor({ note, folders }: { note: ActiveNote; folders: NoteFolderRo
                   <Trash2 size={14} />
                 </button>
               </form>
-
-              {/* F12-K19: folder-picker dropdown removed na żądanie klienta —
-                  wyglądał jak filter w prawym górnym rogu, mylący. Move-to-
-                  folder dalej możliwy przez folder list w lewej kolumnie
-                  (drag) jeśli kiedyś wrócimy. */}
             </>
           )}
         </div>
       </header>
 
-      <div className="flex flex-1 flex-col overflow-y-auto px-8 py-6">
+      <div className="flex flex-1 flex-col overflow-y-auto px-4 py-4 md:px-8 md:py-6">
+        {/* Mobile-only meta row (date + saved) */}
+        <div className="md:hidden mb-3 flex items-center gap-3">
+          <span className="font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground">
+            {formatLongDateTime(note.updatedAt)}
+          </span>
+          {savedAt && !isTrashed && (
+            <span className="font-mono text-[0.6rem] uppercase tracking-[0.14em] text-primary">
+              zapisano {savedAt}
+            </span>
+          )}
+          {isTrashed && (
+            <span className="font-mono text-[0.6rem] uppercase tracking-[0.14em] text-destructive">
+              🗑 w koszu
+            </span>
+          )}
+        </div>
+
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Tytuł"
           maxLength={200}
           readOnly={isTrashed}
-          className="w-full border-0 bg-transparent pb-2 font-display text-[2rem] font-bold leading-tight tracking-[-0.02em] outline-none placeholder:text-muted-foreground/40"
+          className="w-full border-0 bg-transparent pb-2 font-display text-[1.6rem] font-bold leading-tight tracking-[-0.02em] outline-none placeholder:text-muted-foreground/40 md:text-[2rem]"
         />
         {/* F12-K24: pełny toolbar w notatniku — bold/italic/strike/
             nagłówki/listy/cytat/kod/link + tabele + kolor tekstu +
@@ -666,4 +928,81 @@ function formatShortDateTime(iso: string): string {
 function formatLongDateTime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleString("pl-PL", { dateStyle: "long", timeStyle: "short" });
+}
+
+// F12-K45: iOS-Notes-style time grouping for notes list.
+// "Dzisiaj" / "Wczoraj" / "Poprzednie 7 dni" / "Poprzednie 30 dni" /
+// per-month for older.
+function groupNotesByTime(
+  notes: NoteListRow[],
+): Array<{ key: string; label: string; notes: NoteListRow[] }> {
+  if (notes.length === 0) return [];
+  const now = new Date();
+  const todayStart = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  ).getTime();
+  const yesterdayStart = todayStart - 24 * 60 * 60 * 1000;
+  const weekStart = todayStart - 7 * 24 * 60 * 60 * 1000;
+  const monthStart = todayStart - 30 * 24 * 60 * 60 * 1000;
+
+  const buckets = new Map<
+    string,
+    { label: string; order: number; notes: NoteListRow[] }
+  >();
+  for (const n of notes) {
+    const t = new Date(n.updatedAt).getTime();
+    let key: string;
+    let label: string;
+    let order: number;
+    if (t >= todayStart) {
+      key = "today";
+      label = "Dzisiaj";
+      order = 0;
+    } else if (t >= yesterdayStart) {
+      key = "yesterday";
+      label = "Wczoraj";
+      order = 1;
+    } else if (t >= weekStart) {
+      key = "week";
+      label = "Poprzednie 7 dni";
+      order = 2;
+    } else if (t >= monthStart) {
+      key = "month";
+      label = "Poprzednie 30 dni";
+      order = 3;
+    } else {
+      const d = new Date(n.updatedAt);
+      key = `m-${d.getFullYear()}-${d.getMonth()}`;
+      const monthName = d.toLocaleDateString("pl-PL", {
+        month: "long",
+        year: "numeric",
+      });
+      label = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+      // Newer months sort first within "older" bucket.
+      order = 1000 - (d.getFullYear() * 12 + d.getMonth());
+    }
+    const existing = buckets.get(key);
+    if (existing) existing.notes.push(n);
+    else buckets.set(key, { label, order, notes: [n] });
+  }
+  return Array.from(buckets.entries())
+    .sort((a, b) => a[1].order - b[1].order)
+    .map(([key, g]) => ({ key, label: g.label, notes: g.notes }));
+}
+
+function folderLabelFor(selectedFolder: string): string {
+  switch (selectedFolder) {
+    case "all":
+      return "Wszystkie";
+    case "pinned":
+      return "Przypięte";
+    case "recent":
+      return "Ostatnie 30 dni";
+    case "trash":
+      return "Kosz";
+    default:
+      return "Notatki";
+  }
 }

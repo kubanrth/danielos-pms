@@ -47,6 +47,11 @@ export default async function MyNotesPage({
 
   const selectedFolder = params.folderId ?? "all";
   const query = (params.q ?? "").trim().toLowerCase();
+  // F12-K45: mobile UX (iOS-Notes parity) potrzebuje wiedzieć czy URL
+  // ma EXPLICIT params, żeby zdecydować który "ekran" pokazać na mobile
+  // (folders list → notes list → editor). Desktop nie używa tych flag.
+  const hasFolderParam = params.folderId !== undefined;
+  const hasNoteParam = params.noteId !== undefined;
 
   let filteredNotes;
   switch (selectedFolder) {
@@ -102,6 +107,8 @@ export default async function MyNotesPage({
         }}
         selectedFolder={selectedFolder}
         searchQuery={query}
+        hasFolderParam={hasFolderParam}
+        hasNoteParam={hasNoteParam}
         activeNote={
           activeNote
             ? {
