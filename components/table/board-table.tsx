@@ -1145,7 +1145,7 @@ export function BoardTable({
       </div>
       <div className="flex items-center justify-between border-t border-border px-4 py-2 font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground">
         <span>{tasks.length} {taskPl(tasks.length)}</span>
-        <span>
+        <span className="max-md:hidden">
           hint · najedź na zadanie i wciśnij <kbd className="rounded-sm border border-border bg-muted px-1 py-0.5 text-[0.58rem]">M</kbd> aby przypisać osobę
         </span>
       </div>
