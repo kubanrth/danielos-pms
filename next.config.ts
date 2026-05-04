@@ -9,6 +9,10 @@ import { withSentryConfig } from "@sentry/nextjs";
 const withAnalyzer = bundleAnalyzer({ enabled: process.env.ANALYZE === "true" });
 
 const nextConfig: NextConfig = {
+  // F12-K49: standalone output dla Docker deployu na Hetzner/Coolify.
+  // .next/standalone zawiera zminimalizowany server.js + tylko wymagane
+  // dependencies — image ~150MB zamiast ~500MB.
+  output: "standalone",
   turbopack: {
     root: path.join(__dirname),
   },

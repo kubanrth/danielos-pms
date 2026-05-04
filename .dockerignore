@@ -1,0 +1,15 @@
+node_modules
+.next
+.env
+.env.local
+.env.*.local
+.git
+.gitignore
+*.log
+.DS_Store
+.vscode
+.idea
+README.md
+.claude
+scripts/f8b-diag.*
+temporary screenshots
