@@ -8,7 +8,7 @@
 // shake what it doesn't render — TanStack Table only mounts visible
 // cells anyway.
 
-import { startTransition, useState } from "react";
+import { startTransition, useLayoutEffect, useRef, useState } from "react";
 import { Check, ChevronDown, ExternalLink, Mail, Phone, Star, X } from "lucide-react";
 import { setTaskCustomValueAction } from "@/app/(app)/w/[workspaceId]/b/[boardId]/actions";
 import {
@@ -360,6 +360,20 @@ function SelectMenu({
   onPick: (value: string) => void;
   multi?: boolean;
 }) {
+  // F12-K54: gdy dropdown otwiera się przy ostatnim wierszu tabeli,
+  // top-[calc(100%+4px)] uciekał poza viewport. Sprawdzamy po mount,
+  // czy bottom dropdownu mieści się — jeśli nie, flipujemy nad anchor.
+  const ulRef = useRef<HTMLUListElement>(null);
+  const [flipUp, setFlipUp] = useState(false);
+
+  useLayoutEffect(() => {
+    if (!ulRef.current) return;
+    const rect = ulRef.current.getBoundingClientRect();
+    if (rect.bottom > window.innerHeight - 8) {
+      setFlipUp(true);
+    }
+  }, []);
+
   return (
     <>
       <button
@@ -368,7 +382,12 @@ function SelectMenu({
         onClick={onClose}
         className="fixed inset-0 z-40 cursor-default"
       />
-      <ul className="absolute left-0 top-[calc(100%+4px)] z-50 max-h-60 w-48 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-[0_10px_30px_-12px_rgba(10,10,40,0.25)]">
+      <ul
+        ref={ulRef}
+        className={`absolute left-0 z-50 max-h-60 w-48 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-[0_10px_30px_-12px_rgba(10,10,40,0.25)] ${
+          flipUp ? "bottom-[calc(100%+4px)]" : "top-[calc(100%+4px)]"
+        }`}
+      >
         {opts.length === 0 && (
           <li className="px-2 py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted-foreground/70">
             brak opcji — skonfiguruj kolumnę

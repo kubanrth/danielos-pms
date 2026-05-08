@@ -57,11 +57,17 @@ export async function fetchTaskDetail(
             orderBy: [{ orderIndex: "asc" }, { startAt: "asc" }],
             select: { id: true, title: true, startAt: true, stopAt: true },
           },
+          // F12-K54: custom kolumny z tabeli — pokazujemy je w karcie
+          // zadania nad sekcją "Czas pracy", w tej samej kolejności
+          // co w widoku tabeli.
+          customColumns: { orderBy: { order: "asc" } },
         },
       },
       assignees: { select: { userId: true } },
       tags: { select: { tagId: true } },
       subtasks: { orderBy: { order: "asc" } },
+      // F12-K54: custom values per-task (klucz = TableColumn.id)
+      customValues: true,
       poll: {
         include: {
           options: { orderBy: { order: "asc" } },
@@ -228,5 +234,16 @@ export async function fetchTaskDetail(
       : null,
     canManagePoll: can(ctx.role, "poll.manage"),
     canVote: can(ctx.role, "poll.vote"),
+    // F12-K54: custom kolumny + ich wartości dla bieżącego task'a
+    customColumns: task.board.customColumns.map((c) => ({
+      id: c.id,
+      name: c.name,
+      // Prisma string enum → cast na FieldType union (te same wartości).
+      type: c.type as import("@/lib/table-fields").FieldType,
+      options: c.options as unknown,
+    })),
+    customValues: Object.fromEntries(
+      task.customValues.map((v) => [v.columnId, v.valueText ?? ""]),
+    ),
   };
 }

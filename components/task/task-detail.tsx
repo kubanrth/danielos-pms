@@ -15,6 +15,8 @@ import {
 import { type RichTextDoc } from "@/components/task/rich-text-editor";
 import { DescriptionSection } from "@/components/task/description-section";
 import { TaskTimer } from "@/components/task/task-timer";
+import { FieldCell } from "@/components/table/field-cells";
+import { parseFieldOptions } from "@/lib/table-fields";
 import { CommentsSection, type CommentItem } from "@/components/task/comments-section";
 import { ActivityLog, type ActivityEntry } from "@/components/task/activity-log";
 import { AttachmentsSection, type AttachmentItem } from "@/components/task/attachments-section";
@@ -78,6 +80,16 @@ export interface TaskDetailProps {
   poll: PollData | null;
   canManagePoll: boolean;
   canVote: boolean;
+  // F12-K54: custom kolumny tabeli + ich wartości — wyświetlamy w karcie
+  // zadania nad sekcją "Czas pracy". Bidirectional sync ze stroną tabeli
+  // (saveTaskCustomValueAction revalidate'uje obie).
+  customColumns: {
+    id: string;
+    name: string;
+    type: import("@/lib/table-fields").FieldType;
+    options: unknown;
+  }[];
+  customValues: Record<string, string>;
 }
 
 
@@ -105,6 +117,8 @@ export function TaskDetail({
   canManagePoll,
   canVote,
   currentUserId,
+  customColumns,
+  customValues,
 }: TaskDetailProps) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState<UpdateTaskState, FormData>(
@@ -263,6 +277,34 @@ export function TaskDetail({
           </div>
         )}
       </form>
+
+      {/* F12-K54: custom kolumny tabeli — pokazują tutaj te same wartości
+          co w widoku tabeli, edycja w obie strony. Tylko gdy board ma
+          jakieś custom columns (inaczej sekcja jest hidden). */}
+      {customColumns.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <span className="eyebrow">Pola dodatkowe</span>
+          <div className="grid gap-3 rounded-xl border border-border bg-card/50 p-4 sm:grid-cols-2">
+            {customColumns.map((col) => (
+              <div key={col.id} className="flex flex-col gap-1.5">
+                <span className="font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted-foreground">
+                  {col.name}
+                </span>
+                <div className="min-h-[34px] rounded-md border border-border bg-background px-2 py-1.5">
+                  <FieldCell
+                    taskId={task.id}
+                    columnId={col.id}
+                    type={col.type}
+                    raw={customValues[col.id] ?? ""}
+                    options={parseFieldOptions(col.options)}
+                    disabled={!canEdit}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* F12-K40: time tracking — Rozpocznij/Zatrzymaj/Zakończ. */}
       <TaskTimer
