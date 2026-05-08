@@ -244,3 +244,58 @@ export async function deleteWorkspaceAction(
   revalidatePath("/workspaces");
   redirect("/workspaces");
 }
+
+// F12-K51: reorder workspace'ów — UP/DOWN strzałki w UI.
+// Akcja swap'uje order'y dwóch sąsiednich workspace'ów (proste, jednoznaczne).
+async function swapWorkspaceOrder(formData: FormData, direction: "up" | "down") {
+  const session = await auth();
+  if (!session?.user) return;
+  const userId = session.user.id;
+
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+
+  const list = await db.workspace.findMany({
+    where: {
+      deletedAt: null,
+      OR: [
+        { ownerId: userId },
+        { memberships: { some: { userId } } },
+      ],
+    },
+    orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+    select: { id: true, order: true },
+  });
+
+  const idx = list.findIndex((w) => w.id === id);
+  if (idx === -1) return;
+
+  const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+  if (swapIdx < 0 || swapIdx >= list.length) return; // już na krawędzi
+
+  const current = list[idx];
+  const swap = list[swapIdx];
+
+  // Swap order'ów obu workspace'ów. Float order ⇒ wymiana wartości
+  // wystarczy, bez przepisywania reszty kolumny.
+  await db.$transaction([
+    db.workspace.update({
+      where: { id: current.id },
+      data: { order: swap.order },
+    }),
+    db.workspace.update({
+      where: { id: swap.id },
+      data: { order: current.order },
+    }),
+  ]);
+
+  revalidatePath("/workspaces");
+}
+
+export async function moveWorkspaceUpAction(formData: FormData) {
+  await swapWorkspaceOrder(formData, "up");
+}
+
+export async function moveWorkspaceDownAction(formData: FormData) {
+  await swapWorkspaceOrder(formData, "down");
+}

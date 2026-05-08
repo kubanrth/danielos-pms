@@ -163,3 +163,58 @@ export async function createBoardAction(
   const firstView = viewTypeToName(firstType) ?? "table";
   redirect(`/w/${parsed.data.workspaceId}/b/${board.id}/${firstView}`);
 }
+
+// F12-K51: reorder tablic w obrębie workspace'u — UP/DOWN strzałki w UI.
+// Akcja swap'uje order'y dwóch sąsiednich boardów. Wymaga task.update
+// uprawnienia (czyli ADMIN albo MEMBER, nie VIEWER).
+async function swapBoardOrder(formData: FormData, direction: "up" | "down") {
+  const workspaceId = String(formData.get("workspaceId") ?? "");
+  const boardId = String(formData.get("boardId") ?? "");
+  if (!workspaceId || !boardId) return;
+
+  const ctx = await requireWorkspaceAction(workspaceId, "task.update");
+
+  const list = await db.board.findMany({
+    where: { workspaceId, deletedAt: null },
+    orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+    select: { id: true, order: true },
+  });
+
+  const idx = list.findIndex((b) => b.id === boardId);
+  if (idx === -1) return;
+
+  const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+  if (swapIdx < 0 || swapIdx >= list.length) return;
+
+  const current = list[idx];
+  const swap = list[swapIdx];
+
+  await db.$transaction([
+    db.board.update({
+      where: { id: current.id },
+      data: { order: swap.order },
+    }),
+    db.board.update({
+      where: { id: swap.id },
+      data: { order: current.order },
+    }),
+  ]);
+
+  await writeAudit({
+    workspaceId,
+    objectType: "Board",
+    objectId: boardId,
+    actorId: ctx.userId,
+    action: "board.reordered",
+  });
+
+  revalidatePath(`/w/${workspaceId}`);
+}
+
+export async function moveBoardUpAction(formData: FormData) {
+  await swapBoardOrder(formData, "up");
+}
+
+export async function moveBoardDownAction(formData: FormData) {
+  await swapBoardOrder(formData, "down");
+}

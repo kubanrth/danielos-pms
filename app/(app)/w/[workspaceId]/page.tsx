@@ -1,13 +1,19 @@
 import Link from "next/link";
 import {
   BarChart3,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   GitBranch,
   KanbanSquare,
   Pencil,
   PencilRuler,
   Table2,
 } from "lucide-react";
+import {
+  moveBoardDownAction,
+  moveBoardUpAction,
+} from "@/app/(app)/w/[workspaceId]/b/actions";
 import { db } from "@/lib/db";
 import { requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { can } from "@/lib/permissions";
@@ -65,7 +71,9 @@ export default async function WorkspaceOverviewPage({
                 { memberships: { some: { userId: ctx.userId } } },
               ],
             },
-      orderBy: { createdAt: "asc" },
+      // F12-K51: order'em ustawionym przez user'a (strzałki up/down).
+      // createdAt fallback dla świeżo dodanych z domyślnym order=0.
+      orderBy: [{ order: "asc" }, { createdAt: "asc" }],
       include: {
         statusColumns: { orderBy: { order: "asc" } },
         views: { select: { type: true, name: true } },
@@ -108,7 +116,7 @@ export default async function WorkspaceOverviewPage({
         </div>
       </div>
 
-      {boards.map((board) => {
+      {boards.map((board, idx) => {
         // F9-10: same pill set & filtering as board pages — intersection
         // of workspace.enabledViews with the types this board actually
         // has BoardView rows for.
@@ -119,7 +127,37 @@ export default async function WorkspaceOverviewPage({
         return (
         <section key={board.id} className="flex flex-col gap-4 md:gap-5">
           <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center md:justify-between">
-            <h2 className="font-display text-[1.2rem] font-bold leading-[1.15] tracking-[-0.02em] md:text-[1.5rem]">
+            <div className="flex items-center gap-2">
+              {/* F12-K51: arrows do reorderowania board'ów obok tytułu */}
+              <div className="flex flex-col gap-0.5">
+                <form action={moveBoardUpAction} className="m-0">
+                  <input type="hidden" name="workspaceId" value={workspaceId} />
+                  <input type="hidden" name="boardId" value={board.id} />
+                  <button
+                    type="submit"
+                    disabled={idx === 0}
+                    aria-label="Przesuń tablicę w górę"
+                    title="Przesuń w górę"
+                    className="grid h-5 w-5 place-items-center rounded-sm text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+                  >
+                    <ChevronUp size={11} />
+                  </button>
+                </form>
+                <form action={moveBoardDownAction} className="m-0">
+                  <input type="hidden" name="workspaceId" value={workspaceId} />
+                  <input type="hidden" name="boardId" value={board.id} />
+                  <button
+                    type="submit"
+                    disabled={idx === boards.length - 1}
+                    aria-label="Przesuń tablicę w dół"
+                    title="Przesuń w dół"
+                    className="grid h-5 w-5 place-items-center rounded-sm text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+                  >
+                    <ChevronDown size={11} />
+                  </button>
+                </form>
+              </div>
+              <h2 className="font-display text-[1.2rem] font-bold leading-[1.15] tracking-[-0.02em] md:text-[1.5rem]">
               <Link
                 href={`/w/${workspaceId}/b/${board.id}/table`}
                 className="transition-colors hover:text-primary"
@@ -130,6 +168,7 @@ export default async function WorkspaceOverviewPage({
                 {board._count.tasks} {taskPl(board._count.tasks)}
               </span>
             </h2>
+            </div>
             {/* F12-K47c: desktop pokazuje pill-bar; mobile pokazuje
                 full-width segmented list poniżej (ładniej niż wrapping
                 pills). */}
