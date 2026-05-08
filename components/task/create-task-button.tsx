@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState, startTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import {
   Dialog,
@@ -23,6 +23,7 @@ export function CreateTaskButton({
   boardId: string;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [state, formAction, pending] = useActionState<CreateTaskState, FormData>(
     createTaskAction,
@@ -30,13 +31,22 @@ export function CreateTaskButton({
   );
 
   // On success — use client navigation so @modal intercepting route activates.
+  // F12-K53: zapisujemy returnTo w sessionStorage żeby modal close
+  // wracał do strony skąd user kliknął (table/kanban/etc), nie do
+  // workspace overview ("O projekcie") — bo intercept'em modal jest
+  // pod URL'em /w/[wid]/t/[tid] gdzie underlying page = overview.
   useEffect(() => {
     if (state?.ok) {
       setOpen(false);
+      try {
+        sessionStorage.setItem("taskModalReturnTo", pathname);
+      } catch {
+        // sessionStorage może być wyłączone (private mode safari)
+      }
       router.push(`/w/${workspaceId}/t/${state.taskId}`);
       router.refresh();
     }
-  }, [state, router, workspaceId]);
+  }, [state, router, workspaceId, pathname]);
 
   const fieldError = !state?.ok ? state?.fieldErrors?.title : undefined;
 

@@ -9,10 +9,29 @@ import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 // unmounts naturally. Intercepting routes only apply to soft-nav, so
 // the modal is only reachable from a page that's already in history —
 // router.back() is always safe here.
+//
+// F12-K53: jeśli sessionStorage ma 'taskModalReturnTo' (ustawione przez
+// CreateTaskButton przy create flow), wracamy do tej konkretnej strony
+// zamiast router.back. Bez tego close po Nowe Zadanie wracał do
+// workspace overview ("O projekcie") zamiast do np. table/kanban view
+// skąd user kliknął przycisk.
 export function TaskModalShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
-  const close = () => router.back();
+  const close = () => {
+    let returnTo: string | null = null;
+    try {
+      returnTo = sessionStorage.getItem("taskModalReturnTo");
+      sessionStorage.removeItem("taskModalReturnTo");
+    } catch {
+      /* sessionStorage off — fallback to back */
+    }
+    if (returnTo) {
+      router.push(returnTo);
+    } else {
+      router.back();
+    }
+  };
 
   return (
     <BaseDialog.Root
