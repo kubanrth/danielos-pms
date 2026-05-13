@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
@@ -25,8 +25,17 @@ import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 export function TaskModalShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [open, setOpen] = useState(true);
+  // F12-K56b: idempotency guard. close() leciał 2× przy jednym klik'u X:
+  // - 1: onClick handler na buttonie X
+  // - 2: setOpen(false) → BaseDialog re-render → onOpenChange(false) → close()
+  // Pierwsza wywołka czytała sessionStorage + nawigowała. Druga miała już
+  // empty storage → router.back() → przeskakiwała o dodatkowy poziom
+  // (klient lądował na /workspaces zamiast na board view).
+  const closingRef = useRef(false);
 
   const close = () => {
+    if (closingRef.current) return;
+    closingRef.current = true;
     setOpen(false);
     let returnTo: string | null = null;
     try {
