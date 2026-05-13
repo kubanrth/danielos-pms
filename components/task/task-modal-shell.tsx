@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
@@ -15,10 +16,18 @@ import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 // zamiast router.back. Bez tego close po Nowe Zadanie wracał do
 // workspace overview ("O projekcie") zamiast do np. table/kanban view
 // skąd user kliknął przycisk.
+//
+// F12-K56: prop `open` był wcześniej forced=true bez state. Klik X wołał
+// onOpenChange(false), close() startował navigację, ale prop nadal był
+// true — Base UI nie zamykał dialog'u wizualnie. Wyglądało jakby trzeba
+// było kliknąć 2×. Teraz controlled state `open` — pierwsza akcja
+// natychmiast zamyka UI, potem nawigacja.
 export function TaskModalShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const [open, setOpen] = useState(true);
 
   const close = () => {
+    setOpen(false);
     let returnTo: string | null = null;
     try {
       returnTo = sessionStorage.getItem("taskModalReturnTo");
@@ -35,9 +44,9 @@ export function TaskModalShell({ children }: { children: React.ReactNode }) {
 
   return (
     <BaseDialog.Root
-      open
-      onOpenChange={(open) => {
-        if (!open) close();
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) close();
       }}
     >
       <BaseDialog.Portal>
