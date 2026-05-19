@@ -70,7 +70,19 @@ async function loadAssignments(
       task: {
         include: {
           workspace: { select: { id: true, name: true, slug: true } },
-          board: { select: { id: true, name: true } },
+          // F12-K60: board.statusColumns — listę statusów boardu potrzebujemy
+          // w UI my-tasks żeby klient mógł zmienić status z listy (bug
+          // zgłoszony przez Daniela, wcześniej tylko z otwartego taska).
+          board: {
+            select: {
+              id: true,
+              name: true,
+              statusColumns: {
+                select: { id: true, name: true, colorHex: true },
+                orderBy: { order: "asc" },
+              },
+            },
+          },
           statusColumn: true,
           tags: { include: { tag: true } },
           // F9-13: needed for the assign hotkey "already-assigned"
@@ -197,6 +209,16 @@ export default async function MyTasksPage({
     id: a.task.id,
     title: a.task.title,
     workspaceId: a.task.workspace.id,
+    // F12-K60: boardId + boardStatusColumns potrzebne do inline'owego
+    // StatusPicker'a w wierszu listy. statusColumnId trzymamy jako
+    // current selection.
+    boardId: a.task.board.id,
+    statusColumnId: a.task.statusColumn?.id ?? null,
+    boardStatusColumns: a.task.board.statusColumns.map((s) => ({
+      id: s.id,
+      name: s.name,
+      colorHex: s.colorHex,
+    })),
     workspaceName: a.task.workspace.name,
     boardName: a.task.board.name,
     status: a.task.statusColumn

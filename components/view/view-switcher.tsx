@@ -115,15 +115,18 @@ export function ViewSwitcher({
     ? allViews.filter((v) => enabled.includes(v.name))
     : allViews;
 
+  // F12-K60: iPhone-style liquid-glass tabs (.lg-seg / .lg-seg-btn w
+  // globals.css) — klient zażyczył sobie efekt szkła jak na iOS lock
+  // screen. Active pill = thick frosted disc z białą obwódką, top
+  // sheen i fioletowym inner glow + drop shadow. Działa w light i dark.
   const heightClass =
     size === "sm" ? "h-7 px-2.5 text-[0.76rem]" : "h-8 px-3 text-[0.82rem]";
-  const containerPad = size === "sm" ? "p-0.5 gap-0.5" : "p-1 gap-1";
 
   return (
     <div
       role="tablist"
       aria-label="Widoki tablicy"
-      className={`inline-flex flex-wrap items-center rounded-lg border border-border bg-card shadow-sm ${containerPad}`}
+      className="lg-seg flex-wrap"
     >
       {views.map((v) => {
         const isActive = !activeViewId && v.name === active;
@@ -139,7 +142,7 @@ export function ViewSwitcher({
               role="tab"
               aria-selected={isActive}
               data-active={isActive ? "true" : "false"}
-              className={`inline-flex items-center gap-1.5 rounded-md font-sans font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground ${heightClass} ${canDelete ? "pr-6" : ""}`}
+              className={`lg-seg-btn font-sans focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${heightClass} ${canDelete ? "pr-6" : ""}`}
             >
               {v.icon}
               <span>{v.label}</span>
@@ -181,7 +184,7 @@ export function ViewSwitcher({
               role="tab"
               aria-selected={isActive}
               data-active={isActive ? "true" : "false"}
-              className={`inline-flex items-center gap-1.5 rounded-md font-sans font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary ${heightClass} ${canManage ? "pr-6" : ""}`}
+              className={`lg-seg-btn font-sans focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${heightClass} ${canManage ? "pr-6" : ""}`}
             >
               {DEFAULT_ICONS[c.type]}
               <span className="max-w-[160px] truncate">{c.name}</span>

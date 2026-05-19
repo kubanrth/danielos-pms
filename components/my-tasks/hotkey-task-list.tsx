@@ -6,13 +6,20 @@ import {
   useAssignHotkey,
   type AssignMember,
 } from "@/components/task/assign-hotkey";
+import { StatusPicker } from "@/components/table/status-picker";
 
 export interface TaskListRow {
   id: string;
   title: string;
   workspaceId: string;
+  // F12-K60: boardId + boardStatusColumns + statusColumnId — inline
+  // status picker w liście wymaga listy dostępnych statusów per board.
+  boardId: string;
+  statusColumnId: string | null;
+  boardStatusColumns: { id: string; name: string; colorHex: string }[];
   workspaceName: string;
   boardName: string;
+  // Legacy: zostaje na fallback gdy boardStatusColumns puste (rare).
   status: { name: string; colorHex: string } | null;
   tags: { id: string; name: string; colorHex: string }[];
   stopAt: string | null;
@@ -123,25 +130,49 @@ function TaskRow({
   onMouseEnter: () => void;
   onMouseLeave: () => void;
 }) {
+  // F12-K60: aktualny status w formacie StatusOption (id/name/colorHex).
+  // null gdy task nie ma statusu → picker pokaże "— brak —".
+  const current = row.statusColumnId
+    ? row.boardStatusColumns.find((s) => s.id === row.statusColumnId) ?? null
+    : null;
+
   return (
-    <Link
-      href={`/w/${row.workspaceId}/t/${row.id}`}
+    // F12-K60: dwie zmiany w tym wierszu:
+    // 1) Link zawiera `?from=/my-tasks` żeby task detail wiedział że
+    //    user przyszedł z My Tasks, nie z workspace overview — "Wróć"
+    //    pójdzie z powrotem na listę (a nie na ogólny przegląd).
+    // 2) StatusPicker NAD Link'iem (poza nim), żeby klik w picker nie
+    //    nawigował do task'a. Zostawiamy hover-state na całym wierszu
+    //    przez `<div className="group ...">`.
+    <div
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      className="group flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-accent/60 focus-visible:bg-accent/60 focus-visible:outline-none"
+      className="group flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-accent/60"
     >
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="flex flex-wrap items-center gap-2">
-          {row.status && (
-            <span
-              className="inline-flex h-5 items-center rounded-full px-2 font-mono text-[0.6rem] uppercase tracking-[0.12em] font-semibold"
-              style={{
-                color: row.status.colorHex,
-                background: `${row.status.colorHex}22`,
-              }}
-            >
-              {row.status.name}
-            </span>
+          {row.boardStatusColumns.length > 0 ? (
+            <StatusPicker
+              taskId={row.id}
+              workspaceId={row.workspaceId}
+              boardId={row.boardId}
+              current={current}
+              options={row.boardStatusColumns}
+              canEdit
+              canManageBoard={false}
+            />
+          ) : (
+            row.status && (
+              <span
+                className="inline-flex h-5 items-center rounded-full px-2 font-mono text-[0.6rem] uppercase tracking-[0.12em] font-semibold"
+                style={{
+                  color: row.status.colorHex,
+                  background: `${row.status.colorHex}22`,
+                }}
+              >
+                {row.status.name}
+              </span>
+            )
           )}
           {row.tags.map((tag) => (
             <span
@@ -154,9 +185,12 @@ function TaskRow({
             </span>
           ))}
         </div>
-        <span className="truncate font-display text-[0.98rem] font-semibold leading-tight tracking-[-0.01em] transition-colors group-hover:text-primary">
+        <Link
+          href={`/w/${row.workspaceId}/t/${row.id}?from=${encodeURIComponent("/my-tasks")}`}
+          className="truncate font-display text-[0.98rem] font-semibold leading-tight tracking-[-0.01em] transition-colors hover:text-primary focus-visible:text-primary focus-visible:outline-none"
+        >
           {row.title}
-        </span>
+        </Link>
         <span className="font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground">
           {row.workspaceName} · /{row.boardName}
         </span>
@@ -169,6 +203,6 @@ function TaskRow({
           })}
         </span>
       )}
-    </Link>
+    </div>
   );
 }

@@ -174,3 +174,21 @@ _[tool: done]_
 
 Zrobione — usunąłem trzy "traffic lights" z góry sidebara i pole wyszukiwarki "Szukaj wszędzie". Avatar przesunąłem trochę w dół, żeby górny padding wyglądał naturalnie.
 
+## User
+
+odpal mi tryb jasny
+
+## Assistant
+
+_[tool: str_replace_edit]_
+
+_[tool: str_replace_edit]_
+
+_[tool: str_replace_edit]_
+
+_[tool: done]_
+
+Light mode wymaga osobnych kolorów (poprzednio go wyłączyłem). Dodaję teraz pełen light theme i przywracam przełącznik w Tweakach.Włączony — załaduje się od razu w trybie jasnym. Wszystko zostało dopasowane: ciepły off-white background z miękkimi fioletowo-różowymi blobs w tle, szklany sidebar w jasnym wariancie (frosted białe panele), liquid-glass tabs z białym sheenem i delikatnym fioletowym blaskiem, table/kanban/kalendarz na półprzezroczystych białych panelach z hairline'ami. Akcent pozostał fioletowy (`#7c5cff`).
+
+W Tweakach masz teraz przełącznik **Dark / Light** + 6 kolorów akcentu.
+

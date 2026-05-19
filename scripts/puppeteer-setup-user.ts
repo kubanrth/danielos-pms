@@ -10,7 +10,7 @@
 
 import "dotenv/config";
 import { PrismaClient } from "../lib/generated/prisma/client";
-import { Role } from "../lib/generated/prisma/enums";
+import { Role, ViewType } from "../lib/generated/prisma/enums";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcrypt";
 
@@ -36,10 +36,12 @@ async function main() {
   });
   console.log("user:", user.email, user.id);
 
-  // 2 workspace'y żeby było widać oba swatche w sidebarze.
-  for (const [slug, name] of [
-    ["puppeteer-sst", "SideSideTwo"],
-    ["puppeteer-asd", "asdfdasf"],
+  // 2 workspace'y + board z view'ami żeby było widać sidebar swatches
+  // + view switcher na board page.
+  const boardSlugs: string[] = [];
+  for (const [slug, name, withBoard] of [
+    ["puppeteer-sst", "SideSideTwo", true],
+    ["puppeteer-asd", "asdfdasf", false],
   ] as const) {
     const ws = await db.workspace.upsert({
       where: { slug },
@@ -52,8 +54,73 @@ async function main() {
       create: { workspaceId: ws.id, userId: user.id, role: Role.ADMIN },
     });
     console.log("workspace:", slug, ws.id);
+
+    if (withBoard) {
+      // F12-K60: board z table+kanban+roadmap views żeby test'ować
+      // liquid-glass view switcher.
+      const existingBoard = await db.board.findFirst({
+        where: { workspaceId: ws.id, name: "Test Board" },
+      });
+      const board = existingBoard
+        ? existingBoard
+        : await db.board.create({
+            data: {
+              workspaceId: ws.id,
+              creatorId: user.id,
+              name: "Test Board",
+              statusColumns: {
+                create: [
+                  { name: "Do zrobienia", colorHex: "#64748B", order: 0 },
+                  { name: "W trakcie", colorHex: "#F59E0B", order: 1 },
+                  { name: "Done", colorHex: "#10B981", order: 2 },
+                ],
+              },
+              views: {
+                create: [
+                  { type: ViewType.TABLE, configJson: {}, background: { kind: "color", value: "#F8FAFC" } },
+                  { type: ViewType.KANBAN, configJson: {}, background: { kind: "color", value: "#F8FAFC" } },
+                  { type: ViewType.ROADMAP, configJson: {}, background: { kind: "color", value: "#F8FAFC" } },
+                ],
+              },
+            },
+          });
+      boardSlugs.push(`/w/${ws.id}/b/${board.id}/table`);
+      console.log("board:", board.id);
+
+      // F12-K60: pojedynczy task przypisany do test usera + status
+      // w celu sprawdzenia inline status picker'a w /my-tasks.
+      const cols = await db.statusColumn.findMany({
+        where: { boardId: board.id },
+        orderBy: { order: "asc" },
+      });
+      if (cols.length > 0) {
+        const existingTask = await db.task.findFirst({
+          where: { boardId: board.id, title: "Test task" },
+        });
+        const task = existingTask
+          ? existingTask
+          : await db.task.create({
+              data: {
+                workspaceId: ws.id,
+                boardId: board.id,
+                creatorId: user.id,
+                title: "Test task",
+                statusColumnId: cols[0].id,
+                rowOrder: 1000,
+              },
+            });
+        await db.taskAssignee.upsert({
+          where: { taskId_userId: { taskId: task.id, userId: user.id } },
+          update: {},
+          create: { taskId: task.id, userId: user.id },
+        });
+        console.log("task:", task.id, "(assigned)");
+      }
+    }
   }
 
+  console.log("\nBoards to view:");
+  for (const path of boardSlugs) console.log("  http://localhost:3100" + path);
   console.log("\nDone. Login with:");
   console.log("  email:", TEST_EMAIL);
   console.log("  pw:   ", TEST_PASSWORD);

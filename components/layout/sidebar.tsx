@@ -253,7 +253,12 @@ export function Sidebar({
           saturate(180%), border white-10, rounded 20px, panel shadow
           + top sheen via ::before. Na mobile fullscreen drawer:
           rounded-none, no margin, glass solid (kept blur). */}
-      <div className="relative flex h-full flex-col overflow-hidden border bg-[rgba(28,28,34,0.55)] backdrop-blur-[40px] backdrop-saturate-[1.8] before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:bg-gradient-to-b before:from-white/[0.06] before:to-transparent before:to-30% before:content-[''] md:rounded-[20px] md:border-white/10 md:shadow-[0_0_0_0.5px_rgba(255,255,255,0.05),0_1px_2px_rgba(0,0,0,0.3),0_20px_60px_rgba(0,0,0,0.45)] max-md:rounded-none max-md:border-0">
+      {/* F12-K60: sidebar-glass class (globals.css) niesie wszystkie
+          dual-mode wartości (light: white-glass + dark border + light
+          shadow; dark: dark-glass + white-tinted border + heavy shadow)
+          plus top sheen via ::before. Tailwind tu już tylko layout +
+          rounded-corner toggle dla mobile fullscreen. */}
+      <div className="sidebar-glass relative flex h-full flex-col overflow-hidden backdrop-blur-[40px] backdrop-saturate-[1.8] md:rounded-[20px] max-md:rounded-none max-md:border-0">
       {/* Top: profile + collapse toggle */}
       {/* F12-K41d: gdy collapsed, header przełącza się w pion (avatar
           na górze, chevron pod nim). Inaczej w row 68px szerokości
@@ -261,7 +266,7 @@ export function Sidebar({
           klient nie miał jak rozwinąć sidebar'a z powrotem. */}
       <div
         // F12-K57b: większy padding header'a + avatar/name na mobile.
-        className={`flex gap-2 border-b border-white/[0.05] px-3 py-3 max-md:gap-3 max-md:px-4 max-md:py-4 ${
+        className={`flex gap-2 border-b border-black/5 dark:border-white/[0.05] px-3 py-3 max-md:gap-3 max-md:px-4 max-md:py-4 ${
           collapsed
             ? "flex-col items-center"
             : "items-center justify-between"
@@ -269,7 +274,7 @@ export function Sidebar({
       >
         <Link
           href="/profile"
-          className="flex min-w-0 items-center gap-2.5 rounded-sm px-1.5 py-1 transition-colors hover:bg-white/[0.05] focus-visible:bg-white/[0.07] focus-visible:outline-none max-md:gap-3.5 max-md:rounded-md max-md:px-2 max-md:py-2"
+          className="flex min-w-0 items-center gap-2.5 rounded-sm px-1.5 py-1 transition-colors hover:bg-black/5 dark:hover:bg-white/[0.05] focus-visible:bg-white/[0.07] focus-visible:outline-none max-md:gap-3.5 max-md:rounded-md max-md:px-2 max-md:py-2"
         >
           {/* F12-K59: avatar gradient purple→pink (Apple-system tone) +
               inset top white-35% highlight + soft drop shadow — match
@@ -304,7 +309,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={() => setMobileOpen(false)}
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-white/[0.05] hover:text-foreground md:hidden"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-black/5 dark:hover:bg-white/[0.05] hover:text-foreground md:hidden"
             aria-label="Zamknij menu"
           >
             <X size={20} />
@@ -313,7 +318,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={() => setCollapsed((v) => !v)}
-            className="hidden h-7 w-7 shrink-0 place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-white/[0.05] hover:text-foreground md:grid"
+            className="hidden h-7 w-7 shrink-0 place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-black/5 dark:hover:bg-white/[0.05] hover:text-foreground md:grid"
             aria-label={collapsed ? "Rozwiń panel" : "Zwiń panel"}
           >
             {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
@@ -322,7 +327,7 @@ export function Sidebar({
       </div>
 
       {/* Quick actions */}
-      <nav className="flex flex-col gap-0.5 border-b border-white/[0.05] px-2 py-2">
+      <nav className="flex flex-col gap-0.5 border-b border-black/5 dark:border-white/[0.05] px-2 py-2">
         <NavItem
           href="/inbox"
           icon={<Inbox size={15} />}
@@ -385,7 +390,7 @@ export function Sidebar({
             <Link
               href="/workspaces"
               aria-label="Nowa przestrzeń"
-              className="grid h-5 w-5 place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-white/[0.05] hover:text-foreground max-md:h-10 max-md:w-10 max-md:rounded-md"
+              className="grid h-5 w-5 place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-black/5 dark:hover:bg-white/[0.05] hover:text-foreground max-md:h-10 max-md:w-10 max-md:rounded-md"
             >
               <Plus size={13} className="max-md:size-[18px]" />
             </Link>
@@ -423,7 +428,7 @@ export function Sidebar({
       </div>
 
       {/* Bottom: settings + signout */}
-      <div className="flex flex-col gap-0.5 border-t border-white/[0.05] px-2 py-2">
+      <div className="flex flex-col gap-0.5 border-t border-black/5 dark:border-white/[0.05] px-2 py-2">
         {user.isSuperAdmin && (
           <NavItem
             href="/admin"
@@ -448,7 +453,7 @@ export function Sidebar({
           <button
             type="submit"
             // F12-K57b: dopasowane do nav-row'a (większy padding + text na mobile).
-            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[0.88rem] text-muted-foreground transition-colors hover:bg-white/[0.05] hover:text-foreground max-md:gap-3 max-md:rounded-md max-md:px-3 max-md:py-3 max-md:text-[1rem]"
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[0.88rem] text-muted-foreground transition-colors hover:bg-black/5 dark:hover:bg-white/[0.05] hover:text-foreground max-md:gap-3 max-md:rounded-md max-md:px-3 max-md:py-3 max-md:text-[1rem]"
           >
             <LogOut size={15} className="shrink-0 max-md:size-[18px]" />
             {!collapsed && <span className="truncate">Wyloguj</span>}
@@ -484,7 +489,7 @@ function WsSubLink({
       href={href}
       data-active={active ? "true" : "false"}
       // F12-K57b: większy padding + text + ikony na mobile.
-      className="group relative inline-flex items-center gap-1.5 rounded-sm px-2 py-1 font-mono text-[0.78rem] uppercase tracking-[0.12em] text-muted-foreground/80 transition-colors hover:bg-white/[0.05] hover:text-foreground data-[active=true]:bg-white/[0.07] data-[active=true]:shadow-[inset_0_0_0_0.5px_rgba(255,255,255,0.10),inset_0_1px_0_rgba(255,255,255,0.06)] data-[active=true]:font-semibold data-[active=true]:text-foreground max-md:gap-2.5 max-md:rounded-md max-md:px-3 max-md:py-2.5 max-md:text-[0.86rem] [&>svg]:max-md:size-4"
+      className="group relative inline-flex items-center gap-1.5 rounded-sm px-2 py-1 font-mono text-[0.78rem] uppercase tracking-[0.12em] text-muted-foreground/80 transition-colors hover:bg-black/5 dark:hover:bg-white/[0.05] hover:text-foreground data-[active=true]:bg-white/80 data-[active=true]:shadow-[0_0_0_0.5px_rgba(12,13,18,0.08),inset_0_1px_0_rgba(255,255,255,0.9),0_1px_2px_rgba(12,13,18,0.04)] dark:data-[active=true]:bg-white/[0.07] dark:data-[active=true]:shadow-[inset_0_0_0_0.5px_rgba(255,255,255,0.10),inset_0_1px_0_rgba(255,255,255,0.06)] data-[active=true]:font-semibold data-[active=true]:text-foreground max-md:gap-2.5 max-md:rounded-md max-md:px-3 max-md:py-2.5 max-md:text-[0.86rem] [&>svg]:max-md:size-4"
     >
       {/* F12-K59: usunięty lewy purple marker — active state polega na
           inset white-highlight'cie + font-weight'cie. */}
@@ -553,7 +558,7 @@ function NavItem({
   // gap, font) — klient pisał że layout fullscreen wygląda za luźno
   // z malutkimi rzędami. Desktop bez zmian.
   const cls =
-    "group flex items-center gap-2 rounded-sm px-2 py-1.5 text-[0.88rem] data-[active=true]:bg-white/[0.07] data-[active=true]:shadow-[inset_0_0_0_0.5px_rgba(255,255,255,0.10),inset_0_1px_0_rgba(255,255,255,0.06)] data-[active=true]:text-foreground max-md:gap-3 max-md:rounded-md max-md:px-3 max-md:py-3 max-md:text-[1rem]";
+    "group flex items-center gap-2 rounded-sm px-2 py-1.5 text-[0.88rem] data-[active=true]:bg-white/80 data-[active=true]:shadow-[0_0_0_0.5px_rgba(12,13,18,0.08),inset_0_1px_0_rgba(255,255,255,0.9),0_1px_2px_rgba(12,13,18,0.04)] dark:data-[active=true]:bg-white/[0.07] dark:data-[active=true]:shadow-[inset_0_0_0_0.5px_rgba(255,255,255,0.10),inset_0_1px_0_rgba(255,255,255,0.06)] data-[active=true]:text-foreground max-md:gap-3 max-md:rounded-md max-md:px-3 max-md:py-3 max-md:text-[1rem]";
 
   if (disabled) {
     return (
@@ -571,7 +576,7 @@ function NavItem({
     <Link
       href={href}
       data-active={active ? "true" : "false"}
-      className={`${cls} text-sidebar-foreground transition-colors hover:bg-white/[0.05] hover:text-foreground`}
+      className={`${cls} text-sidebar-foreground transition-colors hover:bg-black/5 dark:hover:bg-white/[0.05] hover:text-foreground`}
     >
       {content}
     </Link>
@@ -666,7 +671,7 @@ function SortableWorkspaceRow({
     <div ref={setNodeRef} style={style} className="flex flex-col">
       <div
         data-active={isActive ? "true" : "false"}
-        className="group relative flex items-center gap-1 rounded-sm data-[active=true]:bg-white/[0.07] data-[active=true]:shadow-[inset_0_0_0_0.5px_rgba(255,255,255,0.10),inset_0_1px_0_rgba(255,255,255,0.06)]"
+        className="group relative flex items-center gap-1 rounded-sm data-[active=true]:bg-white/80 data-[active=true]:shadow-[0_0_0_0.5px_rgba(12,13,18,0.08),inset_0_1px_0_rgba(255,255,255,0.9),0_1px_2px_rgba(12,13,18,0.04)] dark:data-[active=true]:bg-white/[0.07] dark:data-[active=true]:shadow-[inset_0_0_0_0.5px_rgba(255,255,255,0.10),inset_0_1px_0_rgba(255,255,255,0.06)]"
       >
         {/* F12-K59: usunięty lewy purple marker — design używa subtelnego
             inset white-highlight'a na active wiersza zamiast purple bara. */}
@@ -681,14 +686,14 @@ function SortableWorkspaceRow({
             // rezerwuje miejsca w layout'cie — wcześniej opacity-0 +
             // w-7 ucinało nazwę workspace'a). group-hover:grid pokazuje
             // na najechaniu. Na mobile zawsze visible (brak hover state'u).
-            className="hidden h-7 w-7 shrink-0 cursor-grab place-items-center rounded-sm text-muted-foreground/60 transition-colors hover:bg-white/[0.05] hover:text-foreground active:cursor-grabbing group-hover:grid max-md:!grid max-md:h-10 max-md:w-10 max-md:rounded-md max-md:text-muted-foreground/50"
+            className="hidden h-7 w-7 shrink-0 cursor-grab place-items-center rounded-sm text-muted-foreground/60 transition-colors hover:bg-black/5 dark:hover:bg-white/[0.05] hover:text-foreground active:cursor-grabbing group-hover:grid max-md:!grid max-md:h-10 max-md:w-10 max-md:rounded-md max-md:text-muted-foreground/50"
           >
             <GripVertical size={13} className="max-md:size-[16px]" />
           </button>
         )}
         <Link
           href={`/w/${ws.id}`}
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-sm px-2 py-1.5 text-[0.88rem] transition-colors hover:bg-white/[0.05] max-md:gap-3 max-md:rounded-md max-md:px-3 max-md:py-3 max-md:text-[1rem]"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-sm px-2 py-1.5 text-[0.88rem] transition-colors hover:bg-black/5 dark:hover:bg-white/[0.05] max-md:gap-3 max-md:rounded-md max-md:px-3 max-md:py-3 max-md:text-[1rem]"
         >
           {/* F12-K59: workspace swatch (mała gradient kafelka) zastępuje
               poprzednią ikonkę FolderOpen. Kolor wybierany stabilnie z
@@ -715,7 +720,7 @@ function SortableWorkspaceRow({
           <button
             type="button"
             onClick={onToggle}
-            className="grid h-7 w-7 shrink-0 place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-white/[0.05] hover:text-foreground max-md:h-11 max-md:w-11 max-md:rounded-md"
+            className="grid h-7 w-7 shrink-0 place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-black/5 dark:hover:bg-white/[0.05] hover:text-foreground max-md:h-11 max-md:w-11 max-md:rounded-md"
             aria-label={expanded ? "Zwiń" : "Rozwiń"}
             aria-expanded={expanded}
           >
@@ -883,7 +888,7 @@ function SortableBoardRow({
       ref={setNodeRef}
       style={style}
       data-active={boardActive ? "true" : "false"}
-      className="group relative flex items-center gap-1 rounded-sm data-[active=true]:bg-white/[0.07] data-[active=true]:shadow-[inset_0_0_0_0.5px_rgba(255,255,255,0.10),inset_0_1px_0_rgba(255,255,255,0.06)]"
+      className="group relative flex items-center gap-1 rounded-sm data-[active=true]:bg-white/80 data-[active=true]:shadow-[0_0_0_0.5px_rgba(12,13,18,0.08),inset_0_1px_0_rgba(255,255,255,0.9),0_1px_2px_rgba(12,13,18,0.04)] dark:data-[active=true]:bg-white/[0.07] dark:data-[active=true]:shadow-[inset_0_0_0_0.5px_rgba(255,255,255,0.10),inset_0_1px_0_rgba(255,255,255,0.06)]"
     >
       {/* F12-K59: usunięty lewy purple marker (analogicznie do workspace
           row) — design polega na inset white-highlight'cie. */}
@@ -896,14 +901,14 @@ function SortableBoardRow({
           title="Przeciągnij aby zmienić kolejność"
           // F12-K59: hidden default na desktopie (nie rezerwuje miejsca),
           // hover-toggle. Mobile always-visible.
-          className="hidden h-6 w-6 shrink-0 cursor-grab place-items-center rounded-sm text-muted-foreground/60 transition-colors hover:bg-white/[0.05] hover:text-foreground active:cursor-grabbing group-hover:grid max-md:!grid max-md:h-9 max-md:w-9 max-md:rounded-md max-md:text-muted-foreground/50"
+          className="hidden h-6 w-6 shrink-0 cursor-grab place-items-center rounded-sm text-muted-foreground/60 transition-colors hover:bg-black/5 dark:hover:bg-white/[0.05] hover:text-foreground active:cursor-grabbing group-hover:grid max-md:!grid max-md:h-9 max-md:w-9 max-md:rounded-md max-md:text-muted-foreground/50"
         >
           <GripVertical size={12} className="max-md:size-[14px]" />
         </button>
       )}
       <Link
         href={`/w/${workspaceId}/b/${b.id}/table`}
-        className={`min-w-0 flex-1 truncate rounded-sm px-2 py-1 text-[0.82rem] transition-colors hover:bg-white/[0.05] hover:text-foreground max-md:rounded-md max-md:px-3 max-md:py-2.5 max-md:text-[0.95rem] ${
+        className={`min-w-0 flex-1 truncate rounded-sm px-2 py-1 text-[0.82rem] transition-colors hover:bg-black/5 dark:hover:bg-white/[0.05] hover:text-foreground max-md:rounded-md max-md:px-3 max-md:py-2.5 max-md:text-[0.95rem] ${
           boardActive
             ? "font-semibold text-foreground"
             : "text-muted-foreground"
