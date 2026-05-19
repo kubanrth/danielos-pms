@@ -116,7 +116,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   });
 
   return (
-    <div className="flex min-h-dvh">
+    // F12-K59: subtle radial gradient za całym (app) layoutem — purple
+    // top-left + soft pink bottom-right, plus base bg. Daje sidebar
+    // glass'owi coś do "blur'owania", inaczej szkło wygląda płasko
+    // na flat-color background'zie. Pure CSS, niezależne od theme'a.
+    <div
+      style={{
+        background:
+          "radial-gradient(900px 600px at 18% 30%, rgba(124,92,255,0.10), transparent 60%), radial-gradient(700px 500px at 85% 70%, rgba(255,156,230,0.05), transparent 60%), var(--background)",
+      }}
+      className="flex min-h-dvh"
+    >
       <Sidebar
         user={{
           id: user.id,
