@@ -102,9 +102,14 @@ export function EditableTitle({
       disabled={!canEdit}
       aria-label={canEdit ? (ariaLabel ?? "Edytuj nazwę") : undefined}
       title={canEdit ? "Klik aby edytować" : undefined}
-      className={`${className} group inline-flex max-w-full items-center gap-2 rounded-sm text-left transition-colors disabled:cursor-default ${
+      // F12-K61b: explicit cursor-pointer (gdy editable) — bez tego button
+      // dziedziczył cursor:default po parent <h1>/<h2> i klient nie widział
+      // że tytuł jest klikalny. Plus subtle dotted-underline on hover żeby
+      // zasygnalizować "ten tytuł jest edytowalny" zanim user złapie pencil
+      // ikonkę.
+      className={`${className ?? ""} group inline-flex max-w-full items-center gap-2 rounded-sm text-left transition-colors disabled:cursor-default ${
         canEdit
-          ? "hover:text-primary focus-visible:text-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
+          ? "cursor-pointer underline decoration-dotted decoration-foreground/0 underline-offset-[6px] hover:text-primary hover:decoration-primary/40 focus-visible:text-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
           : ""
       }`}
     >
