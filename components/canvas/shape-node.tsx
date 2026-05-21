@@ -49,6 +49,14 @@ export interface ShapeNodeData {
   // tekst jest auto-contrast (czarny na jasnym fillu, biały na ciemnym).
   // Klient może wybrać explicit kolor (czerwony tytuł na białym fillu itp).
   textColorHex?: string | null;
+  // F12-K63: opcjonalny override rozmiaru fontu w labelu shape'a.
+  // Gdy null/undef:
+  //  - dla RECT/DIAMOND/CIRCLE/STICKY: domyślne text-[0.94rem] (~15px)
+  //  - dla TEXT shape'a: auto-calc Math.max(14, Math.min(48, height*0.36))
+  // Klient zgłosił że nie ma jak zmienić wielkości fontu tekstu w
+  // kształcie — F12-K63 wystawia 5 presetów (12/14/18/24/32 px) +
+  // "auto" reset, sterowane przez toolbar w canvas-editor.tsx.
+  fontSize?: number | null;
   [key: string]: unknown;
 }
 
@@ -240,6 +248,8 @@ export const ShapeNode = memo(function ShapeNode({
         editing={!!d.editing}
         selected={!!selected}
         locked={!!d.locked}
+        // F12-K63: override fontSize; null = fallback do auto-calc po height.
+        fontSize={d.fontSize ?? null}
       />
     );
   }
@@ -272,6 +282,7 @@ export const ShapeNode = memo(function ShapeNode({
       editing={!!d.editing}
       textColor={textColor}
       isSticky={d.shape === "STICKY"}
+      fontSize={d.fontSize ?? null}
     />
   );
 
@@ -400,12 +411,17 @@ function ShapeLabel({
   editing,
   textColor,
   isSticky,
+  fontSize,
 }: {
   nodeId: string;
   label: string;
   editing: boolean;
   textColor: string;
   isSticky: boolean;
+  // F12-K63: gdy null → fallback do domyślnego text-[0.94rem] (~15px);
+  // gdy liczba → override przez inline style. Tailwind text-* nie da się
+  // dynamic'znie computować z runtime'a, więc fontSize idzie przez style.
+  fontSize: number | null;
 }) {
   const { ref, commit, cancel } = useInlineEdit({
     nodeId,
@@ -416,6 +432,8 @@ function ShapeLabel({
   const fontFamily = isSticky
     ? "ui-serif, Georgia, 'Times New Roman', serif"
     : undefined;
+  // Tailwind class jest baseline (~15px); inline fontSize go nadpisuje.
+  const fontSizeClass = fontSize ? "" : "text-[0.94rem]";
 
   if (editing) {
     return (
@@ -435,8 +453,8 @@ function ShapeLabel({
           e.stopPropagation();
         }}
         onMouseDown={(e) => e.stopPropagation()}
-        className="nodrag select-text px-3 text-center font-display text-[0.94rem] font-semibold tracking-[-0.01em] leading-tight outline-none"
-        style={{ color: textColor, fontFamily }}
+        className={`nodrag select-text px-3 text-center font-display ${fontSizeClass} font-semibold tracking-[-0.01em] leading-tight outline-none`}
+        style={{ color: textColor, fontFamily, fontSize: fontSize ?? undefined }}
       >
         {label}
       </div>
@@ -445,9 +463,9 @@ function ShapeLabel({
 
   return (
     <span
-      className="pointer-events-none select-none px-3 text-center font-display text-[0.94rem] font-semibold tracking-[-0.01em] leading-tight"
+      className={`pointer-events-none select-none px-3 text-center font-display ${fontSizeClass} font-semibold tracking-[-0.01em] leading-tight`}
       data-label=""
-      style={{ color: textColor, fontFamily }}
+      style={{ color: textColor, fontFamily, fontSize: fontSize ?? undefined }}
     >
       {label || <span className="opacity-50">dwuklik aby nazwać</span>}
     </span>
@@ -650,6 +668,7 @@ function TextShape({
   editing,
   selected,
   locked,
+  fontSize: fontSizeOverride,
 }: {
   nodeId: string;
   width: number;
@@ -659,6 +678,9 @@ function TextShape({
   editing: boolean;
   selected: boolean;
   locked: boolean;
+  // F12-K63: gdy null/undef, używamy auto-calc (height*0.36 clamped 14..48).
+  // Gdy ustawiony, klient wybrał konkretny rozmiar z toolbara.
+  fontSize: number | null;
 }) {
   const { ref, commit, cancel } = useInlineEdit({
     nodeId,
@@ -666,7 +688,7 @@ function TextShape({
     isEditing: editing,
   });
   const ink = isPaleHex(colorHex) ? "#1F2937" : colorHex;
-  const fontSize = Math.max(14, Math.min(48, height * 0.36));
+  const fontSize = fontSizeOverride ?? Math.max(14, Math.min(48, height * 0.36));
   return (
     <>
       <ShapeResizer nodeId={nodeId} visible={selected && !locked} minWidth={80} minHeight={40} />

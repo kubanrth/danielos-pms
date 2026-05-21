@@ -106,6 +106,8 @@ export interface EditorInitialNode {
   imagePath?: string | null;
   // F12-K37c: explicit text color override (default = auto contrast).
   textColorHex?: string | null;
+  // F12-K63: explicit font-size override (px) dla shape labela.
+  fontSize?: number | null;
 }
 
 export interface WorkspaceTaskOption {
@@ -242,6 +244,11 @@ function toRFNode(n: EditorInitialNode, workspaceId: string): RFNode {
       locked: n.locked,
       imagePath: n.imagePath ?? undefined,
       textColorHex: n.textColorHex ?? undefined,
+      // F12-K63: fontSize override (px) z Y.js snapshotu.
+      fontSize:
+        typeof (n as { fontSize?: number | null }).fontSize === "number"
+          ? (n as { fontSize: number }).fontSize
+          : undefined,
     },
     width: n.width,
     height: n.height,
@@ -405,6 +412,11 @@ function CanvasEditorInner({
             locked: n.locked,
             imagePath: n.imagePath ?? undefined,
             textColorHex: n.textColorHex ?? undefined,
+            // F12-K63: zachowaj fontSize override przy re-render z snapshotu.
+            fontSize:
+              typeof (n as { fontSize?: number | null }).fontSize === "number"
+                ? (n as { fontSize: number }).fontSize
+                : undefined,
           },
           width: n.width,
           height: n.height,
@@ -509,6 +521,9 @@ function CanvasEditorInner({
           colorHex: node.data.colorHex,
           imagePath: node.data.imagePath ?? null,
           textColorHex: node.data.textColorHex ?? null,
+          // F12-K63: persist fontSize override do Y.js (per-key merge).
+          fontSize:
+            typeof node.data.fontSize === "number" ? node.data.fontSize : null,
           reactions: node.data.reactions,
           locked: node.data.locked,
         });
@@ -837,6 +852,28 @@ function CanvasEditorInner({
           const next = {
             ...n,
             data: { ...n.data, textColorHex: hex },
+          };
+          touched.push(next);
+          return next;
+        }),
+      );
+      for (const n of touched) commitNodeToY(n);
+    },
+    [setNodes, commitNodeToY],
+  );
+
+  // F12-K63: zmiana rozmiaru FONTU na zaznaczonych shape'ach. `size = null`
+  // = reset do baseline (text-[0.94rem] dla RECT/CIRCLE/STICKY/DIAMOND, lub
+  // auto-calc po height dla TEXT). Liczba (12-72) = explicit override.
+  const resizeFontSelected = useCallback(
+    (size: number | null) => {
+      const touched: RFNode[] = [];
+      setNodes((ns) =>
+        ns.map((n) => {
+          if (!n.selected) return n;
+          const next = {
+            ...n,
+            data: { ...n.data, fontSize: size },
           };
           touched.push(next);
           return next;
@@ -1446,6 +1483,12 @@ function CanvasEditorInner({
                 <TextColorPicker
                   selectedNodes={selectedNodes}
                   onPick={recolorTextSelected}
+                />
+                {/* F12-K63: font-size picker — klient zażyczył sobie zmiany
+                    wielkości tekstu w shape'cie (S/M/L/XL/XXL + Auto). */}
+                <FontSizePicker
+                  selectedNodes={selectedNodes}
+                  onPick={resizeFontSelected}
                 />
               </div>
             )}
@@ -2427,6 +2470,112 @@ function TextColorPicker({
             }`}
           >
             Auto (kontrast)
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// F12-K63: rozmiar fontu w shape labelu. Klient zażyczył sobie żeby
+// móc zmienić wielkość tekstu w kształcie (wcześniej tylko height
+// shape'a sterował fontem przez auto-calc). 5 presetów + reset (Auto).
+function FontSizePicker({
+  selectedNodes,
+  onPick,
+}: {
+  selectedNodes: RFNode[];
+  onPick: (size: number | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as unknown as globalThis.Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  // Aktualny rozmiar do podświetlenia w popoverze (jeśli wszystkie
+  // selected mają tę samą wartość — inaczej null = mixed/auto display).
+  const currentSize = (() => {
+    if (selectedNodes.length === 0) return null;
+    const first = (selectedNodes[0]?.data.fontSize as number | null | undefined) ?? null;
+    const allSame = selectedNodes.every(
+      (n) => ((n.data.fontSize as number | null | undefined) ?? null) === first,
+    );
+    return allSame ? first : null;
+  })();
+
+  const disabled = selectedNodes.length === 0;
+  const PRESETS: { px: number; label: string }[] = [
+    { px: 12, label: "S" },
+    { px: 16, label: "M" },
+    { px: 22, label: "L" },
+    { px: 30, label: "XL" },
+    { px: 44, label: "XXL" },
+  ];
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        disabled={disabled}
+        title="Rozmiar fontu"
+        aria-label="Rozmiar fontu"
+        className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-background px-2 transition-colors hover:border-primary/60 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <span className="font-display text-[0.62rem] font-bold leading-none">A</span>
+        <span className="font-display text-[0.92rem] font-bold leading-none">A</span>
+      </button>
+      {open && !disabled && (
+        <div className="absolute left-0 top-[calc(100%+6px)] z-[60] flex w-[200px] flex-col gap-1.5 rounded-lg border border-border bg-popover p-2 shadow-[0_12px_32px_-12px_rgba(10,10,40,0.25)]">
+          <div className="flex flex-wrap gap-1.5">
+            {PRESETS.map((p) => (
+              <button
+                key={p.px}
+                type="button"
+                onClick={() => {
+                  onPick(p.px);
+                  setOpen(false);
+                }}
+                className={`inline-flex h-7 items-center justify-center rounded-md border px-2 font-display text-[0.78rem] font-semibold transition-colors hover:border-primary/60 ${
+                  currentSize === p.px
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border text-muted-foreground"
+                }`}
+                style={{ minWidth: 40 }}
+                title={`${p.label} (${p.px}px)`}
+              >
+                {p.label}
+                <span className="ml-1 font-mono text-[0.6rem] opacity-60">
+                  {p.px}
+                </span>
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              onPick(null);
+              setOpen(false);
+            }}
+            className={`mt-1 inline-flex h-7 items-center justify-center rounded-md border border-border bg-background px-2 font-mono text-[0.62rem] uppercase tracking-[0.14em] transition-colors hover:border-primary/60 ${
+              currentSize === null ? "border-primary text-primary" : "text-muted-foreground"
+            }`}
+          >
+            Auto (domyślny)
           </button>
         </div>
       )}

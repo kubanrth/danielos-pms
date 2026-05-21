@@ -47,6 +47,10 @@ export interface CanvasNodeValue {
   // F12-K37c: explicit text color override. Gdy null/undef, ShapeNode
   // używa auto-contrast od colorHex.
   textColorHex?: string | null;
+  // F12-K63: explicit font-size override (px). Gdy null/undef, label używa
+  // bazowego rozmiaru (~15px dla RECT/CIRCLE/STICKY/DIAMOND, auto-calc
+  // po height dla TEXT shape'a). Klient zażyczył sobie zmiany wielkości.
+  fontSize?: number | null;
 }
 
 export interface CanvasEdgeValue {
@@ -122,6 +126,8 @@ function toNodeYMap(node: CanvasNodeValue): Y.Map<unknown> {
   if (node.imagePath) m.set("imagePath", node.imagePath);
   // F12-K37c: explicit text color override.
   if (node.textColorHex) m.set("textColorHex", node.textColorHex);
+  // F12-K63: explicit font-size override (px).
+  if (typeof node.fontSize === "number") m.set("fontSize", node.fontSize);
   return m;
 }
 
@@ -171,6 +177,16 @@ export function setNodeValue(
     const nextTextColor = node.textColorHex ?? null;
     if (prevTextColor !== nextTextColor) {
       existing.set("textColorHex", nextTextColor);
+    }
+    // F12-K63: fontSize sync (px override).
+    const prevFontSize =
+      typeof existing.get("fontSize") === "number"
+        ? (existing.get("fontSize") as number)
+        : null;
+    const nextFontSize = typeof node.fontSize === "number" ? node.fontSize : null;
+    if (prevFontSize !== nextFontSize) {
+      if (nextFontSize === null) existing.delete("fontSize");
+      else existing.set("fontSize", nextFontSize);
     }
   } else {
     nodesMap.set(node.id, toNodeYMap(node));
@@ -245,6 +261,11 @@ export function readCanvasSnapshot(refs: CanvasYRefs): {
       colorHex: asString(value.get("colorHex"), "#FFFFFF"),
       imagePath: asNullString(value.get("imagePath")) ?? undefined,
       textColorHex: asNullString(value.get("textColorHex")) ?? undefined,
+      // F12-K63: read fontSize override z Y mapy.
+      fontSize:
+        typeof value.get("fontSize") === "number"
+          ? (value.get("fontSize") as number)
+          : undefined,
       reactions: Object.keys(reactions).length > 0 ? reactions : undefined,
       locked: value.get("locked") === true ? true : undefined,
     });
