@@ -28,7 +28,7 @@ export default async function WorkspaceOverviewPage({
       select: { enabledViews: true },
     }),
     db.workspaceMembership.count({ where: { workspaceId } }),
-    // F12-K8: filter boards by visibility. Workspace ADMIN sees all;
+    // Filter boards by visibility. Workspace ADMIN sees all;
     // MEMBER/VIEWER sees only PUBLIC boards or those they have an
     // explicit membership on.
     db.board.findMany({
@@ -43,7 +43,7 @@ export default async function WorkspaceOverviewPage({
                 { memberships: { some: { userId: ctx.userId } } },
               ],
             },
-      // F12-K51 + F12-K52: drag-and-drop reorder, fallback createdAt.
+      // + F12-K52: drag-and-drop reorder, fallback createdAt.
       orderBy: [{ order: "asc" }, { createdAt: "asc" }],
       include: {
         statusColumns: { orderBy: { order: "asc" } },

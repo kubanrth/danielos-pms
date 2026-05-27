@@ -4,17 +4,17 @@ export const NODE_SHAPES = [
   "RECTANGLE",
   "DIAMOND",
   "CIRCLE",
-  // F8b: Whimsical-lite additions.
+  // Whimsical-lite additions.
   "STICKY",
   "FRAME",
   // F10-W: Mural-feel additions.
   "TEXT",
-  // F12-K37: image upload do whiteboard — data.imagePath = storage key.
+  // Image upload do whiteboard — data.imagePath = storage key.
   "IMAGE",
 ] as const;
 export type NodeShape = (typeof NODE_SHAPES)[number];
 
-// F8b: connector end markers. Keep in sync with CanvasEdgeEnd in
+// Connector end markers. Keep in sync with CanvasEdgeEnd in
 // lib/yjs/canvas-doc.ts and the ProcessEdge.endStyle string column.
 export const EDGE_ENDS = ["arrow", "none", "diamond", "circle"] as const;
 export type EdgeEnd = (typeof EDGE_ENDS)[number];
@@ -52,10 +52,10 @@ const nodeSnapshotSchema = z.object({
   // ProcessNode.dataJson. Reactions: emoji → count map. Locked: bool.
   reactions: z.record(z.string().max(8), z.number().int().min(0).max(9999)).optional(),
   locked: z.boolean().optional(),
-  // F12-K37: dla shape="IMAGE" — Supabase Storage key (path relatywny do
+  // Dla shape="IMAGE" — Supabase Storage key (path relatywny do
   // bucket'u attachments). Persistowany w ProcessNode.dataJson.imagePath.
   imagePath: z.string().max(500).nullable().optional(),
-  // F12-K37c: explicit text color override (#RRGGBB albo null = auto).
+  // C: explicit text color override (#RRGGBB albo null = auto).
   textColorHex: z.string().regex(HEX_RE).nullable().optional(),
 });
 

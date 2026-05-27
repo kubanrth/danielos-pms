@@ -23,11 +23,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       include: {
         workspace: {
           include: {
-            // F12-K8: filter boards user can actually see. Workspace
+            // Filter boards user can actually see. Workspace
             // ADMIN sees all (handled below — fetch unrestricted then
             // gate per role). For MEMBER/VIEWER: only PUBLIC boards or
             // ones they have explicit BoardMembership on.
-            // F12-K52: orderBy: order (drag-drop reorder), createdAt fallback.
+            // OrderBy: order (drag-drop reorder), createdAt fallback.
             boards: {
               where: { deletedAt: null },
               orderBy: [{ order: "asc" }, { createdAt: "asc" }],
@@ -44,7 +44,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           },
         },
       },
-      // F12-K52: orderBy workspace.order zamiast joinedAt — sidebar
+      // OrderBy workspace.order zamiast joinedAt — sidebar
       // pokazuje workspace'y w kolejności ustawionej przez user'a.
       orderBy: [
         { workspace: { order: "asc" } },
@@ -54,7 +54,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     db.notification.count({
       where: { userId: session.user.id, readAt: null },
     }),
-    // F12-K38: licznik aktywnych zgłoszeń supportu per workspace, do
+    // Licznik aktywnych zgłoszeń supportu per workspace, do
     // badge'a w sidebar'ze. OPEN+IN_PROGRESS — RESOLVED/CLOSED nie są
     // 'do załatwienia'. Group-by jest jednym zapytaniem niezależnie od
     // liczby workspace'ów (vs N+1 count per ws).
@@ -94,7 +94,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   );
 
   const workspaces: SidebarWorkspace[] = memberships.map((m) => {
-    // F12-K8: per-board visibility filter. ADMINs bypass; everyone else
+    // Per-board visibility filter. ADMINs bypass; everyone else
     // sees PUBLIC boards + boards where they have an explicit membership.
     const visibleBoards = m.workspace.boards.filter((b) => {
       if (m.role === "ADMIN") return true;
@@ -116,7 +116,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   });
 
   return (
-    // F12-K59: subtle radial gradient za całym (app) layoutem — purple
+    // Subtle radial gradient za całym (app) layoutem — purple
     // top-left + soft pink bottom-right, plus base bg. Daje sidebar
     // glass'owi coś do "blur'owania", inaczej szkło wygląda płasko
     // na flat-color background'zie. Pure CSS, niezależne od theme'a.

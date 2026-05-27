@@ -14,7 +14,7 @@ export default async function WorkspacesPage() {
   const session = await auth();
   const user = session!.user;
 
-  // F12-K51 + F12-K52: orderBy = workspace.order (drag-and-drop reorder).
+  // + F12-K52: orderBy = workspace.order (drag-and-drop reorder).
   // Fallback createdAt dla świeżo dodanych z domyślnym order=0.
   const memberships = await db.workspaceMembership.findMany({
     where: { userId: user.id, workspace: { deletedAt: null } },

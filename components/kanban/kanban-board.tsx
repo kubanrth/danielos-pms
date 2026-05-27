@@ -73,9 +73,9 @@ export function KanbanBoard({
   boardId: string;
   statusColumns: KanbanStatusColumn[];
   initialTasks: KanbanTask[];
-  // F9-13 extension: needed for `M` hotkey popup.
+  // Extension: needed for `M` hotkey popup.
   members: AssignMember[];
-  // F12-K1: gate inline „+ Kolumna" — tylko ADMIN/OWNER (board.update perm).
+  // Gate inline „+ Kolumna" — tylko ADMIN/OWNER (board.update perm).
   canManageBoard: boolean;
 }) {
   const assign = useAssignHotkey({ members, workspaceId });
@@ -245,7 +245,7 @@ export function KanbanBoard({
       <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-4 md:mx-0 md:gap-4 md:px-0">
         {renderColumns.map(({ id, column }, idx) => {
           const colTasks = columns.get(id) ?? [];
-          // F12-K55: lista samych prawdziwych kolumn (bez NO_STATUS)
+          // Lista samych prawdziwych kolumn (bez NO_STATUS)
           // do reorderowania — NO_STATUS to virtualna kolumna, nie ma
           // jej w DB.
           const realColumns = renderColumns.filter((rc) => rc.id !== NO_STATUS);
@@ -302,7 +302,7 @@ function Column({
   tasks: KanbanTask[];
   workspaceId: string;
   boardId: string;
-  // F12-K55: reorderowanie kolumn statusu. UP/DOWN swap'uje z sąsiadem.
+  // Reorderowanie kolumn statusu. UP/DOWN swap'uje z sąsiadem.
   canReorder?: boolean;
   isFirstReal?: boolean;
   isLastReal?: boolean;
@@ -314,7 +314,7 @@ function Column({
 }) {
   const color = column?.colorHex ?? "#94A3B8";
   const name = column?.name ?? "Bez statusu";
-  // F11-10: inline add — Trello-style "+ Nowe zadanie" pinned at bottom
+  // Inline add — Trello-style "+ Nowe zadanie" pinned at bottom
   // of every column. Stays in edit mode so user can fire many in a row.
   // Bez statusu column doesn't get the inline-add (no statusColumnId
   // for the server action to use).
@@ -416,7 +416,7 @@ function Column({
   );
 }
 
-// F11-10: inline +Nowe zadanie under each column. Click expands input;
+// Inline +Nowe zadanie under each column. Click expands input;
 // Enter creates and re-focuses for the next task; Esc collapses.
 function InlineAddTask({
   workspaceId,
@@ -518,7 +518,7 @@ function SortableCard({
 }: {
   task: KanbanTask;
   workspaceId: string;
-  // F9-13: spread on the article so the `M` hotkey knows which card
+  // Spread on the article so the `M` hotkey knows which card
   // is hovered. Passed from KanbanBoard via useAssignHotkey.
   hotkeyProps?: {
     onMouseEnter: () => void;
@@ -582,7 +582,7 @@ function CardShell({
       <Link
         href={`/w/${workspaceId}/t/${task.id}`}
         onPointerDown={(e) => e.stopPropagation()}
-        // F11-7: long titles must wrap inside the card; previously they
+        // Long titles must wrap inside the card; previously they
         // overflowed the 300px column. break-words handles long single
         // tokens (URLs, IDs) that would otherwise stretch the card.
         className="font-display text-[0.95rem] font-semibold leading-tight tracking-[-0.01em] whitespace-normal break-words transition-colors hover:text-primary"
@@ -620,7 +620,7 @@ function CardShell({
   );
 }
 
-// F12-K1: inline „+ Kolumna" w Kanban — wzór 1:1 z AddColumnButton w
+// Inline „+ Kolumna" w Kanban — wzór 1:1 z AddColumnButton w
 // board-table.tsx. Ghost column (300px szer., dashed border) jako trigger,
 // po kliku popover via createPortal z nazwą + 8-color palette + Anuluj/Dodaj.
 // Tworzy StatusColumn (nie TableColumn) bo Kanban grupuje po statusie.
@@ -651,7 +651,7 @@ function AddKanbanColumnButton({
     setCoords(null);
   };
 
-  // F12-K1 fix v2: pozycjonowanie z kotwicami CSS top/bottom zamiast
+  // Fix v2: pozycjonowanie z kotwicami CSS top/bottom zamiast
   // obliczania top dla above-mode. Wcześniej `top = rect.top - GAP - maxHeight`
   // przy huge spaceAbove dawało top = PAGE_PAD i popover unosił się daleko
   // od trigger'a (visual disconnect). Teraz:

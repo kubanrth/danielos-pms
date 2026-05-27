@@ -31,7 +31,7 @@ export interface InboxNotification {
   type: string;
   createdAt: string;
   unread: boolean;
-  // F12-K35: user-editowalna adnotacja.
+  // User-editowalna adnotacja.
   userNote: string | null;
   // Normalized payload — server picks out only what we render.
   payload: {
@@ -42,17 +42,17 @@ export interface InboxNotification {
     snippet?: string;
     boardName?: string;
     question?: string;
-    // F12-K21: task.assigned typ — actor który przypisał current usera.
+    // Task.assigned typ — actor który przypisał current usera.
     actorName?: string | null;
-    // F12-K25: support.resolved typ.
+    // Support.resolved typ.
     ticketId?: string;
     ticketTitle?: string;
     status?: string;
-    // F12-K62: task.status.changed nazwy statusów.
+    // Task.status.changed nazwy statusów.
     fromStatusName?: string | null;
     toStatusName?: string | null;
   };
-  // F9-13: server pre-computes the assigneeIds for the task this
+  // Server pre-computes the assigneeIds for the task this
   // notification refers to, so the hotkey popup can mark them as
   // already-assigned. null for non-task notifications.
   assigneeIds: string[] | null;
@@ -168,13 +168,13 @@ function NotificationRow({
 }) {
   const { payload, type, unread, assigneeIds } = notification;
   const isPoll = type === "poll.created";
-  // F12-K21: render notyfikacji o przypisaniu do task'a.
+  // Render notyfikacji o przypisaniu do task'a.
   const isAssigned = type === "task.assigned";
   // F12-K25/K26/K38: support notyfikacje.
   const isSupportResolved = type === "support.resolved";
   const isSupportAssigned = type === "support.assigned";
   const isSupportCreated = type === "support.created";
-  // F12-K62: task lifecycle notyfikacje dla całego workspace'u.
+  // Task lifecycle notyfikacje dla całego workspace'u.
   const isTaskCreated = type === "task.created";
   const isTaskStatusChanged = type === "task.status.changed";
   const href =

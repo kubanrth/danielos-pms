@@ -1,6 +1,6 @@
 "use client";
 
-// F12-K34: client component dla `/admin/backups`. Server-side fetch
+// Client component dla `/admin/backups`. Server-side fetch
 // w page.tsx, tu interaktywność: rozwijanie historii per-workspace,
 // trigger button, download generuje signed URL i otwiera w nowej karcie.
 

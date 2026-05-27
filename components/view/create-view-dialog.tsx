@@ -79,7 +79,7 @@ export function CreateViewDialog({
     }
   }, [state, router, workspaceId, boardId]);
 
-  // F12-K63: pokazuj WSZYSTKIE 5 typów widoków, nawet jeśli workspace
+  // Pokazuj WSZYSTKIE 5 typów widoków, nawet jeśli workspace
   // miał na początku węższy zestaw enabledViews. Wcześniej `enabled`
   // ograniczał picker — klient zgłosił że "w niektórych tablicach nie
   // można dodać innych widoków niż początkowo zdefiniowane". Serwer

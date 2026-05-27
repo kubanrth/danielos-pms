@@ -3,7 +3,7 @@ import { requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { can } from "@/lib/permissions";
 import { SupportWorkspace } from "@/components/support/support-workspace";
 
-// F11-20 (#23): support module — internal helpdesk for the workspace.
+// Support module — internal helpdesk for the workspace.
 // Klient zażądał osobnej tabeli zgłoszeń, podobnej do Przypomnień.
 // Każdy member może zgłosić; admini (task.update perm) mogą obsłużyć.
 

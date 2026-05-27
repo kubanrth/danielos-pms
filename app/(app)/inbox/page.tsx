@@ -26,7 +26,7 @@ interface PollCreatedPayload {
   authorName?: string | null;
 }
 
-// F12-K21: task.assigned payload type — emitowane przez toggleAssigneeAction
+// Task.assigned payload type — emitowane przez toggleAssigneeAction
 // gdy ktoś przypisuje current usera do task'a.
 interface TaskAssignedPayload {
   workspaceId?: string;
@@ -38,7 +38,7 @@ interface TaskAssignedPayload {
   actorName?: string | null;
 }
 
-// F12-K62: task.created + task.status.changed — emitowane przez
+// Task.created + task.status.changed — emitowane przez
 // createTaskAction i patchTaskAction (przez notifyBoardEvent helper).
 // Idą do wszystkich członków workspace'u (minus actor).
 interface TaskBoardEventPayload {
@@ -54,7 +54,7 @@ interface TaskBoardEventPayload {
   toStatusName?: string | null;
 }
 
-// F12-K25: support.resolved — emitowane przez updateSupportTicketAction
+// Support.resolved — emitowane przez updateSupportTicketAction
 // gdy admin oznacza ticket reporter'a jako RESOLVED lub CLOSED.
 interface SupportResolvedPayload {
   workspaceId?: string;
@@ -134,7 +134,7 @@ export default async function InboxPage() {
     }
   }
 
-  // F9-13 extension: union of every workspace member so the hotkey
+  // Extension: union of every workspace member so the hotkey
   // popup can offer the full roster regardless of which workspace the
   // task belongs to. toggleAssigneeAction re-validates per-workspace
   // server-side.
@@ -157,7 +157,7 @@ export default async function InboxPage() {
       type: n.type,
       createdAt: n.createdAt.toISOString(),
       unread: !n.readAt,
-      // F12-K35: user-editowalna adnotacja przy notyfikacji.
+      // User-editowalna adnotacja przy notyfikacji.
       userNote: n.userNote,
       payload: {
         workspaceId: payload.workspaceId,
@@ -171,7 +171,7 @@ export default async function InboxPage() {
         ticketId: payload.ticketId,
         ticketTitle: payload.ticketTitle,
         status: payload.status,
-        // F12-K62: task.status.changed payload extra pól.
+        // Task.status.changed payload extra pól.
         fromStatusName: payload.fromStatusName ?? undefined,
         toStatusName: payload.toStatusName ?? undefined,
       },

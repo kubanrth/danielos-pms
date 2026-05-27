@@ -55,7 +55,7 @@ export interface HeaderCellProps {
   onSort: (dir: "asc" | "desc" | null) => void;
   onFilter: () => void;
   onHide: () => void;
-  // F12-K3: pin/unpin a column to the left side of the table.
+  // Pin/unpin a column to the left side of the table.
   isPinned?: boolean;
   onTogglePin?: () => void;
   // Custom-only callbacks; absent for built-ins.

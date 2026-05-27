@@ -1,4 +1,4 @@
-// F12-K11: human-readable duration formatter dla "Zamknięte w X" w
+// Human-readable duration formatter dla "Zamknięte w X" w
 // support module. PL-friendly krótki format. Round down do najbliższej
 // jednostki czasu — NIE pokazuje "0 dni 2 godz", tylko "2 godz".
 

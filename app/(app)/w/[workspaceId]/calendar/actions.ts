@@ -5,7 +5,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireWorkspaceMembership } from "@/lib/workspace-guard";
 
-// F11-22 (#22): workspace-level calendar events. Wszyscy członkowie
+// Workspace-level calendar events. Wszyscy członkowie
 // workspace'u mogą tworzyć / edytować / usuwać własne wydarzenia.
 
 const createSchema = z.object({

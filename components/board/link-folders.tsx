@@ -32,7 +32,7 @@ export interface LinkFolderData {
   }[];
 }
 
-// F9-12: "Dodaj folder linków" replaces the old chip-based BoardLinks.
+// "Dodaj folder linków" replaces the old chip-based BoardLinks.
 // Klient wants a named folder that expands into a spreadsheet-like
 // table with user-defined columns (Nazwa / Link / Opis / ...). Each
 // folder is independent — user can keep "Brandbook materials" with
@@ -353,7 +353,7 @@ function ColumnHeader({
 
 function NewColumnForm({ folderId }: { folderId: string }) {
   const [name, setName] = useState("");
-  // F11-4 (#10): submit on Enter or button click; explicit button
+  // Submit on Enter or button click; explicit button
   // makes the affordance obvious. Previously users typed and didn't
   // realise they had to hit Enter.
   return (
@@ -419,7 +419,7 @@ function CellInput({
   return <AdminCell rowId={rowId} columnId={columnId} initial={initial} />;
 }
 
-// F12-K2: admin cell w trybie dual-mode (view + edit).
+// Admin cell w trybie dual-mode (view + edit).
 // Klient zażądał żeby URL'e były same w sobie klikalne (bez osobnej
 // ikony). Strategia jak w Notion/Airtable:
 // - default = view mode: URL renderuje się jako klikalny <a>

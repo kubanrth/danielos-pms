@@ -4,7 +4,7 @@ import { startTransition, useState } from "react";
 import { Eye, EyeOff, Plus, X } from "lucide-react";
 import { createUserAction } from "@/app/(admin)/admin/actions";
 
-// F12-K50: dialog dodawania user'a z poziomu /admin/users.
+// Dialog dodawania user'a z poziomu /admin/users.
 // Super admin wpisuje email + name + password + checkbox "Super admin".
 // Submit → server action → revalidate → lista odświeża się.
 export function CreateUserDialog() {

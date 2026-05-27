@@ -45,7 +45,7 @@ export async function inviteMemberAction(
   const limit = await checkLimit("workspace.invite", workspaceId);
   if (!limit.ok) return { ok: false, error: limit.error };
 
-  // F12-K8: optional board scope. Empty string from the UI toggle means
+  // Optional board scope. Empty string from the UI toggle means
   // "workspace-wide invite" — Zod sees min(1).optional() so we strip the
   // empty string before parsing.
   const rawBoardId = String(formData.get("boardId") ?? "").trim();
@@ -70,7 +70,7 @@ export async function inviteMemberAction(
   });
   if (!workspace) return { ok: false, error: "Przestrzeń nie istnieje." };
 
-  // F12-K8: if board-scope, validate the board belongs to this workspace.
+  // If board-scope, validate the board belongs to this workspace.
   let board: { id: string; name: string } | null = null;
   if (parsed.data.boardId) {
     board = await db.board.findFirst({
@@ -182,7 +182,7 @@ export async function inviteMemberAction(
   return { ok: true, inviteUrl, emailed: res.sent };
 }
 
-// F12-K8: add an existing workspace user directly to a board (no email).
+// Add an existing workspace user directly to a board (no email).
 // Used by the per-board members table when admin picks from a member list.
 export async function addBoardMemberAction(formData: FormData) {
   const workspaceId = String(formData.get("workspaceId") ?? "");
@@ -230,7 +230,7 @@ export async function addBoardMemberAction(formData: FormData) {
   revalidatePath(`/w/${workspaceId}`);
 }
 
-// F12-K8: change a user's role on a specific board.
+// Change a user's role on a specific board.
 export async function changeBoardRoleAction(formData: FormData) {
   const workspaceId = String(formData.get("workspaceId") ?? "");
   const parsed = changeBoardRoleSchema.safeParse({
@@ -261,7 +261,7 @@ export async function changeBoardRoleAction(formData: FormData) {
   revalidatePath(`/w/${workspaceId}/members`);
 }
 
-// F12-K8: remove a user from a board (workspace membership unchanged).
+// Remove a user from a board (workspace membership unchanged).
 export async function removeBoardMemberAction(formData: FormData) {
   const workspaceId = String(formData.get("workspaceId") ?? "");
   const parsed = removeBoardMemberSchema.safeParse({
@@ -290,7 +290,7 @@ export async function removeBoardMemberAction(formData: FormData) {
   revalidatePath(`/w/${workspaceId}`);
 }
 
-// F12-K8: flip board visibility between PUBLIC and PRIVATE.
+// Flip board visibility between PUBLIC and PRIVATE.
 export async function setBoardVisibilityAction(formData: FormData) {
   const workspaceId = String(formData.get("workspaceId") ?? "");
   const parsed = setBoardVisibilitySchema.safeParse({

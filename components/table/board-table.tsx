@@ -69,7 +69,7 @@ export interface BoardTableTask {
   statusColumnId: string | null;
   startAt: string | null;
   stopAt: string | null;
-  // F12-K10: needed by preset grouping "Data dodania". Server `createdAt`
+  // Needed by preset grouping "Data dodania". Server `createdAt`
   // jest zawsze ustawiony (default(now)) — typujemy non-null.
   createdAt: string;
   assignees: {
@@ -79,9 +79,9 @@ export interface BoardTableTask {
     avatarUrl: string | null;
   }[];
   tags: { id: string; name: string; colorHex: string }[];
-  // F9-07: user-defined column values, keyed by custom column id.
+  // User-defined column values, keyed by custom column id.
   customValues: Record<string, string>;
-  // F12-K29: lista załączników do wyświetlenia w kolumnie 'Załączniki'.
+  // Lista załączników do wyświetlenia w kolumnie 'Załączniki'.
   // Typ collapsed do tego, czego potrzebuje AttachmentCell — pełnego
   // metadata (uploader, createdAt) tutaj nie dopuszczamy bo widok tabeli
   // nie powinien tego wyświetlać.
@@ -125,7 +125,7 @@ const DEFAULT_COLUMN_ORDER: string[] = [
   "attachments",
 ];
 
-// F11-6 (#12): klient zażądał możliwości ukrywania defaultowych kolumn
+// Klient zażądał możliwości ukrywania defaultowych kolumn
 // (Status, Tytuł). Wcześniej `required: true` zablokowało eye-toggle.
 // Teraz wszystkie kolumny mogą być ukryte; tworzą się automatycznie
 // jak board jest świeży.
@@ -171,14 +171,14 @@ export function BoardTable({
   initialGroupBy?: string | null;
   // F10-X: persisted per-column pixel widths.
   initialWidths?: Record<string, number>;
-  // F12-K3: persisted left-pinned columns. `undefined` means legacy board
+  // Persisted left-pinned columns. `undefined` means legacy board
   // with no preference saved — fall back to the historical "first column
   // always frozen" default. `[]` is an explicit user choice to unpin.
   initialPinned?: string[];
   customColumns: CustomTableColumn[];
-  // F9-13: needed for the `M` assign hotkey.
+  // Needed for the `M` assign hotkey.
   members: AssignMember[];
-  // F12-K5: workspace-wide tag list for the in-cell tag picker. Empty
+  // Workspace-wide tag list for the in-cell tag picker. Empty
   // array is fine — the picker shows an instructional empty state.
   allTags: PickerTag[];
 }) {
@@ -266,7 +266,7 @@ export function BoardTable({
     };
   }, [columnSizing, workspaceId, boardId, canManagePrefs]);
 
-  // F12-K3: column pinning. Legacy boards without a saved `pinned` array
+  // Column pinning. Legacy boards without a saved `pinned` array
   // keep the historical "first column auto-frozen" behaviour by pinning
   // whichever column ends up first in column order. Explicit empty array
   // means user unpinned everything — respect that.
@@ -442,7 +442,7 @@ export function BoardTable({
         cell: (info) => (
           <Link
             href={`/w/${workspaceId}/t/${info.row.original.id}`}
-            // F12-K57: whitespace-normal + break-words zamiast truncate —
+            // Whitespace-normal + break-words zamiast truncate —
             // długi tytuł zawija się w wiele linii w cellu (klient).
             className="block whitespace-normal break-words font-display text-[0.96rem] font-semibold leading-tight tracking-[-0.01em] transition-colors hover:text-primary"
           >
@@ -504,7 +504,7 @@ export function BoardTable({
           />
         ),
       }),
-      // F12-K29: built-in 'Załączniki' kolumna — count + popover z listą
+      // Built-in 'Załączniki' kolumna — count + popover z listą
       // i uploadem. Sortowanie po liczbie plików (DESC default jest
       // intuicyjne — taski z najwięcej załącznikami na górze).
       col.accessor("attachments", {
@@ -614,7 +614,7 @@ export function BoardTable({
   const groupedRows: { key: string; label: string; color?: string; rows: typeof filteredSorted }[] = (() => {
     if (!groupBy) return [{ key: "_all", label: "", rows: filteredSorted }];
 
-    // F12-K10: preset path. Każdy preset ma własną logikę bucketingu
+    // Preset path. Każdy preset ma własną logikę bucketingu
     // (semantyczne buckety czasowe / pierwszy tag alfabetycznie). Buckety
     // sortowane po `order` z descriptora zamiast Map insertion order
     // żeby kolejność była stabilna niezależnie od sort'u rzędów.
@@ -830,7 +830,7 @@ export function BoardTable({
         >
           <thead>
             {table.getHeaderGroups().map((hg) => {
-              // F12-K3: render pinned headers first so the DOM order
+              // Render pinned headers first so the DOM order
               // matches visual order. Sticky offset = checkbox width +
               // cumulative width of preceding pinned columns.
               const leftHeaders = hg.headers.filter(
@@ -843,9 +843,9 @@ export function BoardTable({
               return (
                 <tr key={hg.id} className="border-b border-border bg-card">
                   {canEdit && (
-                    // F12-K29: bg-card (było bg-muted/95) — pełna nieprzezroczystość
+                    // Bg-card (było bg-muted/95) — pełna nieprzezroczystość
                     // żeby tło BoardShell (gradient/obraz) nie przebijało za checkboxem.
-                    // F12-K47e: na mobile sticky pinning wyłączone (max-md:!static) —
+                    // E: na mobile sticky pinning wyłączone (max-md:!static) —
                     // klient nie mógł scrollować przez przypięte kolumny.
                     <th className="sticky left-0 top-0 z-30 h-10 w-10 bg-card px-2 shadow-[1px_0_0_0_var(--border)] max-md:!static max-md:!shadow-none">
                       {(() => {
@@ -1082,7 +1082,7 @@ export function BoardTable({
                             </td>
                           )}
                           {(() => {
-                            // F12-K3: same pinned-first reorder as headers
+                            // Same pinned-first reorder as headers
                             // so DOM cells line up with the visible columns.
                             const allCells = row.getVisibleCells();
                             const leftCells = allCells.filter(
@@ -1319,7 +1319,7 @@ function DateCell({
       <MutedDash />
     );
   }
-  // F12-K7: in-cell DateTimePicker — variant "cell" strips the
+  // In-cell DateTimePicker — variant "cell" strips the
   // input-style border + native calendar icon, autosave fires via
   // patchTaskAction whenever the user picks/clears a date.
   const persist = (iso: string) => {

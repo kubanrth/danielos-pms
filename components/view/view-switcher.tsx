@@ -75,7 +75,7 @@ export function ViewSwitcher({
   customViews?: CustomViewDescriptor[];
   // Controls whether the delete-X on custom pills renders.
   canManage?: boolean;
-  // F9-08: per-default-view BoardView id, used to delete the default
+  // Per-default-view BoardView id, used to delete the default
   // view from this board (X button on default pill). Undefined entries
   // mean "legacy board without BoardView row" — hide the X there.
   defaultViewIds?: Partial<Record<ViewName, string>>;
@@ -117,14 +117,14 @@ export function ViewSwitcher({
     ? allViews.filter((v) => enabled.includes(v.name))
     : allViews;
 
-  // F12-K60: iPhone-style liquid-glass tabs (.lg-seg / .lg-seg-btn w
+  // IPhone-style liquid-glass tabs (.lg-seg / .lg-seg-btn w
   // globals.css) — klient zażyczył sobie efekt szkła jak na iOS lock
   // screen. Active pill = thick frosted disc z białą obwódką, top
   // sheen i fioletowym inner glow + drop shadow. Działa w light i dark.
   const heightClass =
     size === "sm" ? "h-7 px-2.5 text-[0.76rem]" : "h-8 px-3 text-[0.82rem]";
 
-  // F12-K57: stała 6. zakładka 'Opis' — per-board wiki/notes page,
+  // Stała 6. zakładka 'Opis' — per-board wiki/notes page,
   // poza enum ViewType (nie wymaga BoardView row'a). Active gdy URL
   // kończy się na /overview.
   const pathname = usePathname();

@@ -33,7 +33,7 @@ export interface TodoStepRow {
   id: string;
   title: string;
   completed: boolean;
-  // F12-K28: opis pod-zadania.
+  // Opis pod-zadania.
   notes: string | null;
 }
 
@@ -231,7 +231,7 @@ function TitleEditor({
   );
 }
 
-// F12-K28: pod-zadania (subtaski) z osobnymi opisami. Klient zażądał
+// Pod-zadania (subtaski) z osobnymi opisami. Klient zażądał
 // 'Plusik pod mniejszym zadaniem' + 'notatkę pod zadaniem... odnosi
 // się też do pod-zadań'. Każdy step ma teraz:
 //   - checkbox toggle (zostawione)
@@ -323,7 +323,7 @@ function StepsSection({
   );
 }
 
-// F12-K28: pojedynczy step row z możliwością expandowania notatek + edit
+// Pojedynczy step row z możliwością expandowania notatek + edit
 // title inline. Klik chevron → toggle notes editor; klik tytuł → edit.
 function StepRow({ step }: { step: TodoStepRow }) {
   const [expanded, setExpanded] = useState(false);

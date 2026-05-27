@@ -11,13 +11,13 @@ import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 // the modal is only reachable from a page that's already in history —
 // router.back() is always safe here.
 //
-// F12-K53: jeśli sessionStorage ma 'taskModalReturnTo' (ustawione przez
+// Jeśli sessionStorage ma 'taskModalReturnTo' (ustawione przez
 // CreateTaskButton przy create flow), wracamy do tej konkretnej strony
 // zamiast router.back. Bez tego close po Nowe Zadanie wracał do
 // workspace overview ("O projekcie") zamiast do np. table/kanban view
 // skąd user kliknął przycisk.
 //
-// F12-K56: prop `open` był wcześniej forced=true bez state. Klik X wołał
+// Prop `open` był wcześniej forced=true bez state. Klik X wołał
 // onOpenChange(false), close() startował navigację, ale prop nadal był
 // true — Base UI nie zamykał dialog'u wizualnie. Wyglądało jakby trzeba
 // było kliknąć 2×. Teraz controlled state `open` — pierwsza akcja
@@ -25,7 +25,7 @@ import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 export function TaskModalShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [open, setOpen] = useState(true);
-  // F12-K56b: idempotency guard. close() leciał 2× przy jednym klik'u X:
+  // B: idempotency guard. close() leciał 2× przy jednym klik'u X:
   // - 1: onClick handler na buttonie X
   // - 2: setOpen(false) → BaseDialog re-render → onOpenChange(false) → close()
   // Pierwsza wywołka czytała sessionStorage + nawigowała. Druga miała już

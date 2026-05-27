@@ -13,7 +13,7 @@ export interface CalendarEvent {
   statusColor: string | null;
   startAt: string | null;
   stopAt: string | null;
-  // F12-K31: kalendarz workspace'u miesza taski + custom WorkspaceEvent.
+  // Kalendarz workspace'u miesza taski + custom WorkspaceEvent.
   // Klik tasku → nav do /t/<id> (Link). Klik eventu → callback (parent
   // otwiera dialog ze szczegółami). Default = "task" żeby /my/calendar
   // nie musiał ustawiać niczego.
@@ -74,7 +74,7 @@ export function CalendarMonthGrid({
   onEventClick,
 }: {
   events: CalendarEvent[];
-  // F12-K31: parent może obsłużyć klik w event-kind (dialog ze
+  // Parent może obsłużyć klik w event-kind (dialog ze
   // szczegółami WorkspaceEvent'u). Task-kind dalej linkuje przez <Link>.
   onEventClick?: (entityId: string) => void;
 }) {
@@ -83,7 +83,7 @@ export function CalendarMonthGrid({
     year: today.getFullYear(),
     month: today.getMonth(),
   });
-  // F12-K55: expand-day modal state — gdy user klika '+N więcej' na
+  // Expand-day modal state — gdy user klika '+N więcej' na
   // komórce dnia, pokazujemy pełną listę wszystkich wydarzeń tego dnia.
   const [expandedDay, setExpandedDay] = useState<{
     date: Date;
@@ -183,7 +183,7 @@ export function CalendarMonthGrid({
           const dayEvents = events.filter((e) => eventSpansDay(e, cell.date));
           const isToday = sameDay(cell.date, today);
           const isWeekend = mondayFirstDow(cell.date) >= 5;
-          // F12-K47: mobile = max 2 visible events, reszta jako +N badge.
+          // Mobile = max 2 visible events, reszta jako +N badge.
           const showOverflow = dayEvents.length > 2;
 
           return (
@@ -279,7 +279,7 @@ export function CalendarMonthGrid({
   );
 }
 
-// F12-K55: dialog z pełną listą eventów + zadań z konkretnego dnia.
+// Dialog z pełną listą eventów + zadań z konkretnego dnia.
 // Wywoływany przez klik w "+N więcej" na komórce miesięcznego gridu.
 function DayExpandDialog({
   day,

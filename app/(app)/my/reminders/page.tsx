@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { RemindersWorkspace } from "@/components/my/reminders/reminders-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 
-// F9-16: "Dodaj przypomnienie" — list of reminders the user created OR
+// "Dodaj przypomnienie" — list of reminders the user created OR
 // received. Separate from task reminders (which go through email cron).
 // These show up as in-app popups in the top-right corner.
 export default async function MyRemindersPage() {

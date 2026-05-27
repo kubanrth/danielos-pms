@@ -33,7 +33,7 @@ import { reorderBoardsAction } from "@/app/(app)/w/[workspaceId]/b/actions";
 import { type ViewName } from "@/lib/board-views";
 import { taskPl } from "@/lib/pluralize";
 
-// F12-K52: drag-and-drop reorder tablic w workspace overview.
+// Drag-and-drop reorder tablic w workspace overview.
 // Cały render board sections jest w client component żeby dnd-kit mógł
 // zarządzać kolejnością.
 

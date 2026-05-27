@@ -31,7 +31,7 @@ export function CreateTaskButton({
   );
 
   // On success — use client navigation so @modal intercepting route activates.
-  // F12-K53: zapisujemy returnTo w sessionStorage żeby modal close
+  // Zapisujemy returnTo w sessionStorage żeby modal close
   // wracał do strony skąd user kliknął (table/kanban/etc), nie do
   // workspace overview ("O projekcie") — bo intercept'em modal jest
   // pod URL'em /w/[wid]/t/[tid] gdzie underlying page = overview.

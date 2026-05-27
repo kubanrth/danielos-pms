@@ -29,7 +29,7 @@ export async function markAllNotificationsReadAction() {
   revalidatePath("/inbox");
 }
 
-// F12-K35: toggle read/unread (klik powtórny zaznacza ponownie jako
+// Toggle read/unread (klik powtórny zaznacza ponownie jako
 // nieprzeczytane).
 export async function toggleNotificationReadAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
@@ -48,7 +48,7 @@ export async function toggleNotificationReadAction(formData: FormData) {
   revalidatePath("/inbox");
 }
 
-// F12-K35: usuń pojedynczą notyfikację. Recipient-only — admin nie może
+// Usuń pojedynczą notyfikację. Recipient-only — admin nie może
 // czyścić cudzego inbox'u.
 export async function deleteNotificationAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
@@ -61,7 +61,7 @@ export async function deleteNotificationAction(formData: FormData) {
   revalidatePath("/inbox");
 }
 
-// F12-K35: bulk-delete wszystkich przeczytanych — typowy use case
+// Bulk-delete wszystkich przeczytanych — typowy use case
 // 'wyczyść inbox po sprintu'.
 export async function deleteAllReadNotificationsAction() {
   const session = await auth();
@@ -78,7 +78,7 @@ const updateNoteSchema = z.object({
   userNote: z.string().max(500),
 });
 
-// F12-K35: edytuj user-note doklejony do notyfikacji. Klient: 'zapisane
+// Edytuj user-note doklejony do notyfikacji. Klient: 'zapisane
 // powiadomienie musi mieć możliwość edycji'. Sam payload (auto-generowany)
 // zostaje nietknięty; user może dopisać własną notatkę.
 export async function updateNotificationNoteAction(input: {
@@ -100,7 +100,7 @@ export async function updateNotificationNoteAction(input: {
   return { ok: true };
 }
 
-// F12-K35: fetchuje 1 notyfikację dla `<UserToaster>` po realtime
+// Fetchuje 1 notyfikację dla `<UserToaster>` po realtime
 // broadcast'cie (kanał `user:<userId>` przesyła tylko id, klient pobiera
 // szczegóły żeby renderować toast).
 export interface ToastNotificationPayload {
@@ -183,7 +183,7 @@ export async function getNotificationForToastAction(input: {
       if (workspaceId && ticketId) href = `/w/${workspaceId}/support`;
       break;
     case "support.created":
-      // F12-K38: nowe zgłoszenie supportu — toast dla każdego workspace
+      // Nowe zgłoszenie supportu — toast dla każdego workspace
       // member'a poza reporter'em.
       iconKind = "support";
       title = `Nowe zgłoszenie od ${actorName ?? "użytkownika"}`;

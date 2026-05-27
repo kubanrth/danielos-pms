@@ -11,7 +11,7 @@ import {
   requestAttachmentUploadAction,
 } from "@/app/(app)/w/[workspaceId]/t/attachment-actions";
 
-// F12-K29: kolumna 'Załączniki' w Tabeli — pokazuje licznik + popover z
+// Kolumna 'Załączniki' w Tabeli — pokazuje licznik + popover z
 // listą plików i uploadem. Reuse'uje 3-step signed-URL flow z
 // AttachmentsSection (request → PUT → confirm) bez pobierania całego
 // task-detail panelu.

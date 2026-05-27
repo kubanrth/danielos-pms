@@ -18,7 +18,7 @@ export function InviteForm({
   defaultBoardId,
 }: {
   workspaceId: string;
-  // F12-K8: when boards is non-empty the form shows a scope toggle:
+  // When boards is non-empty the form shows a scope toggle:
   // "Cały workspace" vs "Konkretna tablica" (with a select). Empty array
   // hides the toggle entirely (back to legacy workspace-only invite).
   boards?: InviteFormBoard[];

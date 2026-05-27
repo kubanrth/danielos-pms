@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { isCronAuthorized } from "@/lib/cron-auth";
 
-// F11-17 (#24): Vercel Cron hits this once a day. For every task with
+// Vercel Cron hits this once a day. For every task with
 // `recurrenceRule` set, decide whether today matches the rule and a
 // fresh instance hasn't been spawned yet. If yes — clone the template
 // (title + description + status column + assignees + tags) into a new

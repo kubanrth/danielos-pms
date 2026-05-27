@@ -62,7 +62,7 @@ async function runSweep(now: Date) {
     });
   }
 
-  // F8c: same sweep for private TodoItem reminders. Recipient is always
+  // Same sweep for private TodoItem reminders. Recipient is always
   // the item owner (it's a private module — no assignees).
   const todoDue = await db.todoItem.findMany({
     where: {

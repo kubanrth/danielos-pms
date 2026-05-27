@@ -45,7 +45,7 @@ export interface TodoListNode {
   folderId: string | null;
 }
 
-// F12-K17: assigned workspace task pokazywany w prawym panelu obok
+// Assigned workspace task pokazywany w prawym panelu obok
 // add-task. Klient chce widzieć jakie projektowe taski ma na karku
 // kiedy planuje sobie listę.
 export interface AssignedTaskRef {
@@ -61,7 +61,7 @@ export interface AssignedTaskRef {
 }
 
 // MS-To-Do-like labels / icons for smart views.
-// F12-K22: dorzucone 'Przydzielone do mnie' (assigned-to-me) — pokazuje
+// Dorzucone 'Przydzielone do mnie' (assigned-to-me) — pokazuje
 // taski projektowe gdzie current user jest assignee, jako osobny widok
 // w sidebarze (jak MS To Do). Zastępuje wcześniejszy embedded
 // AssignedTasksPanel w prawym panelu.
@@ -72,7 +72,7 @@ const SMART_VIEWS: { key: SmartView; label: string; icon: typeof Sun; accent: st
   { key: "assigned", label: "Przydzielone do mnie", icon: UserIcon, accent: "text-emerald-500" },
 ];
 
-// F9-11: fullwidth 2-column layout (sidebar + main) with a slide-in
+// Fullwidth 2-column layout (sidebar + main) with a slide-in
 // right-side detail panel when a task is selected. Folders only contain
 // lists — nested folders are no longer part of the UX (we ignore
 // parentId in the tree and server-side createTodoFolderAction forces
@@ -95,9 +95,9 @@ export function TodoWorkspace({
   smart: SmartView | null;
   items: TodoItemFull[];
   focusedItemId: string | null;
-  // F12-K46: czy URL zawiera ?smart= albo ?listId= (decyduje o mobile view).
+  // Czy URL zawiera ?smart= albo ?listId= (decyduje o mobile view).
   hasViewParam: boolean;
-  // F12-K17: workspace tasks gdzie current user jest przypisany.
+  // Workspace tasks gdzie current user jest przypisany.
   // Empty gdy lista nie aktywna albo user nie ma żadnych assigned.
   assignedTasks: AssignedTaskRef[];
 }) {
@@ -119,7 +119,7 @@ export function TodoWorkspace({
 
   const [selectedItemId, setSelectedItemId] = useState<string | null>(focusedItemId);
 
-  // F12-K18: optimistic UI dla add-task. Wcześniej user typował, naciskał
+  // Optimistic UI dla add-task. Wcześniej user typował, naciskał
   // Enter, czekał na revalidatePath round-trip — feel laggy. Teraz item
   // pojawia się natychmiast w liście, server save w tle.
   // Mergeujemy items (server) + pending (client-only) — gdy server
@@ -156,7 +156,7 @@ export function TodoWorkspace({
   const incomplete = optimisticItems.filter((i) => !i.completed);
   const completed = optimisticItems.filter((i) => i.completed);
 
-  // F12-K46: mobile screen state. Detail otwiera się state'em (selectedItem
+  // Mobile screen state. Detail otwiera się state'em (selectedItem
   // !== null), więc nadpisuje URL-based ekrany.
   const mobileView: "sidebar" | "items" | "detail" = selectedItem
     ? "detail"
@@ -795,12 +795,12 @@ function QuickAddItem({
 }: {
   listId: string;
   listName: string;
-  // F11-11 → F12-K22: 'bottom' variant = sticky bottom of main content
+  // → F12-K22: 'bottom' variant = sticky bottom of main content
   // (MS-To-Do style — input full-width pod listą zadań). 'panel' = card
   // wewnątrz right panelu (legacy — usunięte w F12-K22). 'main' = top
   // header inline (legacy — usunięte w F12-K22).
   variant?: "main" | "panel" | "bottom";
-  // F12-K18: callback do parent useOptimistic — input renders new item
+  // Callback do parent useOptimistic — input renders new item
   // natychmiast lokalnie, server save w tle.
   onOptimistic?: (pending: {
     tempId: string;
@@ -944,7 +944,7 @@ function EmptyState({
   );
 }
 
-// F12-K28: chip-style counter w header'ze TODO. Klient: 'brak cyferki ile
+// Chip-style counter w header'ze TODO. Klient: 'brak cyferki ile
 // jest zgłoszeń, pokazywać ilość elementów'. Trzy chipy: total /
 // do-zrobienia / ukończone — szybki overview stanu listy.
 function CounterChip({
@@ -980,7 +980,7 @@ function formatShortDate(iso: string): string {
   return d.toLocaleDateString("pl-PL", { day: "numeric", month: "short" });
 }
 
-// F12-K18: render content z auto-detekcją URL'i. Plain text + URL jako
+// Render content z auto-detekcją URL'i. Plain text + URL jako
 // klikalny chip pokazujący tylko hostname (zamiast 80-znakowego URL'a).
 // Klik na chip = open in new tab (stop propagation żeby nie selectowało
 // taska).
@@ -1042,7 +1042,7 @@ function RenderContent({ content }: { content: string }) {
   );
 }
 
-// F12-K17: lista tasków przypisanych do current user w prawym panelu.
+// Lista tasków przypisanych do current user w prawym panelu.
 // Każdy task linkuje do swojego workspace'u + boardu. Empty state =
 // hint że nic nie ma.
 function AssignedTasksPanel({ tasks }: { tasks: AssignedTaskRef[] }) {

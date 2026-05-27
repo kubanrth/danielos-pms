@@ -112,7 +112,7 @@ export async function syncCommentMentions(params: {
       snippet,
     } as const;
 
-    // F12-K35: tworzymy per-user żeby dostać id'ki — `<UserToaster>` po
+    // Tworzymy per-user żeby dostać id'ki — `<UserToaster>` po
     // realtime broadcast'cie pobiera szczegóły konkretnego notyfikacji.
     const created = await Promise.all(
       notifyIds.map((userId) =>

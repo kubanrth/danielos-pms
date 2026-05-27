@@ -26,7 +26,7 @@ export default async function BoardTablePage({
     orderBy: { joinedAt: "asc" },
   });
 
-  // F12-K5: fetch the full tag list for the in-cell tag picker.
+  // Fetch the full tag list for the in-cell tag picker.
   // Mirrors the same `OR: workspace + global` query used by task-fetch.ts.
   const allTags = await db.tag.findMany({
     where: { OR: [{ workspaceId }, { workspaceId: null }] },
@@ -50,7 +50,7 @@ export default async function BoardTablePage({
           },
           tags: { include: { tag: true } },
           customValues: true,
-          // F12-K29: lekkie include (4 pola) dla kolumny 'Załączniki' —
+          // Lekkie include (4 pola) dla kolumny 'Załączniki' —
           // pełne metadane (uploader, createdAt) są w task-detail.
           attachments: {
             where: { deletedAt: null },

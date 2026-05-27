@@ -19,7 +19,7 @@ export function PendingInviteRow({
   role: string;
   inviteUrl: string;
   expiresAt: Date;
-  // F12-K8: when set, this is a board-scope invite — show the board
+  // When set, this is a board-scope invite — show the board
   // name instead of just the role so admin sees what they invited to.
   boardName?: string | null;
 }) {

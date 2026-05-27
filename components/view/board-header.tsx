@@ -32,7 +32,7 @@ export function BoardHeader({
   enabledViews?: ViewName[];
   customViews?: CustomViewDescriptor[];
   canManageViews?: boolean;
-  // F12-K61: kontroluje czy h2 to inline-editable button czy plain text.
+  // Kontroluje czy h2 to inline-editable button czy plain text.
   // Domyślnie false — bezpieczny default, parent server component
   // (BoardHeaderServer) ustawia true gdy `can(role, "board.update")`.
   canEditName?: boolean;
@@ -42,9 +42,9 @@ export function BoardHeader({
   defaultViewIds?: Partial<Record<ViewName, string>>;
 }) {
   return (
-    // F11-5: extra (link folders) now spans full width — previously
+    // Extra (link folders) now spans full width — previously
     // shared row with title/viewswitcher → narrower than the table below.
-    // F12-K47: mobile — h2 mniejsze + ViewSwitcher horizontal-scroll
+    // Mobile — h2 mniejsze + ViewSwitcher horizontal-scroll
     // (negative margin do brzegu ekranu) + actions w nowej linii.
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-start justify-between gap-3">

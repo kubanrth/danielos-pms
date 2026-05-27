@@ -1,6 +1,6 @@
 "use client";
 
-// F12-K8: per-board membership UI — second tab of /members page.
+// Per-board membership UI — second tab of /members page.
 // Renders a board picker, visibility toggle, member list, and re-uses
 // the InviteForm with `defaultBoardId` so admin can invite directly to
 // the selected board.

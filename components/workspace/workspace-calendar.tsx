@@ -35,7 +35,7 @@ export interface WorkspaceCalendarEvent {
   creatorName: string;
 }
 
-// F12-K36: paleta z `lib/colors.ts` (BRAND_PALETTE).
+// Paleta z `lib/colors.ts` (BRAND_PALETTE).
 import { EVENT_PALETTE as PALETTE } from "@/lib/colors";
 
 export function WorkspaceCalendar({
@@ -48,12 +48,12 @@ export function WorkspaceCalendar({
   events: WorkspaceCalendarEvent[];
 }) {
   const [showEventForm, setShowEventForm] = useState(false);
-  // F12-K31: klik w event w gridzie otwiera dialog ze szczegółami zamiast
+  // Klik w event w gridzie otwiera dialog ze szczegółami zamiast
   // próbować nawigować do /t/event:<id> (wcześniej 404).
   const [openEventId, setOpenEventId] = useState<string | null>(null);
 
   // Merge tasks + events into a single CalendarEvent list for MonthGrid.
-  // F12-K31: id pola dalej używa prefixu (żeby unikać kolizji w
+  // Id pola dalej używa prefixu (żeby unikać kolizji w
   // wewnętrznym keyu MonthGrid'a), ale entityId zawiera RAW id i
   // MonthGrid linkuje/callbackuje po entityId.
   const merged: CalendarEvent[] = [
@@ -128,7 +128,7 @@ export function WorkspaceCalendar({
   );
 }
 
-// F12-K31 + F12-K55: dialog ze szczegółami wydarzenia.
+// + F12-K55: dialog ze szczegółami wydarzenia.
 // View mode (default) → przycisk Edytuj przełącza na inline form
 // (title, description, start/end, allDay, color). Submit → updateWorkspaceEventAction
 // → revalidate. Tylko creator widzi guziki edit/delete (sprawdzane
@@ -246,7 +246,7 @@ function EventDetailDialog({
   );
 }
 
-// F12-K55: form edycji istniejącego wydarzenia. Inline w EventDetailDialog
+// Form edycji istniejącego wydarzenia. Inline w EventDetailDialog
 // — toggle widoku z view mode na edit, te same pola co w NewEventForm
 // (poniżej, F12-K31), tylko dispatching do updateWorkspaceEventAction.
 function EditEventForm({

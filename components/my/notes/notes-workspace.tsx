@@ -45,14 +45,14 @@ export interface NoteListRow {
   updatedAt: string;
   pinned: boolean;
   folderId: string | null;
-  // F11-23: marker for Trash view rows.
+  // Marker for Trash view rows.
   isTrashed: boolean;
 }
 export interface ActiveNote {
   id: string;
   title: string;
   content: string;
-  // F11-23: Tiptap rich-text doc.
+  // Tiptap rich-text doc.
   contentJson: RichTextDoc | null;
   folderId: string | null;
   pinned: boolean;
@@ -60,11 +60,11 @@ export interface ActiveNote {
   updatedAt: string;
 }
 
-// F9-15 + F11-23 (#14): Apple-Notes-like 3-column layout with iOS parity:
+// + F11-23 (#14): Apple-Notes-like 3-column layout with iOS parity:
 // smart folders (Pinned/Recent/Trash), search, soft delete + restore,
 // rich text via Tiptap.
 //
-// F12-K45: mobile redesign 1:1 z iOS Notes — desktop dalej trzyma 3
+// Mobile redesign 1:1 z iOS Notes — desktop dalej trzyma 3
 // kolumny obok siebie, ale na mobile pokazujemy TYLKO jeden "ekran"
 // na raz (folders → list → editor), z back-chevron'em w headerze i
 // pełną szerokością ekranu. Stan ekranu czytamy z URL params:
@@ -374,7 +374,7 @@ function NotesListColumn({
   searchQuery: string;
   hideOnMobile: boolean;
 }) {
-  // F11-23: don't auto-target trash/pinned/recent for create — only
+  // Don't auto-target trash/pinned/recent for create — only
   // concrete folders pre-fill folderId on new notes.
   const folderId =
     selectedFolder === "all" ||
@@ -388,8 +388,8 @@ function NotesListColumn({
   const router = useRouter();
   const [search, setSearch] = useState(searchQuery);
 
-  // F11-23: debounced search → URL param so refreshes preserve query.
-  // F12-K45: zawsze ustawiaj folderId (incl. "all") gdy w trybie list,
+  // Debounced search → URL param so refreshes preserve query.
+  // Zawsze ustawiaj folderId (incl. "all") gdy w trybie list,
   // żeby mobile back-chevron zachował odpowiedni state.
   useEffect(() => {
     if (search === searchQuery) return;
@@ -404,7 +404,7 @@ function NotesListColumn({
 
   const folderLabel = folderLabelFor(selectedFolder);
 
-  // F12-K45: pinned na górze + reszta time-grouped (iOS parity:
+  // Pinned na górze + reszta time-grouped (iOS parity:
   // "Dzisiaj" / "Wczoraj" / "Poprzednie 7 dni" / "Poprzednie 30 dni" /
   // per-month). Trash nie grupuje (i tak wszystko "stale").
   const pinned = isTrash ? [] : notes.filter((n) => n.pinned);
@@ -580,7 +580,7 @@ function NoteCard({
   active: boolean;
   selectedFolder: string;
 }) {
-  // F12-K45: link zawsze niesie folderId (ten z którego user wszedł),
+  // Link zawsze niesie folderId (ten z którego user wszedł),
   // żeby back-chevron z editora wiedział dokąd wrócić.
   const folderForBack =
     selectedFolder && selectedFolder !== "all"
@@ -930,7 +930,7 @@ function formatLongDateTime(iso: string): string {
   return d.toLocaleString("pl-PL", { dateStyle: "long", timeStyle: "short" });
 }
 
-// F12-K45: iOS-Notes-style time grouping for notes list.
+// IOS-Notes-style time grouping for notes list.
 // "Dzisiaj" / "Wczoraj" / "Poprzednie 7 dni" / "Poprzednie 30 dni" /
 // per-month for older.
 function groupNotesByTime(

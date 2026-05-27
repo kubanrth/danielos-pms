@@ -5,7 +5,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { Link } from "@tiptap/extension-link";
 import { Placeholder } from "@tiptap/extension-placeholder";
 import { Mention } from "@tiptap/extension-mention";
-// F12-K12: rich-table briefy. Tabele, inline images, kolor tekstu,
+// Rich-table briefy. Tabele, inline images, kolor tekstu,
 // highlight (background) — wymagane przez "Creative Board" UX (klient
 // referencuje ClickUp design brief templates).
 import { Table } from "@tiptap/extension-table";
@@ -55,7 +55,7 @@ export interface RichTextEditorProps {
   // Optional live feedback — invoked on every doc change so parent can
   // keep a local draft without posting a form submit.
   onChange?: (doc: RichTextDoc | null) => void;
-  // F12-K12: feature toggles for richer briefs. Display-variant editors
+  // Feature toggles for richer briefs. Display-variant editors
   // still render these nodes in read mode (Image/Table) but omit toolbar
   // buttons. Pass `extras="brief"` to enable the full toolbar set.
   extras?: "default" | "brief";
@@ -184,7 +184,7 @@ export function RichTextEditor({
   const showFrame = variant === "field";
   const isBriefMode = extras === "brief";
 
-  // F12-K12: kombinacja extensions zależna od trybu. Brief tryb dodaje
+  // Kombinacja extensions zależna od trybu. Brief tryb dodaje
   // tabele + obrazy + kolor tekstu + highlight. Domyślny zachowuje
   // dotychczasowe zachowanie (description tasków, komentarze).
   const briefExtensions = isBriefMode
@@ -571,7 +571,7 @@ function ColorSwatchPopover({
   onPick: (color: string) => void;
   onClear: () => void;
 }) {
-  // F12-K13: poprzedni popover miał h-5 w-5 swatche w 8-kol gridzie —
+  // Poprzedni popover miał h-5 w-5 swatche w 8-kol gridzie —
   // ledwo klikalne. Teraz większe swatche w 4×2 gridzie, wyraźny
   // separator i pełnoszerokościowy "Usuń kolor" jako secondary CTA.
   return (

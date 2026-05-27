@@ -19,7 +19,7 @@ export interface AssignMember {
   avatarUrl: string | null;
 }
 
-// F9-13: global `M` hotkey on hovered task rows pops an assign menu.
+// Global `M` hotkey on hovered task rows pops an assign menu.
 // Use this hook in any list view (BoardTable, KanbanBoard, My Tasks…):
 // 1. call `rowProps(taskId, alreadyAssignedUserIds)` and spread onto the
 //    row element to make it "hoverable" for the hotkey
@@ -187,7 +187,7 @@ function AssignMenu({
                 action={(fd) =>
                   startTransition(async () => {
                     await toggleAssigneeAction(fd);
-                    // F12-K4: Realtime broadcast can fail silently — force
+                    // Realtime broadcast can fail silently — force
                     // a router refresh so the hovered list view picks up
                     // the new assignee even when the channel doesn't fire.
                     router.refresh();

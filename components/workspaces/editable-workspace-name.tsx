@@ -3,7 +3,7 @@
 import { renameWorkspaceAction } from "@/app/(app)/workspaces/actions";
 import { EditableTitle } from "@/components/ui/editable-title";
 
-// F12-K61: cienki client wrapper łączący generic EditableTitle z
+// Cienki client wrapper łączący generic EditableTitle z
 // workspace-specific server action. Trzyma sygnaturę FormData w jednym
 // miejscu — komponent EditableTitle pozostaje generyczny.
 export function EditableWorkspaceName({

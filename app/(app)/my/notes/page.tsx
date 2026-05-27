@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NotesWorkspace } from "@/components/my/notes/notes-workspace";
 
-// F9-15 + F11-23: 3-column Apple-Notes-style layout (fullwidth, no AppShell).
+// + F11-23: 3-column Apple-Notes-style layout (fullwidth, no AppShell).
 // URL params:
 //   folderId  — concrete folder OR smart-folder key:
 //                  "all" | "pinned" | "recent" | "trash"
@@ -24,7 +24,7 @@ export default async function MyNotesPage({
   const userId = session.user.id;
   const params = await searchParams;
 
-  // F11-23: include deleted notes; we filter per-view.
+  // Include deleted notes; we filter per-view.
   const [folders, allNotes] = await Promise.all([
     db.noteFolder.findMany({
       where: { userId },
@@ -47,7 +47,7 @@ export default async function MyNotesPage({
 
   const selectedFolder = params.folderId ?? "all";
   const query = (params.q ?? "").trim().toLowerCase();
-  // F12-K45: mobile UX (iOS-Notes parity) potrzebuje wiedzieć czy URL
+  // Mobile UX (iOS-Notes parity) potrzebuje wiedzieć czy URL
   // ma EXPLICIT params, żeby zdecydować który "ekran" pokazać na mobile
   // (folders list → notes list → editor). Desktop nie używa tych flag.
   const hasFolderParam = params.folderId !== undefined;

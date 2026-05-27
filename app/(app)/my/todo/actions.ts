@@ -19,7 +19,7 @@ const createFolderSchema = z.object({
   name: z.string().trim().min(1).max(80),
 });
 
-// F9-11: Client feedback was that folders should only contain lists,
+// Client feedback was that folders should only contain lists,
 // not nested sub-folders (MS To Do parity). We ignore any parentId
 // that might have been posted by a legacy form.
 export async function createTodoFolderAction(formData: FormData) {
@@ -172,7 +172,7 @@ export async function deleteTodoItemAction(formData: FormData) {
   revalidatePath("/my/todo");
 }
 
-// F12-K28: bulk-delete completed items na liście. Optional listId
+// Bulk-delete completed items na liście. Optional listId
 // (gdy pusty/brak — usuwa wszystkie completed użytkownika, np. ze
 // smart view'u). Klient: 'usuń wszystkie wykonane zadania'.
 const bulkDeleteCompletedSchema = z.object({
@@ -415,7 +415,7 @@ export async function deleteTodoStepAction(formData: FormData) {
   revalidatePath("/my/todo");
 }
 
-// F12-K28: notes per subtask. Klient zażądał opisów dla każdego
+// Notes per subtask. Klient zażądał opisów dla każdego
 // pod-zadania, nie tylko parent task'a.
 const updateStepNotesSchema = z.object({
   id: z.string().min(1),

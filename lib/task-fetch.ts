@@ -57,7 +57,7 @@ export async function fetchTaskDetail(
             orderBy: [{ orderIndex: "asc" }, { startAt: "asc" }],
             select: { id: true, title: true, startAt: true, stopAt: true },
           },
-          // F12-K54: custom kolumny z tabeli — pokazujemy je w karcie
+          // Custom kolumny z tabeli — pokazujemy je w karcie
           // zadania nad sekcją "Czas pracy", w tej samej kolejności
           // co w widoku tabeli.
           customColumns: { orderBy: { order: "asc" } },
@@ -66,7 +66,7 @@ export async function fetchTaskDetail(
       assignees: { select: { userId: true } },
       tags: { select: { tagId: true } },
       subtasks: { orderBy: { order: "asc" } },
-      // F12-K54: custom values per-task (klucz = TableColumn.id)
+      // Custom values per-task (klucz = TableColumn.id)
       customValues: true,
       poll: {
         include: {
@@ -78,7 +78,7 @@ export async function fetchTaskDetail(
   });
   if (!task) notFound();
 
-  // F12-K8: also gate by per-board access. Without this, a workspace
+  // Also gate by per-board access. Without this, a workspace
   // MEMBER who knows a task ID on a PRIVATE board (e.g. shared link
   // before they were removed) could still load the task page.
   if (!(await userCanAccessBoard(task.boardId, ctx.userId, ctx.role))) notFound();
@@ -148,7 +148,7 @@ export async function fetchTaskDetail(
     role: ctx.role,
     task: {
       id: task.id,
-      // F12-K57: ludzki ID (1, 2, 3...) zamiast obciętego cuid'a.
+      // Ludzki ID (1, 2, 3...) zamiast obciętego cuid'a.
       displayId: task.displayId,
       title: task.title,
       descriptionJson: normalizeDescription(task.descriptionJson),
@@ -166,7 +166,7 @@ export async function fetchTaskDetail(
             })
           : null,
       recurrenceParentId: task.recurrenceParentId,
-      // F12-K40: time tracking — komponent TaskTimer odczytuje te 3 pola.
+      // Time tracking — komponent TaskTimer odczytuje te 3 pola.
       timeTrackedSeconds: task.timeTrackedSeconds,
       timerStartedAt: task.timerStartedAt
         ? task.timerStartedAt.toISOString()
@@ -236,7 +236,7 @@ export async function fetchTaskDetail(
       : null,
     canManagePoll: can(ctx.role, "poll.manage"),
     canVote: can(ctx.role, "poll.vote"),
-    // F12-K54: custom kolumny + ich wartości dla bieżącego task'a
+    // Custom kolumny + ich wartości dla bieżącego task'a
     customColumns: task.board.customColumns.map((c) => ({
       id: c.id,
       name: c.name,

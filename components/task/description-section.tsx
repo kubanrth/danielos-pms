@@ -5,7 +5,7 @@ import { Edit3 } from "lucide-react";
 import { RichTextEditor, type RichTextDoc } from "@/components/task/rich-text-editor";
 import { updateTaskDescriptionAction } from "@/app/(app)/w/[workspaceId]/t/actions";
 
-// F9-03: Task description — separate view/edit modes.
+// Task description — separate view/edit modes.
 // MS Task / ClickUp pattern: once saved, description renders as prose
 // with an "Edytuj" button. Clicking Edytuj switches back to the Tiptap
 // editor with a Save/Cancel pair. Solves the bug where the editor stayed

@@ -7,7 +7,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Prisma } from "@/lib/generated/prisma/client";
 
-// F9-15: private per-user Notes module (Apple-Notes parity). All
+// Private per-user Notes module (Apple-Notes parity). All
 // actions scope by session user — the module is intentionally
 // single-player.
 
@@ -109,7 +109,7 @@ const updateNoteSchema = z.object({
   id: z.string().min(1),
   title: z.string().max(200).optional(),
   content: z.string().max(50_000).optional(),
-  // F11-23: Tiptap JSON for rich text. Plain `content` kept as
+  // Tiptap JSON for rich text. Plain `content` kept as
   // search-friendly snippet (derived from JSON on save).
   contentJson: z.string().max(100_000).optional().or(z.literal("")),
 });
@@ -198,7 +198,7 @@ export async function moveNoteAction(formData: FormData) {
 
 const deleteNoteSchema = z.object({ id: z.string().min(1) });
 
-// F11-23 (#14): soft delete — moves note to Kosz. iOS Notes parity.
+// Soft delete — moves note to Kosz. iOS Notes parity.
 // Permanent delete is via emptyTrashAction or restoreNoteAction → delete.
 export async function deleteNoteAction(formData: FormData) {
   const userId = await currentUserId();

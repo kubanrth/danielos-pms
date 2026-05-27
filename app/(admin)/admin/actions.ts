@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { requireSuperAdmin } from "@/lib/admin-guard";
 import { writeAdminAudit } from "@/lib/admin-audit";
 
-// F12-K50: bcrypt cost 12 — zgodne z resztą apki (invite signup, password
+// Bcrypt cost 12 — zgodne z resztą apki (invite signup, password
 // reset). Cost niżej = szybciej dla atakującego brute-force.
 const BCRYPT_COST = 12;
 
@@ -88,7 +88,7 @@ export async function softDeleteUserAction(formData: FormData) {
   revalidatePath("/admin/actions");
 }
 
-// F12-K50: utworz konto user'a bezposrednio z UI (bez invite flow).
+// Utworz konto user'a bezposrednio z UI (bez invite flow).
 // Dla super-adminow ktorzy musza dodac kogos szybko, np. testowe konto
 // dla klienta. User tworzony jest aktywny, isSuperAdmin opcjonalne.
 export async function createUserAction(formData: FormData): Promise<
@@ -163,7 +163,7 @@ export async function createUserAction(formData: FormData): Promise<
   return { ok: true, userId };
 }
 
-// F12-K50: reset hasla istniejacego user'a (bez wysylki maila/invite).
+// Reset hasla istniejacego user'a (bez wysylki maila/invite).
 // Super admin podaje nowe haslo; user dostaje je inną drogą (Slack/SMS).
 // Soft-deleted users — odmawiamy resetu.
 export async function resetUserPasswordAction(formData: FormData): Promise<
@@ -220,7 +220,7 @@ export async function resetUserPasswordAction(formData: FormData): Promise<
   return { ok: true };
 }
 
-// F12-K50: toggle super admin role. Self-toggle blocked (no orphan
+// Toggle super admin role. Self-toggle blocked (no orphan
 // system without admin).
 export async function toggleSuperAdminAction(formData: FormData) {
   const admin = await requireSuperAdmin();

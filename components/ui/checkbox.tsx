@@ -3,7 +3,7 @@
 import { Check, Minus } from "lucide-react";
 import type { ChangeEvent, MouseEvent } from "react";
 
-// F12-K29: tabela używała natywnego <input type="checkbox"> z accent-color,
+// Tabela używała natywnego <input type="checkbox"> z accent-color,
 // który w dark mode zachowuje się jak Windows-95 (jasne tło, brak hover'u,
 // brak indeterminate). Ten komponent renderuje appearance-none input +
 // overlay z lucide ikonką żeby wyglądało jednakowo w light/dark, support'owało
@@ -28,7 +28,7 @@ export function Checkbox({
   size?: "sm" | "md";
   disabled?: boolean;
   className?: string;
-  // F12-K32: native form integration. Gdy 'name' jest set, underlying
+  // Native form integration. Gdy 'name' jest set, underlying
   // input wysyła "on" przez FormData (zachowanie natywnego checkboxa) —
   // formy z action={...} dostają standardowy submit.
   name?: string;

@@ -4,7 +4,7 @@ export const createTaskSchema = z.object({
   workspaceId: z.string().min(1),
   boardId: z.string().min(1),
   title: z.string().trim().min(1, "Tytuł jest wymagany.").max(2000),
-  // F11-10: optional explicit status column (Kanban inline-add). When
+  // Optional explicit status column (Kanban inline-add). When
   // omitted, server falls back to the board's first column.
   statusColumnId: z.string().min(1).optional(),
 });
@@ -18,7 +18,7 @@ const richDocSchema = z.object({
   content: z.array(z.unknown()).optional(),
 });
 
-// F9-03: description moved out to updateTaskDescriptionAction. The main
+// Description moved out to updateTaskDescriptionAction. The main
 // update form no longer touches descriptionJson — kept off the schema so
 // a missing/empty field isn't accidentally treated as "clear description".
 export const updateTaskSchema = z.object({

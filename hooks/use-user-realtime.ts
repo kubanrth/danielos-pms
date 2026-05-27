@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase";
 import type { UserRealtimePayload } from "@/lib/realtime";
 
-// F12-K35: per-user kanał `user:<userId>` — subskrybuje broadcastUserChange'y
+// Per-user kanał `user:<userId>` — subskrybuje broadcastUserChange'y
 // (notification.new / reminder.due). Używane przez `<UserToaster>` żeby
 // pokazać toast w prawym górnym rogu od razu, bez polla.
 //

@@ -14,11 +14,11 @@ export interface DuePopup {
   isSelfAuthored: boolean;
 }
 
-// F9-16 + F11-12 (#2): stacked floating popups in the top-right corner
+// + F11-12 (#2): stacked floating popups in the top-right corner
 // for every reminder that's due + not yet dismissed by the recipient.
 // Rendered once globally from the (app) layout.
 //
-// F12-K20: timing rebuilt — wcześniej był jeden setInterval co 60s, więc
+// Timing rebuilt — wcześniej był jeden setInterval co 60s, więc
 // reminder ustawiony na 'za 30s' nie pokazywał się przed kolejnym pollem
 // (do 60s opóźnienia). Teraz:
 //   - Initial poll natychmiast po mount (bez 60s grace period)
@@ -84,7 +84,7 @@ export function ReminderPopups({
     };
   }, [refetch]);
 
-  // F12-K35: subskrybuj user-realtime — gdy `reminder.due` przyjdzie
+  // Subskrybuj user-realtime — gdy `reminder.due` przyjdzie
   // (np. broadcast z innego miejsca apki / cron'a), refetchuj listę
   // od razu zamiast czekać 20s na poll.
   useUserRealtime(

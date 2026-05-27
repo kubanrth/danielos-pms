@@ -18,10 +18,10 @@ import {
   supabaseAdmin,
 } from "@/lib/storage";
 
-// F11-20 (#23): internal helpdesk module per-workspace. Każdy member
+// Internal helpdesk module per-workspace. Każdy member
 // może zgłosić ticket; ADMIN/MEMBER (z task.update) może obsłużyć.
 //
-// F12-K11: dodane dueAt + isUrgent (NATYCHMIAST flag) + reporter może
+// Dodane dueAt + isUrgent (NATYCHMIAST flag) + reporter może
 // edytować title/description własnego ticketu dopóki status = OPEN.
 
 // ISO datetime accepted as string OR empty string (cleared) — Zod
@@ -80,7 +80,7 @@ export async function createSupportTicketAction(
     },
   });
 
-  // F12-K38: notify wszystkich workspace member'ów (poza reporter'em) o
+  // Notify wszystkich workspace member'ów (poza reporter'em) o
   // nowym zgłoszeniu. Klient: 'dodaj takie same indykatory jak przy
   // powiadomieniach do supportu, jak pojawi się zgłoszenie to ma pisać'.
   const reporter = await db.user.findUnique({
@@ -120,7 +120,7 @@ export async function createSupportTicketAction(
         broadcastUserChange(n.userId, { kind: "notification.new", id: n.id }),
       ),
     );
-    // F12-K39: email do każdego member'a.
+    // Email do każdego member'a.
     const actorLabel = reporter?.name ?? reporter?.email ?? "Ktoś";
     await Promise.all(
       created.map((n) =>
@@ -153,7 +153,7 @@ export async function createSupportTicketAction(
     },
   });
   revalidatePath(`/w/${parsed.data.workspaceId}/support`);
-  // F12-K38: layout-level revalidate żeby badge supportu w sidebar'ze
+  // Layout-level revalidate żeby badge supportu w sidebar'ze
   // dla wszystkich userów odświeżył się przy następnej nawigacji.
   revalidatePath("/", "layout");
   return { ok: true, ticketId: ticket.id };
@@ -161,7 +161,7 @@ export async function createSupportTicketAction(
 
 const updateTicketSchema = z.object({
   id: z.string().min(1),
-  // F12-K11: edycja treści. Reporter może edytować dopóki status=OPEN
+  // Edycja treści. Reporter może edytować dopóki status=OPEN
   // i nie ma assignee. Admin (task.update) zawsze.
   title: z.string().trim().min(1).max(200).optional(),
   description: z.string().trim().min(1).max(5000).optional(),
@@ -200,7 +200,7 @@ export async function updateSupportTicketAction(formData: FormData) {
   });
   if (!ticket) return;
 
-  // F12-K11: dwie ścieżki autoryzacji.
+  // Dwie ścieżki autoryzacji.
   // - "Stan" (status / priority / assignee): tylko task.update.
   // - "Treść" (title / description / dueAt / isUrgent): reporter (own,
   //   open, unassigned) ALBO task.update.
@@ -261,14 +261,14 @@ export async function updateSupportTicketAction(formData: FormData) {
 
   await db.supportTicket.update({ where: { id: ticket.id }, data });
 
-  // F12-K25: gdy ticket właśnie się zamknął (transition do RESOLVED/CLOSED
+  // Gdy ticket właśnie się zamknął (transition do RESOLVED/CLOSED
   // ze stanu OPEN/IN_PROGRESS), powiadom reporter'a w inboxie. Skip
   // jeśli reporter sam jest tym kto zamyka (zwykle admin to robi).
   const wasOpenBefore = ticket.status === "OPEN" || ticket.status === "IN_PROGRESS";
   const isClosedNow =
     parsed.data.status === "RESOLVED" || parsed.data.status === "CLOSED";
 
-  // F12-K26: gdy admin przypisuje kogoś do ticketu (i to nie ten kto
+  // Gdy admin przypisuje kogoś do ticketu (i to nie ten kto
   // klika) — wyślij notyfikację 'support.assigned' do nowego assignee.
   // Wcześniej tylko reporter dostawał info na zamknięciu, assignee
   // nie wiedział że dostał ticket.
@@ -315,12 +315,12 @@ export async function updateSupportTicketAction(formData: FormData) {
       },
       select: { id: true, userId: true },
     });
-    // F12-K35: realtime toast.
+    // Realtime toast.
     await broadcastUserChange(notif.userId, {
       kind: "notification.new",
       id: notif.id,
     });
-    // F12-K39: email reporter'owi.
+    // Email reporter'owi.
     const statusLabel = parsed.data.status === "RESOLVED" ? "rozwiązane" : "zamknięte";
     const actorLabel = actor?.name ?? actor?.email ?? "admin";
     await sendNotificationEmail({
@@ -354,7 +354,7 @@ export async function updateSupportTicketAction(formData: FormData) {
       kind: "notification.new",
       id: notif.id,
     });
-    // F12-K39: email do new assignee.
+    // Email do new assignee.
     const actorLabel = actor?.name ?? actor?.email ?? "Ktoś";
     await sendNotificationEmail({
       to: { userId: newAssigneeId },
@@ -377,12 +377,12 @@ export async function updateSupportTicketAction(formData: FormData) {
     diff: data as Record<string, string | number | boolean | null>,
   });
   revalidatePath(`/w/${ticket.workspaceId}/support`);
-  // F12-K38: status zmienione → liczba otwartych zgłoszeń zmienia się →
+  // Status zmienione → liczba otwartych zgłoszeń zmienia się →
   // sidebar badge musi się przeliczyć.
   if (parsed.data.status) revalidatePath("/", "layout");
 }
 
-// F12-K25: attachments dla ticketów. Reuse Supabase Storage flow z
+// Attachments dla ticketów. Reuse Supabase Storage flow z
 // bucketu 'attachments' (signed upload URL → klient PUT-uje plik →
 // klient potwierdza addSupportAttachmentAction → row w
 // SupportTicketAttachment'cie + revalidate). Storage path:

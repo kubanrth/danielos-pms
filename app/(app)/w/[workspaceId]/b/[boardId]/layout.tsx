@@ -1,4 +1,4 @@
-// F12-K8: per-board access gate. Runs once for every /b/[boardId]/*
+// Per-board access gate. Runs once for every /b/[boardId]/*
 // route (table, kanban, roadmap, gantt, whiteboard, custom views).
 // requireBoardAccess() does:
 //   - workspace membership check (404 if missing — same UX as before)

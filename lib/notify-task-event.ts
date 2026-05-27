@@ -3,7 +3,7 @@ import { Prisma } from "@/lib/generated/prisma/client";
 import { db } from "@/lib/db";
 import { broadcastUserChange } from "@/lib/realtime";
 
-// F12-K62: powiadomienia do wszystkich członków workspace'u (minus
+// Powiadomienia do wszystkich członków workspace'u (minus
 // actor) o evencie na tablicy — utworzenie zadania, zmiana statusu.
 //
 // Recipient model: workspace membership. Świadomie nie filtrujemy
@@ -27,7 +27,7 @@ export async function notifyBoardEvent(params: {
   actorId: string;
   actorName: string | null;
   type: "task.created" | "task.status.changed";
-  // F12-K62: dla task.status.changed — opcjonalne nazwy statusów do
+  // Dla task.status.changed — opcjonalne nazwy statusów do
   // wyrenderowania "X → Y" w treści notyfikacji.
   fromStatusName?: string | null;
   toStatusName?: string | null;
@@ -54,7 +54,7 @@ export async function notifyBoardEvent(params: {
       : {}),
   };
 
-  // F12-K62: createMany dla performance (audit feedback z F12-K60).
+  // CreateMany dla performance (audit feedback z F12-K60).
   await db.notification.createMany({
     data: members.map((m) => ({
       userId: m.userId,
@@ -63,7 +63,7 @@ export async function notifyBoardEvent(params: {
     })),
   });
 
-  // F12-K62: re-fetch IDs (createMany ich nie zwraca) tylko dla świeżo
+  // Re-fetch IDs (createMany ich nie zwraca) tylko dla świeżo
   // dodanych userów. Filtrujemy po createdAt w wąskim okienku 5s żeby
   // nie złapać niezwiązanych notyfikacji jeśli były concurrent inserts.
   const fresh = await db.notification.findMany({

@@ -30,7 +30,7 @@ import { RecurrencePicker } from "@/components/task/recurrence-picker";
 import { PortalDropdown } from "@/components/ui/portal-dropdown";
 import { Bell, Flag } from "lucide-react";
 
-// F12-K36: paleta tagów przeniesiona do `lib/colors.ts` (BRAND_PALETTE).
+// Paleta tagów przeniesiona do `lib/colors.ts` (BRAND_PALETTE).
 import { TAG_PALETTE as TAG_COLORS } from "@/lib/colors";
 
 export interface TaskDetailProps {
@@ -38,7 +38,7 @@ export interface TaskDetailProps {
   role: Role;
   task: {
     id: string;
-    // F12-K57: ludzki ID per-workspace (1, 2, 3...) wyświetlany w UI.
+    // Ludzki ID per-workspace (1, 2, 3...) wyświetlany w UI.
     displayId: number;
     title: string;
     descriptionJson: RichTextDoc | null;
@@ -48,10 +48,10 @@ export interface TaskDetailProps {
     stopAt: string | null;
     reminderAt: string | null;
     reminderOffset: string | null;
-    // F11-17: recurrence rule (cron spawns instances daily at 00:05 UTC).
+    // Recurrence rule (cron spawns instances daily at 00:05 UTC).
     recurrenceRule: { freq: "daily" | "weekly" | "monthly"; day?: number } | null;
     recurrenceParentId: string | null;
-    // F12-K40: time tracking — accumulated seconds + ISO timer state.
+    // Time tracking — accumulated seconds + ISO timer state.
     timeTrackedSeconds: number;
     timerStartedAt: string | null;
     timerCompletedAt: string | null;
@@ -82,7 +82,7 @@ export interface TaskDetailProps {
   poll: PollData | null;
   canManagePoll: boolean;
   canVote: boolean;
-  // F12-K54: custom kolumny tabeli + ich wartości — wyświetlamy w karcie
+  // Custom kolumny tabeli + ich wartości — wyświetlamy w karcie
   // zadania nad sekcją "Czas pracy". Bidirectional sync ze stroną tabeli
   // (saveTaskCustomValueAction revalidate'uje obie).
   customColumns: {
@@ -131,7 +131,7 @@ export function TaskDetail({
   const fieldErrors = !state?.ok ? state?.fieldErrors : undefined;
   const flash = state?.ok ? state.message : null;
 
-  // F12-K4: Server actions revalidate paths but Supabase Realtime
+  // Server actions revalidate paths but Supabase Realtime
   // broadcast can fail silently (channel auth, network) — wrap the
   // assignee toggle so the parent route always gets a router.refresh
   // when the action returns. Cheap belt-and-suspenders.
@@ -334,7 +334,7 @@ export function TaskDetail({
           przez co po server-save select wracał do oryginalnego value
           jeśli intercepted modal route nie zrewalidował się na czas. */}
       <MilestoneSection
-        // F12-K21: key bound to milestoneId — gdy server zwraca nową
+        // Key bound to milestoneId — gdy server zwraca nową
         // wartość, komponent remountuje się i state startuje od fresh
         // currentMilestoneId. Eliminuje wszelkie potential stale-state
         // sync issues bez wywoływania setState w render body.
@@ -426,7 +426,7 @@ export function TaskDetail({
   );
 }
 
-// F12-K21: milestone picker — controlled select. Lokalny state startuje
+// Milestone picker — controlled select. Lokalny state startuje
 // od `currentMilestoneId` (key na poziomie parent'a wymusza remount
 // przy zmianie propa, więc state zawsze świeży). Po onChange optymizujemy
 // UI od razu, server save w tle, router.refresh() wymusza świeże props
@@ -445,7 +445,7 @@ function MilestoneSection({
   const router = useRouter();
   const [value, setValue] = useState<string>(currentMilestoneId ?? "");
 
-  // F12-K30: PortalDropdown zamiast natywnego <select>. Sentinel "__none__"
+  // PortalDropdown zamiast natywnego <select>. Sentinel "__none__"
   // bo PortalDropdown traktuje pustego stringa jako 'no selection' (i nie
   // dałoby się go wybrać jako "Brak"). Convert in/out na granicy.
   const NONE = "__none__";
@@ -495,7 +495,7 @@ function MilestoneSection({
   );
 }
 
-// F12-K30: hidden-input + PortalDropdown żeby reminderOffset dalej trafiał
+// Hidden-input + PortalDropdown żeby reminderOffset dalej trafiał
 // do FormData submitu (parent form). Native <select> w form'ie miało
 // natywny dropdown, który klient zgłosił jako brzydki UX (mac-native
 // styling, dark-mode broken).
@@ -560,7 +560,7 @@ function TagsSection({
   const [creating, setCreating] = useState(false);
   const [color, setColor] = useState(TAG_COLORS[0]);
 
-  // F12-K4: see comment in TaskDetail — same belt-and-suspenders pattern
+  // See comment in TaskDetail — same belt-and-suspenders pattern
   // for tag toggles so the table re-fetches even if Realtime is silent.
   const toggleTagWithRefresh = async (fd: FormData) => {
     await toggleTagAction(fd);

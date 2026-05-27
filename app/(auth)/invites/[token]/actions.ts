@@ -83,7 +83,7 @@ export async function acceptInviteAction(
     userId = newUser.id;
   }
 
-  // F12-K8: invitation.boardId distinguishes scope.
+  // Invitation.boardId distinguishes scope.
   // - workspace scope (boardId null): upsert WorkspaceMembership with the
   //   invited role. No board membership.
   // - board scope (boardId set): ensure baseline workspace membership
@@ -144,7 +144,7 @@ export async function acceptInviteAction(
     },
   });
 
-  // F12-K38: po akceptacji ZAWSZE redirect do workspace'u. Wcześniej, gdy
+  // Po akceptacji ZAWSZE redirect do workspace'u. Wcześniej, gdy
   // user był już zalogowany jako ten sam email, action zwracał { ok: true }
   // bez redirect'u — formularz po prostu sat w pendingu i klient widział
   // 'jakby nic się nie stało' (i przy refreshu strony zaproszenia

@@ -143,7 +143,7 @@ async function TableRenderer({
     orderBy: { joinedAt: "asc" },
   });
 
-  // F12-K5: same workspace-wide tag list as the default /table route so
+  // Same workspace-wide tag list as the default /table route so
   // the in-cell tag picker has options to choose from in custom views.
   const allTags = await db.tag.findMany({
     where: { OR: [{ workspaceId }, { workspaceId: null }] },
@@ -165,7 +165,7 @@ async function TableRenderer({
           },
           tags: { include: { tag: true } },
           customValues: true,
-          // F12-K29: 'Załączniki' built-in column needs file metadata.
+          // 'Załączniki' built-in column needs file metadata.
           attachments: {
             where: { deletedAt: null },
             select: {

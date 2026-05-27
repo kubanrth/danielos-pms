@@ -1,6 +1,6 @@
 "use client";
 
-// F12-K35: globalny toaster powiadomień. Subskrybuje user-realtime kanał
+// Globalny toaster powiadomień. Subskrybuje user-realtime kanał
 // (`user:<userId>`) i wyświetla card w prawym górnym rogu na każde nowe
 // powiadomienie — niezależnie od strony na której user jest. Klik na
 // kartę = nawigacja do powiadomienia (workspace/task/support). Klik X =

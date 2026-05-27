@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { requireWorkspaceAction } from "@/lib/workspace-guard";
 import { writeAudit } from "@/lib/audit";
 
-// F9-12: Folder linków = named container + user-defined table (columns
+// Folder linków = named container + user-defined table (columns
 // + rows + cells). All actions scope by the folder's board → workspace.
 
 const revalidateBoard = (workspaceId: string, boardId: string) => {

@@ -1,6 +1,6 @@
 "use client";
 
-// F12-K5: inline assignee + tag pickers used as table cells. Click the
+// Inline assignee + tag pickers used as table cells. Click the
 // cell → portal popover with searchable list → toggle item. Mirrors the
 // task-detail modal UX so users don't have to open a task just to add a
 // person or tag.

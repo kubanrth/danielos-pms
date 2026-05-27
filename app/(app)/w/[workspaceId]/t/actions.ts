@@ -84,7 +84,7 @@ export async function createTaskAction(
   const limit = await checkLimit("task.create", ctx.userId);
   if (!limit.ok) return { ok: false, error: limit.error };
 
-  // F11-10: prefer explicit status column from caller (Kanban inline-add),
+  // Prefer explicit status column from caller (Kanban inline-add),
   // fall back to board's first column for the legacy modal flow.
   let pickedColumn: { id: string } | null = null;
   if (parsed.data.statusColumnId) {
@@ -110,7 +110,7 @@ export async function createTaskAction(
       })
     : null;
 
-  // F12-K57: next displayId per-workspace. Max+1, fallback 1.
+  // Next displayId per-workspace. Max+1, fallback 1.
   // Włącza też soft-deleted task'y w max() żeby usunięte numery nie były
   // reużyte (uniknięcie konfliktów historycznych w audit log'u).
   const lastDisplay = await db.task.findFirst({
@@ -148,7 +148,7 @@ export async function createTaskAction(
     boardId: task.boardId,
   });
 
-  // F12-K62: notyfikacja do całego workspace'u (minus creator) — Daniel
+  // Notyfikacja do całego workspace'u (minus creator) — Daniel
   // zażyczył sobie żeby team widział nowe zadania w inbox panelu.
   const [board, actor] = await Promise.all([
     db.board.findUnique({ where: { id: task.boardId }, select: { name: true } }),
@@ -326,7 +326,7 @@ export async function bulkUpdateStatusAction(formData: FormData) {
   await broadcastWorkspaceChange(workspaceId, { type: "task.changed" });
 }
 
-// F9-03: dedicated description save — lets the task-detail UI flip
+// Dedicated description save — lets the task-detail UI flip
 // description to "view mode" (rendered prose) after save without
 // round-tripping other fields.
 const updateDescriptionSchema = z.object({
@@ -419,7 +419,7 @@ export async function patchTaskAction(formData: FormData) {
 
   if (!hasChange) return;
 
-  // F12-K62: zapamiętuję poprzedni status PRZED update'em żeby móc
+  // Zapamiętuję poprzedni status PRZED update'em żeby móc
   // wykryć zmianę i wysłać powiadomienie z "X → Y".
   const statusChanged =
     "statusColumnId" in data && data.statusColumnId !== existing.statusColumnId;
@@ -443,7 +443,7 @@ export async function patchTaskAction(formData: FormData) {
   // + layout-level (board) revalidate już pokrywają wszystkie views.
   // Workspace overview łapie zmianę przez broadcastWorkspaceChange.
   revalidatePath(`/w/${updated.workspaceId}/t/${updated.id}`);
-  // F12-K4: layout-level revalidation covers /table + /kanban + /v/[viewId]
+  // Layout-level revalidation covers /table + /kanban + /v/[viewId]
   // + /roadmap + /gantt with one call. Without it, edits made in the task
   // modal stay invisible on custom views until a hard reload.
   revalidatePath(`/w/[workspaceId]/b/[boardId]`, "layout");
@@ -453,7 +453,7 @@ export async function patchTaskAction(formData: FormData) {
     boardId: updated.boardId,
   });
 
-  // F12-K62: notyfikacja do workspace'u (minus actor) o zmianie statusu.
+  // Notyfikacja do workspace'u (minus actor) o zmianie statusu.
   // Tylko gdy faktycznie statusColumnId się zmieniło — patch może być
   // czysto title/date i nie chcemy spamować w takim przypadku.
   if (statusChanged) {
@@ -520,7 +520,7 @@ export async function toggleAssigneeAction(formData: FormData) {
     await db.taskAssignee.create({
       data: { taskId: parsed.data.taskId, userId: parsed.data.userId },
     });
-    // F12-K21: notyfikacja w inbox'ie dla osoby przypisanej. Skip jeśli
+    // Notyfikacja w inbox'ie dla osoby przypisanej. Skip jeśli
     // user przypisał sam siebie (no point notyfikować). Klient zgłosił
     // 'mimo tego ze jestem przypisany do kilku zadan to nic mi sie w
     // panelu powiadomien nie pokazuje' — wcześniej assign nie tworzył
@@ -550,12 +550,12 @@ export async function toggleAssigneeAction(formData: FormData) {
         },
         select: { id: true, userId: true },
       });
-      // F12-K35: live toast w prawym górnym rogu recipienta.
+      // Live toast w prawym górnym rogu recipienta.
       await broadcastUserChange(notif.userId, {
         kind: "notification.new",
         id: notif.id,
       });
-      // F12-K39: email do recipient'a.
+      // Email do recipient'a.
       const actorLabel = actor?.name ?? actor?.email ?? "Ktoś";
       await sendNotificationEmail({
         to: { userId: parsed.data.userId },
@@ -582,7 +582,7 @@ export async function toggleAssigneeAction(formData: FormData) {
   });
 
   revalidatePath(`/w/${task.workspaceId}/t/${task.id}`);
-  // F12-K4: layout-level revalidation covers default /table + /kanban
+  // Layout-level revalidation covers default /table + /kanban
   // AND custom views /v/[viewId], /roadmap, /gantt — without it, custom
   // views show stale assignees until manual reload. Pattern form is
   // required by Next.js when path contains dynamic segments + 'layout'.
@@ -630,7 +630,7 @@ export async function toggleTagAction(formData: FormData) {
   });
 
   revalidatePath(`/w/${task.workspaceId}/t/${task.id}`);
-  // F12-K4: same layout revalidation as toggleAssigneeAction so tags
+  // Same layout revalidation as toggleAssigneeAction so tags
   // toggled in the task modal propagate to all board views.
   revalidatePath(`/w/[workspaceId]/b/[boardId]`, "layout");
   await broadcastWorkspaceChange(task.workspaceId, {

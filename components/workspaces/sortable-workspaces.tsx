@@ -23,7 +23,7 @@ import { ArrowRight, GripVertical } from "lucide-react";
 import { reorderWorkspacesAction } from "@/app/(app)/workspaces/actions";
 import { boardPl } from "@/lib/pluralize";
 
-// F12-K52: drag-and-drop reorder workspace'ów (zamiast strzałek).
+// Drag-and-drop reorder workspace'ów (zamiast strzałek).
 // Pattern jak w kanban-board: DndContext + SortableContext + useSortable.
 // Drag handle = ikona GripVertical po lewej, reszta karty klikalna do nawigacji.
 

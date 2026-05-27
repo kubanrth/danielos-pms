@@ -360,7 +360,7 @@ function SelectMenu({
   onPick: (value: string) => void;
   multi?: boolean;
 }) {
-  // F12-K54: gdy dropdown otwiera się przy ostatnim wierszu tabeli,
+  // Gdy dropdown otwiera się przy ostatnim wierszu tabeli,
   // top-[calc(100%+4px)] uciekał poza viewport. Sprawdzamy po mount,
   // czy bottom dropdownu mieści się — jeśli nie, flipujemy nad anchor.
   const ulRef = useRef<HTMLUListElement>(null);

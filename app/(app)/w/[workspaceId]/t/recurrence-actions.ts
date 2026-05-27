@@ -1,6 +1,6 @@
 "use server";
 
-// F11-17 (#24): set / clear the recurrenceRule on a task. Stored as
+// Set / clear the recurrenceRule on a task. Stored as
 // JSON so we can extend (e.g. cron expression, end date) without a
 // migration. Cron `/api/cron/spawn-recurring` reads + spawns instances.
 

@@ -40,7 +40,7 @@ export async function broadcastWorkspaceChange(
   }
 }
 
-// F12-K35: per-user broadcast — kanał `user:<userId>`. Używane do live
+// Per-user broadcast — kanał `user:<userId>`. Używane do live
 // powiadomień (toast w prawym górnym rogu), żeby klik nie czekał 20s
 // na poll. Recipient subskrybuje przez `useUserRealtime` w
 // `<UserToaster>` rendowanym z `app/(app)/layout.tsx`.

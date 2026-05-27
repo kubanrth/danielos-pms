@@ -24,7 +24,7 @@ export function AcceptInviteForm({
     null,
   );
 
-  // F12-K38: client-side fallback. Server zazwyczaj redirect()'uje przy
+  // Client-side fallback. Server zazwyczaj redirect()'uje przy
   // ok=true (`signIn(...redirectTo)` lub `redirect("/w/<id>")`), ale
   // jeśli z jakiegoś powodu odpowiedź wraca z ok:true bez redirect'u —
   // klient od razu nawiguje do workspace'u zamiast utknąć na pendingu.

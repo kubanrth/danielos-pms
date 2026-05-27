@@ -49,7 +49,7 @@ export async function requireWorkspaceAction(
   return ctx;
 }
 
-// F12-K8: per-board access check. Returns true if:
+// Per-board access check. Returns true if:
 //   1. Workspace ADMIN — they bypass board ACL by design.
 //   2. Board.visibility = PUBLIC — every workspace member sees it.
 //   3. BoardMembership row exists for this user on this board.

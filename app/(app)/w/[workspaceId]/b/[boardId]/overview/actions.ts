@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { requireWorkspaceAction } from "@/lib/workspace-guard";
 import { writeAudit } from "@/lib/audit";
 
-// F12-K57: zapis 'Opis ogólny' tablicy (Tiptap doc JSON). Wymaga
+// Zapis 'Opis ogólny' tablicy (Tiptap doc JSON). Wymaga
 // board.update permission (ADMIN + MEMBER).
 const updateSchema = z.object({
   workspaceId: z.string().min(1),

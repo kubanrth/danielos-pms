@@ -1,4 +1,4 @@
-// F12-K34: Vercel cron — raz dziennie tworzy snapshot każdego workspace'u
+// Vercel cron — raz dziennie tworzy snapshot każdego workspace'u
 // (`vercel.json`: schedule "0 1 * * *" = 01:00 UTC = 02:00 CET / 03:00 CEST).
 // Idempotent: jeśli backup dla danego dnia już istnieje, skip.
 

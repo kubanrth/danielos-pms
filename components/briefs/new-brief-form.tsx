@@ -1,6 +1,6 @@
 "use client";
 
-// F12-K14: template picker. Klient wskazał ClickUp Design Brief Templates
+// Template picker. Klient wskazał ClickUp Design Brief Templates
 // page (11 template'ów) jako wzór — zamiast jednego stub'a teraz przy
 // "Nowy board" otwiera się modal z gridem template'ów do wyboru.
 

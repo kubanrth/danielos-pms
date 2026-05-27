@@ -52,7 +52,7 @@ export function RoadmapView({
   canDelete: boolean;
   initialMode?: Mode;
 }) {
-  // F11-7 (#13): klient zażądał usunięcia trybu "Oś czasu" (gantt
+  // Klient zażądał usunięcia trybu "Oś czasu" (gantt
   // robi to lepiej). Tryb pinujemy na "markers" — toggle ukryty
   // poniżej, mode state zostaje na wypadek gdyby ktoś chciał
   // wrócić do timeline w przyszłości.
@@ -361,7 +361,7 @@ function TimelineTrack({
   );
 }
 
-// F9-14: "Wizualizacja" — flow-chart layout bez osi czasu. Milestones
+// "Wizualizacja" — flow-chart layout bez osi czasu. Milestones
 // idą chronologicznie w rzędzie z połączeniami strzałkowymi między
 // nimi. Pod każdą kropką: tytuł milestone + button "Sprawdź zadania"
 // prowadzący do listy zadań tego milestone'u (/t/[taskId] dla każdego
@@ -496,7 +496,7 @@ function MilestoneNode({
 // Flow arrow between two milestone nodes — simple SVG chevron at node-
 // center-height so cała linia łączy je ładnie.
 function FlowArrow() {
-  // F11-2 (#8): arrow Y-center pinned to dot center.
+  // Arrow Y-center pinned to dot center.
   // dot center = 44 (title block) + 8 (gap-2) + 24 (half of h-12 dot) = 76px.
   // svg is 24px tall with line at y=12, so paddingTop = 76 - 12 = 64.
   return (

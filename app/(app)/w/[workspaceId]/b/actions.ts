@@ -101,7 +101,7 @@ export async function createBoardAction(
   });
   if (!ws) return { ok: false, error: "Workspace nie istnieje." };
 
-  // F9-04: pick up user-selected view types from the checkbox group.
+  // Pick up user-selected view types from the checkbox group.
   // Must be a subset of workspace.enabledViews — illegal values are
   // stripped silently (we won't block submit on a mismatched box).
   const workspaceEnabled = new Set(
@@ -164,7 +164,7 @@ export async function createBoardAction(
   redirect(`/w/${parsed.data.workspaceId}/b/${board.id}/${firstView}`);
 }
 
-// F12-K52: drag-and-drop reorder tablic. Klient wysyła nową kolejność
+// Drag-and-drop reorder tablic. Klient wysyła nową kolejność
 // ID. Wymaga task.update permission (ADMIN/MEMBER, nie VIEWER).
 export async function reorderBoardsAction(workspaceId: string, orderedIds: string[]) {
   if (!workspaceId || !Array.isArray(orderedIds) || orderedIds.length === 0) return;
@@ -196,7 +196,7 @@ export async function reorderBoardsAction(workspaceId: string, orderedIds: strin
     action: "boards.reordered",
   });
 
-  // F12-K52b: invalidate cały layout — sidebar też pokazuje boardy
+  // B: invalidate cały layout — sidebar też pokazuje boardy
   // wewnątrz workspace'u, nie tylko strona overview.
   revalidatePath("/", "layout");
 }

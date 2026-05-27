@@ -91,7 +91,7 @@ export default async function CanvasEditorPage({
           workspaceId={workspaceId}
           canvasId={canvas.id}
           initialNodes={canvas.nodes.map((n) => {
-            // F12-K37: dataJson zawiera reactions/locked/imagePath. Defensive
+            // DataJson zawiera reactions/locked/imagePath. Defensive
             // unpacking — pole może być null (DbNull) albo Json object.
             const meta =
               n.dataJson && typeof n.dataJson === "object" && !Array.isArray(n.dataJson)

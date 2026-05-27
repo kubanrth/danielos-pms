@@ -1,4 +1,4 @@
-// F12-K10: preset groupings dla widoku Tabela. Klient zgłosił że zwykłe
+// Preset groupings dla widoku Tabela. Klient zgłosił że zwykłe
 // grupowanie po `startAt` / `stopAt` (raw ISO timestamp jako bucket key)
 // daje 1 bucket per task — bezużyteczne. Tu są semantyczne buckety
 // czasowe + tag-alphabetical jako gotowe presety obok kolumn.

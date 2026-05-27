@@ -1,6 +1,6 @@
 "use client";
 
-// F12-K6: dedykowany date+time picker. Trzecia iteracja: poprzednia
+// Dedykowany date+time picker. Trzecia iteracja: poprzednia
 // (native datetime-local) miała ohydny browser-specific UI a dwa
 // wcześniejsze popovery same nie otwierały się przez containing-block
 // trap (backdrop-blur na ancestorze → position:fixed pozycjonowane do
@@ -29,7 +29,7 @@ export interface DateTimePickerProps {
   disabled?: boolean;
   placeholder?: string;
   label?: string;
-  // F12-K7: "cell" variant for inline use in table rows — strips the
+  // "cell" variant for inline use in table rows — strips the
   // input-style border + calendar icon so the cell is just the date text
   // (with click-to-open and hover clear-X). "input" is the default
   // (modal/form) look.
@@ -87,7 +87,7 @@ export function DateTimePicker({
     setDate(isoToDate(defaultValue));
   }, [defaultValue]);
 
-  // F12-K7: notify parent whenever the user actually edits the date so
+  // Notify parent whenever the user actually edits the date so
   // table cells (or other auto-save consumers) can persist immediately
   // without a wrapping <form>. Skip the first render so we don't fire on
   // mount with the initial value.

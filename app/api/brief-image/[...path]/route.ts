@@ -1,4 +1,4 @@
-// F12-K12: serve obrazy z briefów przez signed redirect. URL osadzony
+// Serve obrazy z briefów przez signed redirect. URL osadzony
 // w contentJson briefu ma postać `/api/brief-image/w/<wid>/briefs/<bid>/...`
 // — handler weryfikuje workspace membership użytkownika i 302-redirectuje
 // na świeży signed download URL z Supabase Storage. Dzięki temu signed

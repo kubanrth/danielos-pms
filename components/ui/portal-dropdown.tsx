@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown } from "lucide-react";
 
-// F12-K30: reusable portal-rendered dropdown. Wszystkie native <select>
+// Reusable portal-rendered dropdown. Wszystkie native <select>
 // w danielosie wyglądają jak Windows-95 (zwłaszcza dark mode), nie
 // matchują brand'u i nie mają hover/focus parity z resztą UI. Ten
 // komponent renderuje custom button-trigger + portal-popover z items'ami,

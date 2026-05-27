@@ -47,7 +47,7 @@ const SORT_ICONS: Record<SortMode, typeof Clock> = {
   createdDesc: Clock,
 };
 
-// F12-K23: dropdown pogrupowany w sekcje z eyebrow nagłówkami zamiast
+// Dropdown pogrupowany w sekcje z eyebrow nagłówkami zamiast
 // płaskiej listy. Dużo czytelniejsze niż 6 opcji jedna pod drugą.
 const SORT_GROUPS: { label: string; items: { mode: SortMode; description: string }[] }[] = [
   {
@@ -209,7 +209,7 @@ export function FiltersBar({
   );
 }
 
-// F12-K23: redesigned sort dropdown — pogrupowane sekcje z eyebrow
+// Redesigned sort dropdown — pogrupowane sekcje z eyebrow
 // nagłówkami, większe option items (z descriptionem), trigger pokazuje
 // 'Sortuj: <label>' z ArrowUpDown ikoną zamiast clock'a (bardziej
 // generic — sygnalizuje że to SORT, nie filter time'em).

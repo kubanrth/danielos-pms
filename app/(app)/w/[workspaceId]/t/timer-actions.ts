@@ -1,6 +1,6 @@
 "use server";
 
-// F12-K40: per-task time tracking — start / pause / complete. Klient:
+// Per-task time tracking — start / pause / complete. Klient:
 // 'do każdego zadania muszę dodać start/stop'. Trzy stany:
 //   - Idle:      timerStartedAt=null, timerCompletedAt=null
 //   - Running:   timerStartedAt set
@@ -31,7 +31,7 @@ async function loadTaskForTimer(id: string) {
   });
 }
 
-// F12-K40: idempotent — gdy timer już chodzi, nic nie robi (drugie
+// Idempotent — gdy timer już chodzi, nic nie robi (drugie
 // kliknięcie 'Rozpocznij' nie podwoi czasu).
 export async function startTaskTimerAction(formData: FormData) {
   const parsed = timerSchema.safeParse({ id: formData.get("id") });
@@ -63,7 +63,7 @@ export async function startTaskTimerAction(formData: FormData) {
   revalidatePath(`/w/${task.workspaceId}/t/${task.id}`);
 }
 
-// F12-K40: pause = dodaj elapsed do akumulatora + wyzeruj timerStartedAt.
+// Pause = dodaj elapsed do akumulatora + wyzeruj timerStartedAt.
 // Po pauzie ten sam Task wraca do stanu Idle z accumulated > 0; user
 // może 'Rozpocznij' znowu i akumulator dalej rośnie.
 export async function pauseTaskTimerAction(formData: FormData) {
@@ -103,7 +103,7 @@ export async function pauseTaskTimerAction(formData: FormData) {
   revalidatePath(`/w/${task.workspaceId}/t/${task.id}`);
 }
 
-// F12-K40: complete = jeśli running → zliczamy elapsed do akumulatora,
+// Complete = jeśli running → zliczamy elapsed do akumulatora,
 // potem locked. Po Zakończ user nie ma już przycisków (timer zamrożony).
 export async function completeTaskTimerAction(formData: FormData) {
   const parsed = timerSchema.safeParse({ id: formData.get("id") });

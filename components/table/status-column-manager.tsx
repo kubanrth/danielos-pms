@@ -14,9 +14,9 @@ interface Column {
   colorHex: string;
 }
 
-// F12-K1: exported jako single source of truth dla wszystkich
+// Exported jako single source of truth dla wszystkich
 // status-color picker'ów (tabela, kanban, status-picker w komórkach).
-// F12-K36: paleta przeniesiona do `lib/colors.ts` (BRAND_PALETTE) —
+// Paleta przeniesiona do `lib/colors.ts` (BRAND_PALETTE) —
 // re-eksport pod tą samą nazwą żeby istniejące importy (kanban-board)
 // działały bez zmian.
 import { STATUS_PALETTE } from "@/lib/colors";

@@ -102,11 +102,11 @@ export interface EditorInitialNode {
   reactions?: Record<string, number>;
   // F10-W3: when true, node is locked (no drag/resize/delete).
   locked?: boolean;
-  // F12-K37: shape="IMAGE" stores Supabase Storage key here.
+  // Shape="IMAGE" stores Supabase Storage key here.
   imagePath?: string | null;
-  // F12-K37c: explicit text color override (default = auto contrast).
+  // C: explicit text color override (default = auto contrast).
   textColorHex?: string | null;
-  // F12-K63: explicit font-size override (px) dla shape labela.
+  // Explicit font-size override (px) dla shape labela.
   fontSize?: number | null;
 }
 
@@ -128,7 +128,7 @@ type RFEdgeData = { style: "solid" | "dashed"; endStyle: CanvasEdgeEnd };
 type RFNode = Node<ShapeNodeData>;
 type RFEdge = Edge<RFEdgeData>;
 
-// F12-K64: vibrant brand palette — klient zażyczył sobie "żywe mocne
+// Vibrant brand palette — klient zażyczył sobie "żywe mocne
 // kolory" dla tła i tekstu. Wcześniej PALETTE było 8 pastelowych kolorów
 // (cream, sky-50, mint-50 itp.) — wizualnie dawały takie "spłowiale"
 // karty. Teraz Tailwind 500-weight + Apple system, czyste nasycone hue.
@@ -158,10 +158,10 @@ const SHAPE_DEFAULTS: Record<ShapeKind, { width: number; height: number; color: 
   CIRCLE: { width: 120, height: 120, color: "#FFFFFF" },
   STICKY: { width: 150, height: 150, color: "#FEF3C7" },
   FRAME: { width: 520, height: 320, color: "#F1F5F9" },
-  // F12-K37: image — ten default jest tylko fallback'iem; rzeczywisty
+  // Image — ten default jest tylko fallback'iem; rzeczywisty
   // rozmiar ustawiamy w handleImageUpload po PUT'cie pliku.
   IMAGE: { width: 280, height: 200, color: "#FFFFFF" },
-  // F12-K64: TEXT shape teraz traktuje colorHex jako BACKGROUND (jak
+  // TEXT shape teraz traktuje colorHex jako BACKGROUND (jak
   // inne shape'y) + osobne textColorHex jako kolor tekstu. Wcześniej
   // colorHex był używany jako kolor tekstu — klient zgłosił że nie
   // można zmienić ani tła ani tekstu w opcji "Dodaj tekst", więc
@@ -259,7 +259,7 @@ function toRFNode(n: EditorInitialNode, workspaceId: string): RFNode {
       locked: n.locked,
       imagePath: n.imagePath ?? undefined,
       textColorHex: n.textColorHex ?? undefined,
-      // F12-K63: fontSize override (px) z Y.js snapshotu.
+      // FontSize override (px) z Y.js snapshotu.
       fontSize:
         typeof (n as { fontSize?: number | null }).fontSize === "number"
           ? (n as { fontSize: number }).fontSize
@@ -333,7 +333,7 @@ function CanvasEditorInner({
   // F12-K44 P7: zob. REACT_FLOW_NODE_TYPES (module-level const).
   const nodeTypes = REACT_FLOW_NODE_TYPES;
   const flowWrapperRef = useRef<HTMLDivElement>(null);
-  // F12-K37: file picker dla 'Dodaj obraz' button.
+  // File picker dla 'Dodaj obraz' button.
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   const [nodes, setNodes, rfOnNodesChange] = useNodesState<RFNode>(
@@ -427,7 +427,7 @@ function CanvasEditorInner({
             locked: n.locked,
             imagePath: n.imagePath ?? undefined,
             textColorHex: n.textColorHex ?? undefined,
-            // F12-K63: zachowaj fontSize override przy re-render z snapshotu.
+            // Zachowaj fontSize override przy re-render z snapshotu.
             fontSize:
               typeof (n as { fontSize?: number | null }).fontSize === "number"
                 ? (n as { fontSize: number }).fontSize
@@ -500,7 +500,7 @@ function CanvasEditorInner({
     return () => wrap.removeEventListener("mousemove", onMove);
   }, [canEdit, reactFlow, myCursorIdentity]);
 
-  // F12-K37: nasłuch custom-eventu z ShapeNode po inline-edit / resize.
+  // Nasłuch custom-eventu z ShapeNode po inline-edit / resize.
   // RF nie emituje data-delta'ów przez onNodesChange, więc shape-node
   // dispatch'uje 'canvas-node:commit' żeby wymusić sync do Yjs.
   useEffect(() => {
@@ -536,7 +536,7 @@ function CanvasEditorInner({
           colorHex: node.data.colorHex,
           imagePath: node.data.imagePath ?? null,
           textColorHex: node.data.textColorHex ?? null,
-          // F12-K63: persist fontSize override do Y.js (per-key merge).
+          // Persist fontSize override do Y.js (per-key merge).
           fontSize:
             typeof node.data.fontSize === "number" ? node.data.fontSize : null,
           reactions: node.data.reactions,
@@ -637,7 +637,7 @@ function CanvasEditorInner({
           height: defaults.height,
           linkedTasks: [],
           workspaceId,
-          // F12-K37: ustawiamy editing=true od razu — node renderuje
+          // Ustawiamy editing=true od razu — node renderuje
           // contentEditable z autofocus, klient może wpisywać natychmiast
           // bez podwójnego kliknięcia.
           editing: true,
@@ -653,7 +653,7 @@ function CanvasEditorInner({
     [setNodes, workspaceId, commitNodeToY],
   );
 
-  // F12-K37: upload obrazu do whiteboard'u. 3-step: requestUpload (signed
+  // Upload obrazu do whiteboard'u. 3-step: requestUpload (signed
   // URL) → PUT → utwórz IMAGE node z imagePath = storageKey.
   const handleImageUpload = useCallback(
     async (file: File) => {
@@ -824,7 +824,7 @@ function CanvasEditorInner({
     for (const n of touched) commitNodeToY(n);
   }, [setNodes, commitNodeToY]);
 
-  // F12-K37: rename = ustaw flagę editing=true na zaznaczonym node'cie.
+  // Rename = ustaw flagę editing=true na zaznaczonym node'cie.
   // ShapeNode (zawiera contentEditable + autofocus) odpala edit mode
   // od razu po renderze. window.prompt usunięty — klient zgłosił że
   // wpisywanie tekstu w prompt'cie było 'dziwne'.
@@ -856,7 +856,7 @@ function CanvasEditorInner({
     [setNodes, commitNodeToY],
   );
 
-  // F12-K37c: zmiana koloru TEKSTU na zaznaczonych shape'ach. `hex = null`
+  // C: zmiana koloru TEKSTU na zaznaczonych shape'ach. `hex = null`
   // = reset do auto-contrast (textColorFor od fillu).
   const recolorTextSelected = useCallback(
     (hex: string | null) => {
@@ -877,7 +877,7 @@ function CanvasEditorInner({
     [setNodes, commitNodeToY],
   );
 
-  // F12-K63: zmiana rozmiaru FONTU na zaznaczonych shape'ach. `size = null`
+  // Zmiana rozmiaru FONTU na zaznaczonych shape'ach. `size = null`
   // = reset do baseline (text-[0.94rem] dla RECT/CIRCLE/STICKY/DIAMOND, lub
   // auto-calc po height dla TEXT). Liczba (12-72) = explicit override.
   const resizeFontSelected = useCallback(
@@ -1254,7 +1254,7 @@ function CanvasEditorInner({
         // F10-W2: smoothstep edges route around obstacles cleanly (90° bends),
         // much closer to Mural's connector behaviour than raw bezier.
         defaultEdgeOptions={{ type: "smoothstep" }}
-        // F12-K37: connectionMode=Loose pozwala upuścić strzałkę na DOWOLNY
+        // ConnectionMode=Loose pozwala upuścić strzałkę na DOWOLNY
         // handle (target lub source) — wcześniej można było tylko na top/left,
         // bo right/bottom były source-only.
         connectionMode={ConnectionMode.Loose}
@@ -1263,7 +1263,7 @@ function CanvasEditorInner({
         // the overlay can capture pointer events.
         selectionOnDrag={canEdit && toolMode === "select"}
         panOnDrag={toolMode === "select" ? [1, 2] : false}
-        // F12-K37: pan kółkiem/trackpadem (klient: 'nawigacja po tym jest
+        // Pan kółkiem/trackpadem (klient: 'nawigacja po tym jest
         // mega rozjebana'). Default RF12 = scroll = zoom; my flippujemy.
         panOnScroll
         zoomOnScroll={false}
@@ -1595,7 +1595,7 @@ function CanvasEditorInner({
       </div>
 
       {canEdit && singleSelectedNode && (
-        // F12-K65: key na nodeId — wybór innego węzła remountuje panel
+        // Key na nodeId — wybór innego węzła remountuje panel
         // (świeży collapsed=false), więc klient zawsze widzi rozwinięty
         // panel po klikaniu nowego kształtu. Bez key state collapse'a
         // przeszedłby między selekcjami i klient by nie widział że ma
@@ -1681,7 +1681,7 @@ function TaskLinksPanel({
   error: string | null;
 }) {
   const [query, setQuery] = useState("");
-  // F12-K65: klient zgłosił że panel zasłania szpace na canvas'ie /
+  // Klient zgłosił że panel zasłania szpace na canvas'ie /
   // toolbar. Collapse state pozwala zminimalizować panel do chipa
   // (icon + count) trzymanego w tym samym rogu. Klik chip → expand.
   // Key={nodeId} w parent'cie resetuje state przy zmianie selekcji,
@@ -1698,7 +1698,7 @@ function TaskLinksPanel({
     [workspaceTasks, linkedIds, q],
   );
 
-  // F12-K65: collapsed render — mały chip pokazujący tylko link icon
+  // Collapsed render — mały chip pokazujący tylko link icon
   // i count. Klik rozwija panel. Sama lokalizacja (right-3 top-3) ta
   // sama co dla pełnego widoku, żeby klient wiedział gdzie szukać.
   if (collapsed) {
@@ -2384,7 +2384,7 @@ function CtxItem({
   );
 }
 
-// F12-K37: custom zoom controls — natywne <Controls /> z react-flow
+// Custom zoom controls — natywne <Controls /> z react-flow
 // nie ma dark-mode parity (białe na jasnym tle, niewidoczne w dark
 // mode). Tu używamy bg-card/border-border/text-muted-foreground które
 // poprawnie się przełączają przez --css vars.
@@ -2430,7 +2430,7 @@ function ControlButton({
   );
 }
 
-// F12-K37c: text color picker popover. Trigger pokazuje literkę 'A' z
+// C: text color picker popover. Trigger pokazuje literkę 'A' z
 // underline'm w kolorze aktualnie ustawionego tekstu (albo 'auto'). Klik
 // otwiera panel z paletą + 'Auto' (= reset do contrast od fillu) + black/white.
 function TextColorPicker({
@@ -2540,10 +2540,10 @@ function TextColorPicker({
   );
 }
 
-// F12-K63: rozmiar fontu w shape labelu. Klient zażyczył sobie żeby
+// Rozmiar fontu w shape labelu. Klient zażyczył sobie żeby
 // móc zmienić wielkość tekstu w kształcie (wcześniej tylko height
 // shape'a sterował fontem przez auto-calc). 5 presetów + reset (Auto).
-// F12-K63b: Word-style font-size picker — number input (typing dowolnej
+// B: Word-style font-size picker — number input (typing dowolnej
 // wartości 6-200px) + stepper − / + (krok 1px) + preset chips (Word ma
 // 9/10/11/12/14/16/18/20/24/28/36/48/72) + Auto reset. Klient: "cos jak
 // masz w wordzie".

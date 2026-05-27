@@ -52,7 +52,7 @@ export async function createPollAction(formData: FormData) {
     },
   });
 
-  // F9-06: notify every workspace member (except the author) that a new
+  // Notify every workspace member (except the author) that a new
   // poll dropped — they'll see it in /inbox next to mentions.
   const members = await db.workspaceMembership.findMany({
     where: {
@@ -62,7 +62,7 @@ export async function createPollAction(formData: FormData) {
     select: { userId: true },
   });
   if (members.length > 0) {
-    // F12-K35: per-user create żeby dostać id'ki dla realtime broadcast'u.
+    // Per-user create żeby dostać id'ki dla realtime broadcast'u.
     const created = await Promise.all(
       members.map((m) =>
         db.notification.create({
@@ -87,7 +87,7 @@ export async function createPollAction(formData: FormData) {
         broadcastUserChange(n.userId, { kind: "notification.new", id: n.id }),
       ),
     );
-    // F12-K39: email do każdego workspace member'a (poza autorem).
+    // Email do każdego workspace member'a (poza autorem).
     await Promise.all(
       created.map((n) =>
         sendNotificationEmail({

@@ -1,6 +1,6 @@
 "use client";
 
-// F12-K40: per-task time tracking — UI dla 3 stanów (idle / running /
+// Per-task time tracking — UI dla 3 stanów (idle / running /
 // completed). Klient: 'do każdego zadania muszę dodać start/stop'.
 //
 // - Idle:      pokaz akumulowany czas + przycisk 'Rozpocznij'
@@ -35,7 +35,7 @@ export function TaskTimer({
 }: TaskTimerProps) {
   // Live elapsed (running). Re-render co 1s przez state hook'a.
   const [now, setNow] = useState(() => Date.now());
-  // F12-K40b: custom confirm dialog zamiast natywnego window.confirm()
+  // B: custom confirm dialog zamiast natywnego window.confirm()
   // (klient: brzydki UI w dark mode, niebieski default OK button bez
   // brand'owania).
   const [confirmingComplete, setConfirmingComplete] = useState(false);

@@ -1,4 +1,4 @@
-// F12-K25: serve załączniki support ticketów przez signed redirect
+// Serve załączniki support ticketów przez signed redirect
 // (taki sam pattern jak /api/brief-image). storageKey w URL'u =
 // w/<wid>/support/<tid>/... — handler weryfikuje workspace membership
 // usera i 302-redirectuje na świeży 1h signed URL z Supabase Storage.

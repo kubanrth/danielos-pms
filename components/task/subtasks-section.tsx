@@ -28,7 +28,7 @@ export function SubtasksSection({
   const [title, setTitle] = useState("");
 
   const doneCount = subtasks.filter((s) => s.completed).length;
-  // F9-02: progress bar aiming for 100%. 0 subtasks = 0% (hidden).
+  // Progress bar aiming for 100%. 0 subtasks = 0% (hidden).
   const pct = subtasks.length === 0 ? 0 : Math.round((doneCount / subtasks.length) * 100);
   const complete = subtasks.length > 0 && doneCount === subtasks.length;
 

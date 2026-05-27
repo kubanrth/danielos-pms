@@ -28,7 +28,7 @@ const NICE_COLORS = [
 
 export async function renameBoardAction(formData: FormData) {
   const workspaceId = String(formData.get("workspaceId") ?? "");
-  // F12-K61: coerce null → undefined dla `description` żeby schema'owe
+  // Coerce null → undefined dla `description` żeby schema'owe
   // `.optional()` zaakceptowało brak pola w FormData (formData.get() zwraca
   // null gdy brak; null nie pasuje do z.string().optional()).
   const descRaw = formData.get("description");
@@ -39,7 +39,7 @@ export async function renameBoardAction(formData: FormData) {
   });
   if (!parsed.success) return;
   const ctx = await requireWorkspaceAction(workspaceId, "board.update");
-  // F12-K61: skip description gdy nie podane (Prisma undefined = "don't
+  // Skip description gdy nie podane (Prisma undefined = "don't
   // update this column"). Inline-edit-name nie powinien wymazywać opisu.
   const board = await db.board.update({
     where: { id: parsed.data.id },
@@ -232,14 +232,14 @@ export async function reorderStatusColumnsAction(formData: FormData) {
       db.statusColumn.update({ where: { id }, data: { order: idx } }),
     ),
   );
-  // F12-K55: revalidate też kanban + roadmap (kolejność statusów to
+  // Revalidate też kanban + roadmap (kolejność statusów to
   // kolejność kolumn w kanban, przedziałów w roadmap'ie).
   revalidatePath(`/w/${workspaceId}/b/${parsed.data.boardId}/table`);
   revalidatePath(`/w/${workspaceId}/b/${parsed.data.boardId}/kanban`);
   revalidatePath(`/w/${workspaceId}/b/${parsed.data.boardId}/roadmap`);
 }
 
-// F8b: create a named BoardView so the user can have multiple views of
+// Create a named BoardView so the user can have multiple views of
 // the same type (e.g. two Kanbans with different filters), and also a
 // "name = null" default row that recreates the canonical pill (Tabela,
 // Kanban, …) when the user deleted it earlier.
@@ -339,7 +339,7 @@ export async function deleteBoardViewAction(formData: FormData) {
 
   const ctx = await requireWorkspaceAction(view.board.workspaceId, "board.update");
 
-  // F9-08: also allow removing default (name=null) views per board —
+  // Also allow removing default (name=null) views per board —
   // e.g. an OKR board wants only Tabela. Safety: never let the board
   // end up with zero views (user would have no way back in).
   const remaining = await db.boardView.count({
@@ -365,7 +365,7 @@ export async function deleteBoardViewAction(formData: FormData) {
   }
 }
 
-// F8b: per-board table column preferences. Stored on the default TABLE
+// Per-board table column preferences. Stored on the default TABLE
 // BoardView.configJson as `{ columnOrder: string[], hidden: string[] }`.
 // Per-board (not per-user) because support-ability > ergonomics — one
 // shared layout means screenshots match what admins see.
@@ -739,7 +739,7 @@ export async function saveTableColumnPrefsAction(formData: FormData) {
       hidden: z.array(z.string()).optional(),
       // F10-X: per-column persisted pixel widths (TanStack columnSizing)
       widths: z.record(z.string(), z.number().min(40).max(1200)).optional(),
-      // F12-K3: pinned columns (left side) by columnId
+      // Pinned columns (left side) by columnId
       pinned: z.array(z.string()).optional(),
     })
     .safeParse(config);

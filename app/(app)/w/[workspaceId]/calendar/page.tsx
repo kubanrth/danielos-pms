@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { requireWorkspaceMembership } from "@/lib/workspace-guard";
 import { WorkspaceCalendar } from "@/components/workspace/workspace-calendar";
 
-// F11-22 (#22): workspace-level calendar — pokazuje WSZYSTKIE zadania
+// Workspace-level calendar — pokazuje WSZYSTKIE zadania
 // w workspace'ie + custom events. Każdy member widzi pełny kalendarz
 // projektu, nie tylko własne assignedTasks.
 

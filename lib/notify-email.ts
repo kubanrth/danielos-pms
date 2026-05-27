@@ -1,4 +1,4 @@
-// F12-K39: shared template + sender dla in-app notification emails.
+// Shared template + sender dla in-app notification emails.
 // Klient: 'jak zostaniesz przypisany do jakiegoś zadania, support
 // powiadomienia cokolwiek komentarz to dostajesz maila'.
 //

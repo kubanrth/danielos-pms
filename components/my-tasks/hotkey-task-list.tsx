@@ -12,7 +12,7 @@ export interface TaskListRow {
   id: string;
   title: string;
   workspaceId: string;
-  // F12-K60: boardId + boardStatusColumns + statusColumnId — inline
+  // BoardId + boardStatusColumns + statusColumnId — inline
   // status picker w liście wymaga listy dostępnych statusów per board.
   boardId: string;
   statusColumnId: string | null;
@@ -33,7 +33,7 @@ export interface TaskListSection {
   rows: TaskListRow[];
 }
 
-// F9-13 extension: wraps the My Tasks render in a hotkey-aware client
+// Extension: wraps the My Tasks render in a hotkey-aware client
 // component so hovering a row + pressing M opens the assign menu.
 // Buckets / flat list mode handled by the `sections` structure.
 export function HotkeyTaskList({
@@ -130,14 +130,14 @@ function TaskRow({
   onMouseEnter: () => void;
   onMouseLeave: () => void;
 }) {
-  // F12-K60: aktualny status w formacie StatusOption (id/name/colorHex).
+  // Aktualny status w formacie StatusOption (id/name/colorHex).
   // null gdy task nie ma statusu → picker pokaże "— brak —".
   const current = row.statusColumnId
     ? row.boardStatusColumns.find((s) => s.id === row.statusColumnId) ?? null
     : null;
 
   return (
-    // F12-K60: dwie zmiany w tym wierszu:
+    // Dwie zmiany w tym wierszu:
     // 1) Link zawiera `?from=/my-tasks` żeby task detail wiedział że
     //    user przyszedł z My Tasks, nie z workspace overview — "Wróć"
     //    pójdzie z powrotem na listę (a nie na ogólny przegląd).

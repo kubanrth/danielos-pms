@@ -1,4 +1,4 @@
-// F12-K36: centralna paleta używana w pickerach kolorów (tagi, statusy,
+// Centralna paleta używana w pickerach kolorów (tagi, statusy,
 // kolumny single/multi-select, kolor wydarzenia w kalendarzu workspace'u,
 // kolor headera briefu, roadmap colorFor, status manager kanban).
 //

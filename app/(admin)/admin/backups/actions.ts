@@ -1,6 +1,6 @@
 "use server";
 
-// F12-K34: server actions dla `/admin/backups`. Wszystkie gated przez
+// Server actions dla `/admin/backups`. Wszystkie gated przez
 // `requireSuperAdmin()`. Pliki backupu lecą do Supabase Storage przez
 // service-role klienta z `lib/storage.ts`.
 
@@ -18,7 +18,7 @@ import {
 
 const triggerSchema = z.object({ workspaceId: z.string().min(1) });
 
-// F12-K34: manualny snapshot 1 workspace'u. W przeciwieństwie do crona,
+// Manualny snapshot 1 workspace'u. W przeciwieństwie do crona,
 // tu **upsertujemy** plik + WorkspaceBackup row — admin może wymusić
 // świeży snapshot mid-day (np. przed deploy'em zmiany ryzykownej).
 export async function triggerWorkspaceBackupAction(formData: FormData) {
@@ -84,7 +84,7 @@ export async function triggerWorkspaceBackupAction(formData: FormData) {
   revalidatePath("/admin/backups");
 }
 
-// F12-K34: "Backup wszystkich teraz" — synchronous loop. Dla większych
+// "Backup wszystkich teraz" — synchronous loop. Dla większych
 // instalacji (10+ workspace'ów × MB-skalowane payloady) request może
 // zająć kilkadziesiąt sekund. Rozważyć w przyszłości background queue.
 export async function triggerAllBackupsAction(): Promise<{
@@ -159,7 +159,7 @@ export async function triggerAllBackupsAction(): Promise<{
 
 const downloadSchema = z.object({ backupId: z.string().min(1) });
 
-// F12-K34: mint signed download URL z `Content-Disposition: attachment;
+// Mint signed download URL z `Content-Disposition: attachment;
 // filename=…` żeby browser zapisał plik pod sensowną nazwą zamiast
 // generycznego key'a.
 export async function getBackupDownloadUrlAction(input: {

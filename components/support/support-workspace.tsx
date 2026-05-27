@@ -1,9 +1,9 @@
 "use client";
 
-// F11-20 (#23): support tickets workspace.
-// F12-K11: rewrite z grouped cards na table view + edycja treści (title/
+// Support tickets workspace.
+// Rewrite z grouped cards na table view + edycja treści (title/
 // description) + dueAt + isUrgent ("NATYCHMIAST") + "Zamknięte w X" duration.
-// F12-K25: custom dropdowns (Status / Priorytet / Odpowiedzialny) zamiast
+// Custom dropdowns (Status / Priorytet / Odpowiedzialny) zamiast
 // native opacity-0 select'a, attachments, ticket counter, notyfikacja
 // reporter'a po RESOLVED.
 
@@ -62,14 +62,14 @@ export interface SupportTicketRow {
   description: string;
   status: Status;
   priority: Priority;
-  // F12-K11: deadline / NATYCHMIAST flag.
+  // Deadline / NATYCHMIAST flag.
   dueAt: string | null;
   isUrgent: boolean;
   createdAt: string;
   resolvedAt: string | null;
   reporter: { id: string; name: string | null; email: string; avatarUrl: string | null };
   assignee: { id: string; name: string | null; email: string; avatarUrl: string | null } | null;
-  // F12-K25: lista załączników (screenshoty, pliki) per ticket.
+  // Lista załączników (screenshoty, pliki) per ticket.
   attachments: SupportAttachment[];
 }
 
@@ -107,14 +107,14 @@ export function SupportWorkspace({
   tickets: SupportTicketRow[];
   members: SupportMember[];
 }) {
-  // F12-K26: editing state by ID — wcześniej trzymał cały ticket object,
+  // Editing state by ID — wcześniej trzymał cały ticket object,
   // który stawał się stale po revalidatePath (np. nowy załącznik nie
   // pojawiał się w dialog'u, bo ticket prop zostawał ze starym
   // attachments[]). Look up po id z tickets[] daje świeży obiekt na
   // każdy re-render.
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // F12-K55: resizable columns — szerokości per kolumna, persist w
+  // Resizable columns — szerokości per kolumna, persist w
   // localStorage żeby user zachował układ między reload'ami.
   const STORAGE_KEY = "support-table-col-widths.v1";
   const DEFAULT_WIDTHS: Record<string, number> = {
@@ -155,7 +155,7 @@ export function SupportWorkspace({
     ? tickets.find((t) => t.id === editingId) ?? null
     : null;
 
-  // F12-K26: counters per status — zamiast jednej liczby pokazujemy
+  // Counters per status — zamiast jednej liczby pokazujemy
   // breakdown chip-per-status, klient widzi od razu ile czego.
   const statusCounts: Record<Status, number> = {
     OPEN: 0,
@@ -258,7 +258,7 @@ export function SupportWorkspace({
   );
 }
 
-// F12-K55: resizable th. Drag handle po prawej stronie zmienia width
+// Resizable th. Drag handle po prawej stronie zmienia width
 // kolumny. Persistence (localStorage) trzymana w SupportWorkspace state.
 function Th({
   children,
@@ -487,7 +487,7 @@ function PersonChip({
 // Inline cell editors
 // ─────────────────────────────────────────────────────────────────────
 
-// F12-K25: shared dropdown popover hook + helpers. Portal to body żeby
+// Shared dropdown popover hook + helpers. Portal to body żeby
 // uniknąć clipping przez table overflow + sticky cells. Coords liczone
 // z trigger rect, auto-flip above gdy mało miejsca, close on outside
 // click / Escape / scroll.
@@ -857,7 +857,7 @@ function AssigneeSelect({
 }
 
 function DueCell({ ticket, canEdit }: { ticket: SupportTicketRow; canEdit: boolean }) {
-  // F12-K11: trzy stany — NATYCHMIAST (czerwony badge), data (formatted),
+  // Trzy stany — NATYCHMIAST (czerwony badge), data (formatted),
   // brak ("—" + opcjonalnie ustaw). isUrgent wyklucza dueAt.
   if (ticket.isUrgent) {
     return (
@@ -1087,7 +1087,7 @@ function NewTicketForm({ workspaceId }: { workspaceId: string }) {
   const [priority, setPriority] = useState<Priority>("MEDIUM");
   const [isUrgent, setIsUrgent] = useState(false);
   const [dueAt, setDueAt] = useState<string>("");
-  // F12-K27: pending files trzymane w state — uploadują się PO
+  // Pending files trzymane w state — uploadują się PO
   // stworzeniu ticket'u (potrzebujemy ticketId żeby je zapisać).
   const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -1361,7 +1361,7 @@ function NewTicketForm({ workspaceId }: { workspaceId: string }) {
   );
 }
 
-// F12-K25: attachments do support ticketu. Drop zone + lista zał. z
+// Attachments do support ticketu. Drop zone + lista zał. z
 // link do API route (/api/support-attachment/[...path]) który verifyje
 // access i 302-redirectuje na świeży signed URL z Supabase Storage.
 function AttachmentsSection({
@@ -1380,7 +1380,7 @@ function AttachmentsSection({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // F12-K26: ALLOWED MIME na serverze odrzuca pliki bez detekcji typu
+  // ALLOWED MIME na serverze odrzuca pliki bez detekcji typu
   // (np. .heic czy custom). Sprawdzamy tu szybciutko i mappujemy
   // common cases zanim wyślemy żądanie.
   const inferContentType = (file: File): string => {
@@ -1441,7 +1441,7 @@ function AttachmentsSection({
         setUploading(false);
         return;
       }
-      // F12-K26: explicit refresh — revalidatePath sam nie zawsze
+      // Explicit refresh — revalidatePath sam nie zawsze
       // dochodzi do otwartego dialogu (intercepted route caching).
       router.refresh();
     } catch (e) {
@@ -1563,7 +1563,7 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-// F12-K27: klikalny attachment badge w wierszu — open popover z listą
+// Klikalny attachment badge w wierszu — open popover z listą
 // załączników, każdy klikalny do otwarcia w nowej karcie. Zastępuje
 // poprzedni statyczny badge który wyglądał jakby był klikalny ale nic
 // nie robił.

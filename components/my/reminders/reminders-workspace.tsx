@@ -106,7 +106,7 @@ function NewReminderForm({
       action={(fd) =>
         startTransition(async () => {
           await createReminderAction(fd);
-          // F12-K20: trigger natychmiastowy popup refresh (zamiast
+          // Trigger natychmiastowy popup refresh (zamiast
           // czekać na 20s tick w ReminderPopups). Custom event łapie
           // global listener zamontowany w app layoutu.
           if (typeof window !== "undefined") {
@@ -237,7 +237,7 @@ function ReminderRowCard({
   const dismissed = !!reminder.dismissedAt;
   const isOwnCreator = reminder.creatorId === currentUserId;
   const isOwnRecipient = reminder.recipientId === currentUserId;
-  // F11-13 (#3): in-place edit. Only creator can toggle.
+  // In-place edit. Only creator can toggle.
   const [editing, setEditing] = useState(false);
   if (editing && isOwnCreator) {
     return (
@@ -357,7 +357,7 @@ function formatDateTime(iso: string): string {
   return d.toLocaleString("pl-PL", { dateStyle: "medium", timeStyle: "short" });
 }
 
-// F11-13 (#3): inline edit. Same shape as the create form but pre-filled.
+// Inline edit. Same shape as the create form but pre-filled.
 function EditReminderForm({
   reminder,
   currentUserId,
@@ -456,9 +456,9 @@ function EditReminderForm({
   );
 }
 
-// F11-14 (#4): rich recipient picker with member avatars + searchable
+// Rich recipient picker with member avatars + searchable
 // list. Replaces the plain <select> the klient called "nieczytelny".
-// F12-K20: RecipientPicker przeprojektowany — klient zgłosił że dropdown
+// RecipientPicker przeprojektowany — klient zgłosił że dropdown
 // był nieczytelny. Zmiany:
 //   - Trigger jest większy (h-10), z eyebrow 'Komu' wewnątrz lewej strony,
 //     wyraźnym ChevronDown po prawej

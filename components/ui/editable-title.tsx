@@ -3,7 +3,7 @@
 import { startTransition, useEffect, useRef, useState } from "react";
 import { Pencil } from "lucide-react";
 
-// F12-K61: inline-edit pattern dla nagłówków (h1/h2). Klik w tytuł
+// Inline-edit pattern dla nagłówków (h1/h2). Klik w tytuł
 // (gdy canEdit=true) → input edycyjny w tym samym miejscu, Enter
 // zapisuje, Escape lub blur z pustym polem cancel'uje, blur z value
 // zapisuje. Optimistic UI: state lokalny zmienia się natychmiast,
@@ -102,7 +102,7 @@ export function EditableTitle({
       disabled={!canEdit}
       aria-label={canEdit ? (ariaLabel ?? "Edytuj nazwę") : undefined}
       title={canEdit ? "Klik aby edytować" : undefined}
-      // F12-K61b: explicit cursor-pointer (gdy editable) — bez tego button
+      // B: explicit cursor-pointer (gdy editable) — bez tego button
       // dziedziczył cursor:default po parent <h1>/<h2> i klient nie widział
       // że tytuł jest klikalny. Plus subtle dotted-underline on hover żeby
       // zasygnalizować "ten tytuł jest edytowalny" zanim user złapie pencil

@@ -25,7 +25,7 @@ export default async function MembersPage({
   });
   if (!workspace) notFound();
 
-  // F12-K8: load all boards (admin sees all; non-admin still gets the
+  // Load all boards (admin sees all; non-admin still gets the
   // tab but limited to boards they can manage — currently none unless
   // they're workspace ADMIN). For simplicity we hide the tab entirely
   // for non-admins below.
@@ -68,7 +68,7 @@ export default async function MembersPage({
       ? boards.find((b) => b.id === selectedBoardId) ?? boards[0] ?? null
       : null;
 
-  // F12-K8: per-board membership + pending board invites for the
+  // Per-board membership + pending board invites for the
   // selected board. Cheap query — only runs when boards tab is open.
   const boardMembers = selectedBoard
     ? await db.boardMembership.findMany({

@@ -1,4 +1,4 @@
-// F12-K34: serializer dla dziennego workspace backup'u. Czysty server-side
+// Serializer dla dziennego workspace backup'u. Czysty server-side
 // moduł — używany przez:
 //   - cron `/api/cron/workspace-backup` (raz dziennie wszystkie workspace'y)
 //   - admin actions `triggerWorkspaceBackupAction` / `triggerAllBackupsAction`

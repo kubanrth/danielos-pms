@@ -1,4 +1,4 @@
-// F12-K37: serve obrazy z whiteboard'u przez signed redirect. Pattern
+// Serve obrazy z whiteboard'u przez signed redirect. Pattern
 // taki sam jak /api/brief-image — handler weryfikuje workspace membership
 // i 302-redirectuje na świeży signed download URL z Supabase Storage.
 

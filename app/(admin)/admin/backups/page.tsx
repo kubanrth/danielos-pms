@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { requireSuperAdmin } from "@/lib/admin-guard";
 import { BackupsClient } from "@/app/(admin)/admin/backups/backups-client";
 
-// F12-K34: panel admina z listą wszystkich workspace'ów + ich dziennych
+// Panel admina z listą wszystkich workspace'ów + ich dziennych
 // backupów. Fetch zwraca tylko index (WorkspaceBackup metadata) — pliki
 // JSON są w Supabase Storage, pobrane on-demand przez signed URL.
 

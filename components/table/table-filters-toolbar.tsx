@@ -37,7 +37,7 @@ export interface ToolbarColumnRef {
   statusOptions?: { id: string; label: string; color: string }[];
 }
 
-// F12-K10: opcjonalne presety grupowania (Data dodania / Data startu /
+// Opcjonalne presety grupowania (Data dodania / Data startu /
 // Data zakończenia / Tagi A→Z) renderowane jako osobna sekcja nad listą
 // kolumn w GroupPicker'ze. Empty / undefined = brak sekcji (wstecz-
 // kompatybilne z wszelkimi miejscami które kiedyś używały toolbar'a).
@@ -429,21 +429,21 @@ function GroupPicker({
   onChange,
 }: {
   columns: ToolbarColumnRef[];
-  // F12-K10: gotowe presety bucketingu (np. "Data dodania", "Tagi A→Z")
+  // Gotowe presety bucketingu (np. "Data dodania", "Tagi A→Z")
   // pokazane nad listą kolumn jako odzielna sekcja.
   presets?: GroupPreset[];
   groupBy: string | null;
   onChange: (next: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
-  // F12-K10: aktywny groupBy może być id presetu (`preset:*`) — najpierw
+  // Aktywny groupBy może być id presetu (`preset:*`) — najpierw
   // szukamy w presetach, potem w listingu kolumn.
   const current = groupBy
     ? presets?.find((p) => p.id === groupBy) ?? columns.find((c) => c.id === groupBy)
     : null;
   // Only allow grouping on bucket-like fields — grouping by free text
   // would create one bucket per row.
-  // F11-9 (#18): klient zgłosił że grupowanie nie obejmuje wszystkich
+  // Klient zgłosił że grupowanie nie obejmuje wszystkich
   // kolumn — wcześniej był whitelist na bucket-like fields. Teraz każda
   // kolumna jest groupable; długie wartości (TEXT/LONG_TEXT) tworzą
   // dużo bucketów (każda unikalna wartość = osobny), ale to świadoma
@@ -569,7 +569,7 @@ function Popover({
     <div ref={ref} className="relative">
       {trigger}
       {open && (
-        // F12-K29: z-50 (było z-30) — sticky <thead> ma własny stacking
+        // Z-50 (było z-30) — sticky <thead> ma własny stacking
         // context z z-30, więc filter popover wpadał pod nagłówek tabeli
         // ('obraz nakłada się na checkbox' = tło thead nakładało się na
         // listę filtrów).

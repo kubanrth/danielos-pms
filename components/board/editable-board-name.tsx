@@ -3,7 +3,7 @@
 import { renameBoardAction } from "@/app/(app)/w/[workspaceId]/b/[boardId]/actions";
 import { EditableTitle } from "@/components/ui/editable-title";
 
-// F12-K61: cienki client wrapper dla board name inline edit. renameBoardAction
+// Cienki client wrapper dla board name inline edit. renameBoardAction
 // już istnieje (wcześniej tylko serwer, zero UI), tu po prostu wystawiamy go
 // w nagłówku BoardHeader przez generyczny EditableTitle.
 export function EditableBoardName({
@@ -31,7 +31,7 @@ export function EditableBoardName({
         fd.set("workspaceId", workspaceId);
         fd.set("id", boardId);
         fd.set("name", next);
-        // F12-K61: NIE set description — renameBoardAction po fix'ie pomija
+        // NIE set description — renameBoardAction po fix'ie pomija
         // pole gdy nie podane, więc istniejący opis tablicy zostaje nietknięty.
         await renameBoardAction(fd);
       }}

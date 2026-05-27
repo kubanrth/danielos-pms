@@ -8,7 +8,7 @@ import {
 } from "@/components/task/rich-text-editor";
 import { updateBoardOverviewAction } from "@/app/(app)/w/[workspaceId]/b/[boardId]/overview/actions";
 
-// F12-K57: editor 'Opis ogólny' — Tiptap rich-text z autosave (500ms debounce).
+// Editor 'Opis ogólny' — Tiptap rich-text z autosave (500ms debounce).
 // Klient pisze, save w tle, indicator "zapisano" obok tytułu.
 export function BoardOverviewEditor({
   workspaceId,

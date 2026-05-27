@@ -44,7 +44,7 @@ export interface ColumnDef {
   // Status column is always visible — we hide the toggle but keep it
   // draggable so users can position it first/last/middle.
   required?: boolean;
-  // F9-07: custom columns are user-editable (rename + delete).
+  // Custom columns are user-editable (rename + delete).
   custom?: boolean;
   // F10-A: present only for custom columns, used by the gear-icon
   // popover so the user can change type/options.
@@ -157,7 +157,7 @@ export function ColumnSettings({
       </button>
 
       {open && (
-        // F12-K29: bump z-30 → z-50; sticky <thead> creates own stacking
+        // Bump z-30 → z-50; sticky <thead> creates own stacking
         // context at z-30, popover was rendered behind the column headers.
         <div className="absolute right-0 top-[calc(100%+6px)] z-50 w-80 rounded-xl border border-border bg-popover p-3 shadow-[0_12px_32px_-12px_rgba(10,10,40,0.25)]">
           <div className="mb-2 flex items-center justify-between">

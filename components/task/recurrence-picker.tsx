@@ -1,6 +1,6 @@
 "use client";
 
-// F11-17 (#24): recurrence rule picker for task detail. Klient zażądał
+// Recurrence rule picker for task detail. Klient zażądał
 // "zadanie wchodzi każdego dnia miesiąca". Rule shape:
 //   - daily: every day
 //   - weekly: every week on `day` (0..6, Sun..Sat)
@@ -48,7 +48,7 @@ export function RecurrencePicker({
         : `Co miesiąc, ${draft.day ?? 1}. dnia`
     : "Brak";
 
-  // F12-K30: PortalDropdown zamiast natywnego <select>. Trzy oddzielne
+  // PortalDropdown zamiast natywnego <select>. Trzy oddzielne
   // dropdowny: freq → opcjonalnie weekday/monthday. Sentinel string'i
   // dla numeric day'a, żeby działało z generycznym typem PortalDropdown.
   return (

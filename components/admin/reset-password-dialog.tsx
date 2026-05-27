@@ -4,7 +4,7 @@ import { startTransition, useState } from "react";
 import { Eye, EyeOff, Key, X } from "lucide-react";
 import { resetUserPasswordAction } from "@/app/(admin)/admin/actions";
 
-// F12-K50: dialog resetowania hasła istniejącego user'a (z poziomu
+// Dialog resetowania hasła istniejącego user'a (z poziomu
 // admin panel). Super admin podaje nowe hasło bezpośrednio — przekaże
 // user'owi inną drogą. Opcja dla "Daniel zapomniał hasła".
 export function ResetPasswordDialog({

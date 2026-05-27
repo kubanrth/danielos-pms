@@ -28,13 +28,13 @@ import {
 // F10-W2/W3: collapse the node's optional reactions + locked flags into
 // a JSON blob for ProcessNode.dataJson. Returns DbNull when nothing
 // non-default is set so we don't bloat rows with empty objects.
-// F12-K37: imagePath dla shape="IMAGE" też tu się ląduje.
+// ImagePath dla shape="IMAGE" też tu się ląduje.
 function nodeMeta(n: NodeSnapshotInput): Prisma.InputJsonValue | typeof Prisma.DbNull {
   const meta: Record<string, unknown> = {};
   if (n.reactions && Object.keys(n.reactions).length > 0) meta.reactions = n.reactions;
   if (n.locked) meta.locked = true;
   if (n.imagePath) meta.imagePath = n.imagePath;
-  // F12-K37c: text color override w ProcessNode.dataJson.
+  // C: text color override w ProcessNode.dataJson.
   if (n.textColorHex) meta.textColorHex = n.textColorHex;
   if (Object.keys(meta).length === 0) return Prisma.DbNull;
   return meta as Prisma.InputJsonValue;
@@ -304,7 +304,7 @@ export async function getCanvasSnapshotAction(id: string) {
   return { nodes, edges };
 }
 
-// F12-K37: image upload do whiteboard. Pattern jak `requestBriefImageUploadAction`:
+// Image upload do whiteboard. Pattern jak `requestBriefImageUploadAction`:
 // klient żąda signed URL → PUT pliku → osadza imagePath w node.data.imagePath →
 // rendering przez `/api/canvas-image/<path>` z signed-redirect (handler weryfikuje
 // workspace membership na każdy request, więc signed URL nigdy nie wycieka do JSON'a).

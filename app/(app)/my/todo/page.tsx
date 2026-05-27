@@ -9,7 +9,7 @@ import { TodoWorkspace } from "@/components/my/todo/todo-workspace";
 //   my-day    — items where myDayAt >= start-of-today (auto-expires)
 //   important — items where important=true
 //   planned   — items where dueDate is set
-// F12-K22: 'assigned' smart view = workspace tasks gdzie current user
+// 'assigned' smart view = workspace tasks gdzie current user
 // jest przypisany (zastąpienie wcześniejszego embedded panelu w prawym).
 export type SmartView = "my-day" | "important" | "planned" | "assigned";
 
@@ -74,7 +74,7 @@ export default async function MyTodoPage({
     }
 
     // Smart view — pull across all lists, apply filter.
-    // F12-K22: 'assigned' smart view nie ładuje TodoItems (pokazuje tylko
+    // 'assigned' smart view nie ładuje TodoItems (pokazuje tylko
     // workspace TaskAssignee'y poniżej), więc skip tego query całkowicie.
     if (effectiveSmart === "assigned") return [];
 
@@ -105,7 +105,7 @@ export default async function MyTodoPage({
     ? lists.find((l) => l.id === activeListId) ?? null
     : null;
 
-  // F12-K22: pull workspace tasks gdzie current user jest assignee.
+  // Pull workspace tasks gdzie current user jest assignee.
   // Pokazywane jako osobny smart view 'Przydzielone do mnie' w sidebar'ze
   // (MS-To-Do parity). Też potrzebne gdy activeListId set, bo
   // prawy detail panel oryginalnie próbował to pokazywać — teraz tylko
@@ -115,7 +115,7 @@ export default async function MyTodoPage({
       ? await db.taskAssignee.findMany({
           where: {
             userId,
-            // F12-K42: filtruj też po workspace.deletedAt + board.deletedAt
+            // Filtruj też po workspace.deletedAt + board.deletedAt
             // (analogicznie do /my-tasks i /my/calendar). Soft-delete nie
             // cascade'uje na taski, bez tego stare assignment'y leaknęłyby
             // i klik dawałby 404.
@@ -143,13 +143,13 @@ export default async function MyTodoPage({
   // can open the detail panel immediately without an extra fetch.
   const focusedItemId = params.itemId ?? null;
 
-  // F12-K46: mobile UX (iOS-Reminders/MS-To-Do parity) — bez żadnego URL
+  // Mobile UX (iOS-Reminders/MS-To-Do parity) — bez żadnego URL
   // param na mobile pokazujemy sidebar (foldery + listy + smart). Z param
   // (smart= albo listId=) → items view. Selected item (state) → detail.
   // Desktop nie używa tej flagi.
   const hasViewParam = !!params.smart || !!params.listId;
 
-  // F9-11: Fullwidth layout — no AppShell wrapper, no max-width cap.
+  // Fullwidth layout — no AppShell wrapper, no max-width cap.
   // Klient chciał "całą szerokość ekranu jak MS To Do". Title collapses
   // into the sidebar header; main area uses all horizontal space.
   return (

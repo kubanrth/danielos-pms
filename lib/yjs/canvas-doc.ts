@@ -18,7 +18,7 @@ export const SHAPES = [
   "FRAME",
   // F10-W: Mural-feel additions.
   "TEXT",
-  // F12-K37: image upload — data.imagePath = Supabase Storage key.
+  // Image upload — data.imagePath = Supabase Storage key.
   "IMAGE",
 ] as const;
 export type CanvasShape = (typeof SHAPES)[number];
@@ -41,13 +41,13 @@ export interface CanvasNodeValue {
   // F10-W3: when locked, the node can't be moved, resized, or deleted
   // via React Flow's normal interactions. The UI shows a lock icon.
   locked?: boolean;
-  // F12-K37: dla shape="IMAGE" — Supabase Storage key (path relatywny
+  // Dla shape="IMAGE" — Supabase Storage key (path relatywny
   // do bucket'u attachments). Renderowane przez `/api/canvas-image/<key>`.
   imagePath?: string | null;
-  // F12-K37c: explicit text color override. Gdy null/undef, ShapeNode
+  // C: explicit text color override. Gdy null/undef, ShapeNode
   // używa auto-contrast od colorHex.
   textColorHex?: string | null;
-  // F12-K63: explicit font-size override (px). Gdy null/undef, label używa
+  // Explicit font-size override (px). Gdy null/undef, label używa
   // bazowego rozmiaru (~15px dla RECT/CIRCLE/STICKY/DIAMOND, auto-calc
   // po height dla TEXT shape'a). Klient zażyczył sobie zmiany wielkości.
   fontSize?: number | null;
@@ -122,11 +122,11 @@ function toNodeYMap(node: CanvasNodeValue): Y.Map<unknown> {
   m.set("colorHex", node.colorHex);
   if (node.reactions) m.set("reactions", node.reactions);
   if (node.locked) m.set("locked", true);
-  // F12-K37: imagePath dla shape="IMAGE".
+  // ImagePath dla shape="IMAGE".
   if (node.imagePath) m.set("imagePath", node.imagePath);
-  // F12-K37c: explicit text color override.
+  // C: explicit text color override.
   if (node.textColorHex) m.set("textColorHex", node.textColorHex);
-  // F12-K63: explicit font-size override (px).
+  // Explicit font-size override (px).
   if (typeof node.fontSize === "number") m.set("fontSize", node.fontSize);
   return m;
 }
@@ -165,20 +165,20 @@ export function setNodeValue(
     if ((existing.get("locked") ?? false) !== Boolean(node.locked)) {
       existing.set("locked", Boolean(node.locked));
     }
-    // F12-K37: imagePath sync. Tylko gdy się zmienił żeby nie spamować
+    // ImagePath sync. Tylko gdy się zmienił żeby nie spamować
     // peerów niepotrzebnymi update'ami.
     const prevImagePath = existing.get("imagePath") ?? null;
     const nextImagePath = node.imagePath ?? null;
     if (prevImagePath !== nextImagePath) {
       existing.set("imagePath", nextImagePath);
     }
-    // F12-K37c: textColorHex sync.
+    // C: textColorHex sync.
     const prevTextColor = existing.get("textColorHex") ?? null;
     const nextTextColor = node.textColorHex ?? null;
     if (prevTextColor !== nextTextColor) {
       existing.set("textColorHex", nextTextColor);
     }
-    // F12-K63: fontSize sync (px override).
+    // FontSize sync (px override).
     const prevFontSize =
       typeof existing.get("fontSize") === "number"
         ? (existing.get("fontSize") as number)
@@ -261,7 +261,7 @@ export function readCanvasSnapshot(refs: CanvasYRefs): {
       colorHex: asString(value.get("colorHex"), "#FFFFFF"),
       imagePath: asNullString(value.get("imagePath")) ?? undefined,
       textColorHex: asNullString(value.get("textColorHex")) ?? undefined,
-      // F12-K63: read fontSize override z Y mapy.
+      // Read fontSize override z Y mapy.
       fontSize:
         typeof value.get("fontSize") === "number"
           ? (value.get("fontSize") as number)

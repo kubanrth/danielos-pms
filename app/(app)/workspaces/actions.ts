@@ -154,7 +154,7 @@ export async function createWorkspaceAction(
   redirect(`/w/${workspace.id}`);
 }
 
-// F12-K61: inline rename z heading'a workspace overview. Pojedyncze pole
+// Inline rename z heading'a workspace overview. Pojedyncze pole
 // (name), zero error UI — fire-and-forget z optimistic UI po stronie klienta.
 // Trzyma się z dala od `updateWorkspaceAction` (useActionState/full settings
 // form) żeby nie komplikować response shape'u dla prostego "edit and save".
@@ -274,7 +274,7 @@ export async function deleteWorkspaceAction(
   redirect("/workspaces");
 }
 
-// F12-K52: reorder workspace'ów drag-and-drop.
+// Reorder workspace'ów drag-and-drop.
 // Klient wysyła całą nową listę ID w kolejności (po drop'ie) — server
 // zapisuje order = idx * 1000 dla każdego. Prosta logika, brak ryzyka
 // rozjeżdżania się gdy wiele drag'ów na raz.
@@ -311,7 +311,7 @@ export async function reorderWorkspacesAction(orderedIds: string[]) {
     ),
   );
 
-  // F12-K52b: invalidate cały layout (app) żeby sidebar też się odświeżył
+  // B: invalidate cały layout (app) żeby sidebar też się odświeżył
   // — sidebar fetchuje workspace'y w (app)/layout.tsx, nie w /workspaces page.
   revalidatePath("/", "layout");
 }

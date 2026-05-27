@@ -25,7 +25,7 @@ async function loadAssignments(
     sort: SortMode;
   },
 ) {
-  // F12-K42: filtrujemy też po workspace.deletedAt + board.deletedAt.
+  // Filtrujemy też po workspace.deletedAt + board.deletedAt.
   // Soft-delete workspace'a/boardu nie cascade'uje na taski, więc bez
   // tego 'Zadania dla Ciebie' pokazywało stare assignment'y → klik
   // dawał 404 bo route /w/<wid>/t/<tid> nie znajdował aktywnego task'a
@@ -70,7 +70,7 @@ async function loadAssignments(
       task: {
         include: {
           workspace: { select: { id: true, name: true, slug: true } },
-          // F12-K60: board.statusColumns — listę statusów boardu potrzebujemy
+          // Board.statusColumns — listę statusów boardu potrzebujemy
           // w UI my-tasks żeby klient mógł zmienić status z listy (bug
           // zgłoszony przez Daniela, wcześniej tylko z otwartego taska).
           board: {
@@ -85,7 +85,7 @@ async function loadAssignments(
           },
           statusColumn: true,
           tags: { include: { tag: true } },
-          // F9-13: needed for the assign hotkey "already-assigned"
+          // Needed for the assign hotkey "already-assigned"
           // highlight in the popup menu.
           assignees: { select: { userId: true } },
         },
@@ -119,7 +119,7 @@ export default async function MyTasksPage({
     // Dedupe boards for the filter pills, only those the user actually has
     // assignments on.
     db.taskAssignee.findMany({
-      // F12-K42: ten sam filtr co loadAssignments — board pickle pills
+      // Ten sam filtr co loadAssignments — board pickle pills
       // muszą zawierać tylko żywe boardy z żywych workspace'ów.
       where: {
         userId,
@@ -139,7 +139,7 @@ export default async function MyTasksPage({
         },
       },
     }),
-    // F9-13: collect every member across every workspace the user belongs
+    // Collect every member across every workspace the user belongs
     // to → union powers the assign-hotkey popup. toggleAssigneeAction
     // validates membership server-side, so we can safely offer everyone.
     db.workspaceMembership.findMany({
@@ -209,7 +209,7 @@ export default async function MyTasksPage({
     id: a.task.id,
     title: a.task.title,
     workspaceId: a.task.workspace.id,
-    // F12-K60: boardId + boardStatusColumns potrzebne do inline'owego
+    // BoardId + boardStatusColumns potrzebne do inline'owego
     // StatusPicker'a w wierszu listy. statusColumnId trzymamy jako
     // current selection.
     boardId: a.task.board.id,

@@ -28,7 +28,7 @@ export interface StatusOption {
   colorHex: string;
 }
 
-// F12-K36: paleta z `lib/colors.ts` (BRAND_PALETTE).
+// Paleta z `lib/colors.ts` (BRAND_PALETTE).
 import { STATUS_PALETTE as PRESET_COLORS } from "@/lib/colors";
 
 export function StatusPicker({
@@ -64,7 +64,7 @@ export function StatusPicker({
   const computeCoords = () => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) return null;
-    // F12-K21: jeśli trigger jest poza viewportem (user scrolluje
+    // Jeśli trigger jest poza viewportem (user scrolluje
     // tabelę lub stronę), zwracamy null — caller zamknie picker
     // zamiast pozwolić mu utknąć przy górze viewportu.
     if (
@@ -120,7 +120,7 @@ export function StatusPicker({
       if (c) {
         setCoords(c);
       } else {
-        // F12-K21: trigger wyjechał z viewportu — zamykamy zamiast
+        // Trigger wyjechał z viewportu — zamykamy zamiast
         // zostawiać picker oddzielony od triggera.
         close();
       }

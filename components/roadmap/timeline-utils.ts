@@ -6,7 +6,7 @@ export const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Each entity gets a stable color derived from its id so re-orderings
 // don't reshuffle hues across renders.
-// F12-K36: paleta przeniesiona do `lib/colors.ts` (BRAND_PALETTE).
+// Paleta przeniesiona do `lib/colors.ts` (BRAND_PALETTE).
 export { TIMELINE_PALETTE } from "@/lib/colors";
 import { TIMELINE_PALETTE as PALETTE } from "@/lib/colors";
 

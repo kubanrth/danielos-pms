@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 
-// F11-12 (#2): klient zgłosił że dymki przypomnień nie wyskakują —
+// Klient zgłosił że dymki przypomnień nie wyskakują —
 // poprzednio layout fetchował due reminders RAZ przy SSR i renderował
 // statyczną listę. Tworząc reminder na "za 5 minut" user nie widział
 // popupu bez ręcznego refresha.

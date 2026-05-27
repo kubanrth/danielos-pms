@@ -200,7 +200,7 @@ export const FIELD_TYPE_META: Record<FieldType, FieldTypeMeta> = {
 
 // Default option palette — same hexes used elsewhere (tags, statuses)
 // so the picker feels consistent across the app.
-// F12-K36: paleta przeniesiona do `lib/colors.ts` (BRAND_PALETTE) —
+// Paleta przeniesiona do `lib/colors.ts` (BRAND_PALETTE) —
 // re-eksport pod tą samą nazwą.
 export { SELECT_PALETTE } from "@/lib/colors";
 

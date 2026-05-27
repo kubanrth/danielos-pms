@@ -59,7 +59,7 @@ export async function createReminderAction(formData: FormData) {
     },
     select: { id: true, recipientId: true, dueAt: true },
   });
-  // F12-K35: jeśli reminder ma due-at <= now (np. user kliknął 'za 5
+  // Jeśli reminder ma due-at <= now (np. user kliknął 'za 5
   // minut' i refreshuje 6 minut później; albo cross-device — recipient
   // ma otwartą inną kartę), broadcastuj user-realtime żeby <ReminderPopups>
   // refetchowało od razu zamiast czekać 20s na poll.
@@ -100,7 +100,7 @@ export async function deleteReminderAction(formData: FormData) {
   revalidatePath("/my/reminders");
 }
 
-// F11-13 (#3): klient zażądał edycji istniejących przypomnień. Tylko
+// Klient zażądał edycji istniejących przypomnień. Tylko
 // twórca może edytować — recipient ma już dismiss/snooze.
 const updateReminderSchema = z.object({
   id: z.string().min(1),

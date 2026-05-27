@@ -2,7 +2,7 @@ import Link from "next/link";
 import { fetchTaskDetail } from "@/lib/task-fetch";
 import { TaskDetail } from "@/components/task/task-detail";
 
-// F12-K60: bezpieczna sanityzacja `from` — tylko ścieżki internal
+// Bezpieczna sanityzacja `from` — tylko ścieżki internal
 // (start od "/" + brak "//" żeby zablokować protocol-relative
 // `//evil.com`). Wszystko inne fallback'uje do workspace overview.
 function safeBackHref(from: string | undefined, fallback: string): string {
@@ -12,7 +12,7 @@ function safeBackHref(from: string | undefined, fallback: string): string {
   return from;
 }
 
-// F12-K60: human-readable label dla najczęstszych źródeł nawigacji.
+// Human-readable label dla najczęstszych źródeł nawigacji.
 // Domyślny "wróć do przeglądu" zostaje dla nieznanych ścieżek.
 function backLabel(from: string | undefined): string {
   if (from === "/my-tasks") return "← wróć do zadań dla Ciebie";

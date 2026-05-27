@@ -1,4 +1,4 @@
-// F12-K14: 11 templates dla "Creative Board" — wzorowane na ClickUp
+// 11 templates dla "Creative Board" — wzorowane na ClickUp
 // Design Brief Templates page'u który klient wskazał jako referencję.
 // Każdy template to gotowy Tiptap doc (contentJson) + metadane do
 // renderowania w pickerze (emoji + opis + akcent kolorystyczny).

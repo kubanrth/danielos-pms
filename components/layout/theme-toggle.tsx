@@ -1,6 +1,6 @@
 "use client";
 
-// F11-19 (#15): tryb ciemny dla całej apki. CSS variables dla `.dark`
+// Tryb ciemny dla całej apki. CSS variables dla `.dark`
 // są już w globals.css — ten toggle:
 // 1) czyta zapisaną preferencję z localStorage (z fallbackiem na
 //    prefers-color-scheme media query)
@@ -32,7 +32,7 @@ export function ThemeToggle({
   collapsed = false,
 }: {
   variant?: "sidebar" | "compact" | "labeled";
-  // F12-K15: gdy variant='labeled' i collapsed=false, button pokazuje
+  // Gdy variant='labeled' i collapsed=false, button pokazuje
   // tekstowy label obok ikonki — dużo bardziej discoverable niż samą
   // ikonkę w nagłówku sidebar'a (klient zgłosił że nie wiedział że
   // toggle istnieje).
@@ -70,7 +70,7 @@ export function ThemeToggle({
         <button
           type="button"
           aria-label="Tryb"
-          // F12-K57b: dopasowane do innych nav-rowów w sidebarze.
+          // B: dopasowane do innych nav-rowów w sidebarze.
           className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[0.88rem] text-muted-foreground max-md:gap-3 max-md:rounded-md max-md:px-3 max-md:py-3 max-md:text-[1rem]"
         >
           <Sun size={15} className="shrink-0 max-md:size-[18px]" />
@@ -103,7 +103,7 @@ export function ThemeToggle({
         onClick={toggle}
         aria-label={label}
         title={label}
-        // F12-K57b: dopasowane do innych nav-rowów w sidebarze.
+        // B: dopasowane do innych nav-rowów w sidebarze.
         className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[0.88rem] text-muted-foreground transition-colors hover:bg-black/5 dark:hover:bg-white/[0.05] hover:text-foreground max-md:gap-3 max-md:rounded-md max-md:px-3 max-md:py-3 max-md:text-[1rem]"
       >
         <Icon size={15} className="shrink-0 max-md:size-[18px]" />

@@ -29,7 +29,7 @@ const STATUS_COLOR: Record<Status, string> = {
   ARCHIVED: "#94A3B8",
 };
 
-// F12-K36: paleta z `lib/colors.ts` (BRAND_PALETTE).
+// Paleta z `lib/colors.ts` (BRAND_PALETTE).
 import { HEADER_PALETTE as HEADER_COLORS } from "@/lib/colors";
 
 const EMOJI_PICKS = ["📝", "🎯", "🚀", "💡", "🎨", "📊", "🔥", "✨", "🛠", "📦"];

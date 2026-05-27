@@ -17,13 +17,13 @@ import {
 } from "@/lib/storage";
 import { getBriefTemplate } from "@/lib/brief-templates";
 
-// F11-21 (#25): Creative brief CRUD. Tworzenie wymaga membership;
+// Creative brief CRUD. Tworzenie wymaga membership;
 // edycja/usuwanie creator + admin (task.update perm).
 
 const createSchema = z.object({
   workspaceId: z.string().min(1),
   title: z.string().trim().min(1).max(200),
-  // F12-K14: opcjonalny ID template'a — gdy podany, content/header
+  // Opcjonalny ID template'a — gdy podany, content/header
   // zostają zainicjowane z tego template'a zamiast default'owego.
   templateId: z.string().min(1).optional(),
 });
@@ -37,7 +37,7 @@ export async function createBriefAction(formData: FormData) {
   if (!parsed.success) return;
   const ctx = await requireWorkspaceMembership(parsed.data.workspaceId);
 
-  // F12-K14: wybór template'a → contentJson + headerColor + emoji
+  // Wybór template'a → contentJson + headerColor + emoji
   // pobierane z definicji template'a. Brak templateId = fallback do
   // pierwszego template'a (Design Brief), żeby legacy callers (jeśli
   // jakieś) dalej działali bez zmian.
@@ -148,7 +148,7 @@ export async function deleteBriefAction(formData: FormData) {
   redirect(`/w/${brief.workspaceId}/briefs`);
 }
 
-// F12-K12: image upload do briefu. Reuse Supabase Storage `attachments`
+// Image upload do briefu. Reuse Supabase Storage `attachments`
 // bucket (ten sam co task attachments) ale pod ścieżką `briefs/`.
 // Klient dostaje signed upload URL, przesyła plik, potem inserts <img>
 // z `src=/api/brief-image/<encoded-key>` — route-handler weryfikuje
