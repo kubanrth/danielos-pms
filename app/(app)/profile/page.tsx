@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ProfileForm } from "@/components/profile/profile-form";
 import { TwoFactorSection } from "@/components/profile/two-factor-section";
+import { ChangePasswordSection } from "@/components/profile/change-password-section";
 
 export default async function ProfilePage() {
   const session = await auth();
@@ -29,6 +30,8 @@ export default async function ProfilePage() {
         />
 
         <TwoFactorSection enabled={!!user.totpEnabledAt} />
+
+        <ChangePasswordSection />
 
         {user.isSuperAdmin && (
           <div className="border-t border-border pt-6">
