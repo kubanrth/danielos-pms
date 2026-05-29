@@ -40,8 +40,11 @@ export function StatusPicker({
   canManageBoard: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  // Either `top` (opening downward) or `bottom` (opening upward) is set, never
+  // both. Anchoring by `bottom` when above keeps a short list glued to the cell.
   const [coords, setCoords] = useState<{
-    top: number;
+    top?: number;
+    bottom?: number;
     left: number;
     maxHeight: number;
   } | null>(null);
@@ -71,10 +74,17 @@ export function StatusPicker({
     const spaceBelow = window.innerHeight - rect.bottom - GAP - PAD;
     const spaceAbove = rect.top - GAP - PAD;
     const useBelow = spaceBelow >= 260 || spaceBelow >= spaceAbove;
-    const maxHeight = Math.max(220, useBelow ? spaceBelow : spaceAbove);
-    const top = useBelow ? rect.bottom + GAP : Math.max(PAD, rect.top - GAP - maxHeight);
     const left = Math.max(8, Math.min(window.innerWidth - POP_WIDTH - 8, rect.left));
-    return { top, left, maxHeight };
+    if (useBelow) {
+      return { top: rect.bottom + GAP, left, maxHeight: Math.max(220, spaceBelow) };
+    }
+    // Opening upward: anchor the popup's BOTTOM edge just above the trigger so a
+    // short list hugs the cell instead of floating at the top of the viewport.
+    return {
+      bottom: window.innerHeight - rect.top + GAP,
+      left,
+      maxHeight: Math.max(220, spaceAbove),
+    };
   };
 
   const openPicker = () => {
@@ -170,7 +180,9 @@ export function StatusPicker({
             ref={popRef}
             style={{
               position: "fixed",
-              top: coords.top,
+              ...(coords.top !== undefined
+                ? { top: coords.top }
+                : { bottom: coords.bottom }),
               left: coords.left,
               width: 280,
               maxHeight: coords.maxHeight,
